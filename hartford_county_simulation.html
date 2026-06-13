@@ -7,53 +7,108 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <style>
-  html, body { margin:0; padding:0; height:100%; font-family: system-ui, sans-serif; background:#0b0f14; }
-  #app { display:grid; grid-template-columns: 340px 1fr; height:100vh; }
-  #sidebar { background:#0f1720; color:#e6edf3; padding:16px; overflow:auto; }
-  #sidebar h1 { font-size:16px; margin:0 0 6px; }
-  #sidebar p  { font-size:12px; line-height:1.4; color:#9aa7b4; margin:0 0 12px; }
-  #map { height:100%; background:#0b0f14; }
-  .ctrl { background:#1b2530; padding:9px 12px; border-radius:8px; margin-bottom:8px; font-size:12px; }
-  .ctrl input[type=range] { width:100%; }
-  .ctrl input[type=number] { width:70px; background:#0b0f14; color:#e6edf3; border:1px solid #334; border-radius:4px; padding:2px 4px; }
-  .ctrl .small { font-size:10px; color:#7e8a98; margin-top:3px; }
+  html, body { margin:0; padding:0; height:100%; font-family: system-ui, sans-serif; background:#f5f7fb; }
+  #app { display:grid; grid-template-columns: 360px 1fr; height:100vh; }
+  #sidebar {
+    background: linear-gradient(180deg, #ffffff 0%, #eef3fb 100%);
+    color:#1a2332; padding:18px; overflow:auto;
+    box-shadow: inset -1px 0 0 #d4dcea;
+  }
+  #sidebar h1 { font-size:18px; margin:0 0 6px; color:#0f1f3a; letter-spacing:-0.2px; }
+  #sidebar p  { font-size:12px; line-height:1.45; color:#5a6b85; margin:0 0 14px; }
+  #map { height:100%; background:#f5f7fb; }
+
+  .section-label {
+    font-size:10px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase;
+    color:#7c61d6; margin:14px 0 6px 2px;
+  }
+  .ctrl {
+    background:white; padding:10px 12px; border-radius:10px; margin-bottom:8px; font-size:12px;
+    color:#1a2332; box-shadow: 0 1px 2px rgba(15,31,58,0.06), 0 1px 0 #e6ebf3 inset;
+    border: 1px solid #e6ebf3;
+  }
+  .ctrl input[type=range] { width:100%; accent-color:#5b8def; }
+  .ctrl input[type=number] {
+    width:80px; background:#f5f7fb; color:#1a2332; border:1px solid #d4dcea;
+    border-radius:6px; padding:3px 6px; font-size:13px;
+  }
+  .ctrl .small { font-size:11px; color:#6b7a93; margin-top:4px; line-height:1.4; }
   .ctrl .row { display:flex; align-items:center; justify-content:space-between; gap:6px; }
-  .stat-box { background:#142033; border:1px solid #1f3a5f; padding:8px 12px; border-radius:8px; margin-bottom:8px; }
-  .stat-box .big { font-size:20px; font-weight:700; }
-  .stat-box .lbl { font-size:10px; color:#9aa7b4; text-transform:uppercase; letter-spacing:0.5px; }
-  .stat-box .sub { font-size:11px; color:#7e8a98; margin-top:2px; }
+  .ctrl b { color:#1d4ed8; }
+
+  .stat-box {
+    background:white; border:1px solid #e6ebf3; padding:10px 14px;
+    border-radius:10px; margin-bottom:8px;
+    box-shadow: 0 1px 2px rgba(15,31,58,0.06);
+  }
+  .stat-box .big { font-size:24px; font-weight:800; line-height:1.1; }
+  .stat-box .lbl { font-size:10px; color:#6b7a93; text-transform:uppercase; letter-spacing:0.8px; font-weight:700; }
+  .stat-box .sub { font-size:11px; color:#6b7a93; margin-top:3px; }
+  .stat-affected { background:linear-gradient(180deg, #fff5f5 0%, #ffe9e9 100%); border-color:#ffb8b8; }
+  .stat-affected .big { color:#dc2626; }
+  .stat-outage   { background:linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%); border-color:#fdba74; }
+  .stat-outage   .big { color:#ea580c; }
+  .stat-restore  { background:linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%); border-color:#6ee7b7; }
+  .stat-restore  .big { color:#047857; }
+
   button.action {
-    width:100%; border:none; padding:9px; border-radius:6px; font-size:13px; font-weight:600;
-    cursor:pointer; margin-bottom:6px; color:white;
+    width:100%; border:none; padding:11px; border-radius:8px; font-size:13px; font-weight:700;
+    cursor:pointer; margin-bottom:8px; color:white; letter-spacing:0.3px;
+    box-shadow: 0 2px 6px rgba(15,31,58,0.12);
+    transition: transform 0.1s, filter 0.1s;
   }
-  .btn-grid    { background:linear-gradient(180deg,#3b82f6,#1d4ed8); }
-  .btn-storm   { background:linear-gradient(180deg,#dc2626,#991b1b); }
-  .btn-restore { background:linear-gradient(180deg,#10b981,#047857); }
-  .btn-reset   { background:#374151; }
-  button.action:hover { filter:brightness(1.1); }
-  #status { font-size:11px; color:#7e8a98; margin-top:8px; }
+  .btn-grid    { background:linear-gradient(135deg,#5b8def,#1d4ed8); }
+  .btn-storm   { background:linear-gradient(135deg,#f97316,#dc2626); }
+  .btn-restore { background:linear-gradient(135deg,#34d399,#047857); }
+  .btn-reset   { background:linear-gradient(135deg,#94a3b8,#475569); }
+  button.action:hover { filter:brightness(1.06); transform: translateY(-1px); }
+  button.action:active { transform: translateY(0); }
+
+  #status {
+    font-size:11px; color:#475569; margin-top:10px; padding:8px 10px;
+    background:#eef3fb; border-radius:6px; border-left:3px solid #5b8def;
+    line-height:1.4;
+  }
+
+  .seed-explainer {
+    background:#fef9e7; border:1px solid #fde68a; padding:8px 10px;
+    border-radius:8px; font-size:11px; color:#713f12; line-height:1.45; margin-bottom:10px;
+  }
+  .seed-explainer b { color:#92400e; }
+
   .map-legend {
-    background: rgba(15,23,32,0.92); color:#e6edf3; padding:10px 12px;
-    border-radius:8px; font-size:11px; line-height:1.6;
-    box-shadow:0 2px 8px rgba(0,0,0,0.4); min-width:200px;
+    background: rgba(255,255,255,0.96); color:#1a2332; padding:11px 13px;
+    border-radius:10px; font-size:11px; line-height:1.7;
+    box-shadow:0 4px 16px rgba(15,31,58,0.18); min-width:210px;
+    border:1px solid #e6ebf3;
   }
-  .map-legend .ml-title { font-weight:600; color:#9fd6ff; margin-bottom:4px; font-size:12px; }
-  .map-legend .ml-row { display:flex; align-items:center; gap:6px; }
-  .map-legend .ml-note { color:#8b95a3; font-size:10px; }
+  .map-legend .ml-title { font-weight:700; color:#1d4ed8; margin-bottom:5px; font-size:12px; letter-spacing:0.3px; }
+  .map-legend .ml-row { display:flex; align-items:center; gap:7px; }
+  .map-legend .ml-note { color:#6b7a93; font-size:10px; }
   .map-legend .ml-line { display:inline-block; width:18px; border-top:2px solid; }
-  .map-legend .sq { display:inline-block; width:10px; height:10px; background:#374151; border:1px solid #6b7280; }
+  .map-legend .sq { display:inline-block; width:11px; height:11px; background:#475569; border:1px solid #1e293b; border-radius:2px; }
 </style>
 </head>
 <body>
 <div id="app">
   <aside id="sidebar">
     <h1>Hartford County — Storm &amp; Restoration</h1>
-    <p>Mock 100-substation distribution grid for Hartford County. Simulate storm outages, count affected customers, and plan crew-based restoration.</p>
+    <p>Mock distribution grid for Hartford County. Simulate storm outages, count affected customers, and plan crew-based restoration.</p>
+
+    <div class="seed-explainer">
+      <b>Random seed</b> — controls <i>every</i> random choice in the model: where substations land, where feeders branch, where the storm strikes, where crew depots sit. Same seed + same sliders → identical result every time (reproducible). Change the seed to explore a different scenario. The storm-outages slider sets <i>how many</i> outages; the seed sets <i>where</i> they fall — they don't overlap.
+      <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
+        <span>Seed:</span>
+        <input type="number" id="seedInput" value="42" />
+      </div>
+    </div>
+
+    <div class="section-label">1 · Distribution grid</div>
 
     <div class="ctrl">
       <div class="row"><span>Substations: <b id="kVal">100</b></span></div>
-      <input type="range" id="kSlider" min="20" max="250" value="100" />
-      <div class="small">Substations placed via weighted k-means on town population.</div>
+      <input type="range" id="kSlider" min="20" max="300" value="100" />
+      <div class="small">Placed via a hybrid of population-weighted and area-weighted k-means so coverage reaches every corner of the county.</div>
     </div>
 
     <div class="ctrl">
@@ -63,32 +118,28 @@
 
     <button class="action btn-grid" id="genGrid">Generate distribution grid</button>
 
+    <div class="section-label">2 · Storm simulation</div>
+
     <div class="ctrl">
       <div class="row"><span>Storm outages: <b id="oVal">500</b></span></div>
       <input type="range" id="oSlider" min="50" max="5000" value="500" step="50" />
-      <div class="small">Random failure points across feeders and laterals.</div>
-    </div>
-
-    <div class="ctrl">
-      <div class="row">
-        <span>Seed:</span>
-        <input type="number" id="seedInput" value="42" />
-      </div>
-      <div class="small">Same seed → identical storm. Reproducible.</div>
+      <div class="small">How many failure points to place across feeders and laterals.</div>
     </div>
 
     <button class="action btn-storm" id="simStorm">Simulate storm</button>
 
-    <div class="stat-box" style="border-color:#5f2a2a;background:#201212">
+    <div class="stat-box stat-affected">
       <div class="lbl">Customers without power</div>
-      <div class="big" style="color:#ff8585" id="affected">0</div>
+      <div class="big" id="affected">0</div>
       <div class="sub" id="affectedPct">0% of county population</div>
     </div>
 
-    <div class="stat-box">
+    <div class="stat-box stat-outage">
       <div class="lbl">Outage locations</div>
-      <div class="big" style="color:#fca5a5" id="outageCount">0</div>
+      <div class="big" id="outageCount">0</div>
     </div>
+
+    <div class="section-label">3 · Restoration plan</div>
 
     <div class="ctrl">
       <div class="row"><span>Repair crews: <b id="cVal">10</b></span></div>
@@ -97,9 +148,9 @@
 
     <button class="action btn-restore" id="planRestore">Plan restoration</button>
 
-    <div class="stat-box" style="border-color:#1f5f3a;background:#0d2017">
+    <div class="stat-box stat-restore">
       <div class="lbl">Total restoration time</div>
-      <div class="big" style="color:#7fcdbb" id="restoreTime">—</div>
+      <div class="big" id="restoreTime">—</div>
       <div class="sub" id="restoreDetail">— customers restored</div>
     </div>
 
@@ -112,6 +163,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="./hartford_towns.js"></script>
 <script>
 const TOWNS = [
   {name:"Hartford",lat:41.7637,lon:-72.6851,pop:121054},
@@ -154,11 +206,29 @@ function pointInRing(lon,lat,ring){let inside=false;for (let i=0,j=ring.length-1
 function pointInGeo(lon,lat,geo){const polys=geo.type==="Polygon"?[geo.coordinates]:geo.coordinates;for (const poly of polys){if (!pointInRing(lon,lat,poly[0])) continue;let h=false;for (let i=1;i<poly.length;i++) if (pointInRing(lon,lat,poly[i])){h=true;break;}if (!h) return true;}return false;}
 function geoBounds(geo){let minLa=90,maxLa=-90,minLo=180,maxLo=-180;const v=r=>r.forEach(([lo,la])=>{minLa=Math.min(minLa,la);maxLa=Math.max(maxLa,la);minLo=Math.min(minLo,lo);maxLo=Math.max(maxLo,lo);});if (geo.type==="Polygon") v(geo.coordinates[0]); else geo.coordinates.forEach(p=>v(p[0]));return L.latLngBounds([minLa,minLo],[maxLa,maxLo]);}
 function buildMask(geo){const outer=[[-90,-180],[-90,180],[90,180],[90,-180],[-90,-180]];const holes=[];const push=r=>holes.push(r.map(([lo,la])=>[la,lo]));if (geo.type==="Polygon") push(geo.coordinates[0]);else geo.coordinates.forEach(p=>push(p[0]));return [outer,...holes];}
-async function loadBoundary(){const url="https://nominatim.openstreetmap.org/search?country=USA&state=Connecticut&county=Hartford+County&format=json&polygon_geojson=1&limit=1";const r=await fetch(url,{headers:{'Accept':'application/json'}});const d=await r.json();if (!d.length||!d[0].geojson) throw new Error("No boundary");return d[0].geojson;}
+async function loadBoundary(){
+  // Try local cache first (works offline / when Nominatim is rate-limiting); fall back to live API.
+  try {
+    const r = await fetch('./hartford_boundary.json');
+    if (r.ok) {
+      const d = await r.json();
+      if (d.length && d[0].geojson) { console.log("boundary loaded from local cache"); return d[0].geojson; }
+    }
+  } catch(_){}
+  const url="https://nominatim.openstreetmap.org/search.php?q=Hartford+County%2C+Connecticut&format=json&polygon_geojson=1&limit=1";
+  const r=await fetch(url,{headers:{'Accept':'application/json'}});
+  const d=await r.json();
+  if (!d.length||!d[0].geojson) throw new Error("No boundary from Nominatim");
+  return d[0].geojson;
+}
 
 // --- Map ---
 const map=L.map('map',{zoomControl:true,minZoom:9,maxZoom:16}).setView([41.80,-72.73],10);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; CARTO, OSM'}).addTo(map);
+// Dedicated top pane for the county boundary so nothing else can render above it.
+map.createPane('countyBoundary');
+map.getPane('countyBoundary').style.zIndex = 650;
+map.getPane('countyBoundary').style.pointerEvents = 'none';
 
 const legend=L.control({position:'bottomleft'});
 legend.onAdd=function(){
@@ -251,6 +321,7 @@ function starSVG(color,size=14){return `<svg xmlns="http://www.w3.org/2000/svg" 
 // --- Step 1: Substation placement via weighted k-means on demand points ---
 function buildDemandPoints(rnd){
   const pts=[];
+  // (a) Population-weighted points clustered around town centers.
   TOWNS.forEach(t=>{
     const n=Math.max(8,Math.round(Math.sqrt(t.pop)/2));
     const w=t.pop/n;
@@ -259,6 +330,22 @@ function buildDemandPoints(rnd){
       pts.push({lat:t.lat+Math.sin(a)*r*0.85,lon:t.lon+Math.cos(a)*r,w});
     }
   });
+  // (b) Uniform-area points across the entire county polygon.
+  // This pulls k-means centroids into rural areas so substations reach every corner.
+  if (_bitmapReady){
+    const uniformN = 1200;
+    const uniformWeightTotal = TOTAL_POP * 0.35;   // 35% of total weight goes to area
+    const wPerPt = uniformWeightTotal / uniformN;
+    let placed=0, tries=0;
+    while (placed < uniformN && tries < uniformN*10){
+      tries++;
+      const lat = _gLatMin + rnd()*(_gLatMax-_gLatMin);
+      const lon = _gLonMin + rnd()*(_gLonMax-_gLonMin);
+      if (!insideFast(lon,lat)) continue;
+      pts.push({lat,lon,w:wPerPt});
+      placed++;
+    }
+  }
   return pts;
 }
 function kmeans(pts,k,geo,rnd,iters=15){
@@ -388,7 +475,7 @@ function renderGrid(){
     L.marker([s.lat,s.lon],{icon,interactive:true}).addTo(subLayer)
       .bindTooltip(`Substation ${i+1} — ${Math.round(s.popServed).toLocaleString()} customers`);
   });
-  // Bring mask back to top
+  // Layer order after re-render: mask hides outside-county; boundary lives on its own top pane.
   if (window._mask) window._mask.bringToFront();
 }
 
@@ -523,12 +610,56 @@ document.getElementById('resetAll').onclick=resetStorm;
     geo=await loadBoundary();
     countyGeo=geo;
     buildInsideBitmap(geo);
-    L.geoJSON(geo,{style:{color:"#ef4444",weight:2.5,fill:false}}).addTo(map);
     const b=geoBounds(geo);
-    map.fitBounds(b,{padding:[10,10]});
-    map.setMaxBounds(b.pad(0.05));
-    window._mask=L.polygon(buildMask(geo),{color:"#0b0f14",weight:0,fillColor:"#0b0f14",fillOpacity:1,interactive:false}).addTo(map);
-    window._mask.bringToFront();
+    map.fitBounds(b,{padding:[20,20]});
+    // No max-bounds: user can pan around to see surrounding counties.
+    // No mask: surrounding counties stay visible; only the red boundary marks Hartford.
+    window._mask=null;
+    // MASSIVELY BOLD red boundary on a dedicated top pane (z-index 650)
+    // so it always paints above the mask, tiles, and grid layers.
+    window._boundary = L.geoJSON(geo, {
+      pane: 'countyBoundary',
+      style: { color:"#ef0000", weight:2, opacity:1, fill:false, lineCap:"round", lineJoin:"round" }
+    }).addTo(map);
+    // Town boundaries — green 1px outline per Hartford County town.
+    // Isolated try/catch so any town-data issue can't break grid generation below.
+    try {
+      if (!map.getPane('townBoundaries')) {
+        map.createPane('townBoundaries');
+        map.getPane('townBoundaries').style.zIndex = 640;
+      }
+      if (window.HARTFORD_TOWNS_GEOJSON && window.HARTFORD_TOWNS_GEOJSON.features) {
+        const tg = window.HARTFORD_TOWNS_GEOJSON;
+        console.log("[towns] features:", tg.features.length);
+        // Sanitize: drop any feature whose coordinates aren't a valid Polygon ring.
+        const safe = {
+          type:"FeatureCollection",
+          features: tg.features.filter(f => {
+            try {
+              const c = f && f.geometry && f.geometry.coordinates;
+              return Array.isArray(c) && Array.isArray(c[0]) && Array.isArray(c[0][0]) && typeof c[0][0][0] === 'number';
+            } catch(_) { return false; }
+          })
+        };
+        console.log("[towns] sanitized features:", safe.features.length);
+        window._towns = L.geoJSON(safe, {
+          pane: 'townBoundaries',
+          style: { color:"#16a34a", weight:2, opacity:1, fill:false },
+          onEachFeature: (feature, layer) => {
+            if (feature && feature.properties && feature.properties.name) {
+              layer.bindTooltip(feature.properties.name, {sticky:true});
+            }
+          }
+        }).addTo(map);
+        console.log("[towns] layer added, child count:", window._towns.getLayers().length);
+      } else {
+        console.warn("[towns] HARTFORD_TOWNS_GEOJSON missing or empty");
+      }
+    } catch(e) {
+      console.error("[towns] render threw — skipping town overlay:", e);
+    }
+
+    // Order: tiles → grid layers (added later) → boundary always on its top pane
   } catch(e){
     status.textContent="Boundary load failed: "+e.message;
     return;
