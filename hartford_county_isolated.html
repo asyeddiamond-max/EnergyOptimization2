@@ -23,6 +23,20 @@
   #status { font-size:11px; color:#7e8a98; margin-top:8px; }
   .leaflet-popup-content b { font-size:14px; }
   .leaflet-popup-content .stat { display:flex; justify-content:space-between; font-size:12px; padding:2px 0; }
+  .map-legend {
+    background: rgba(15,23,32,0.92); color:#e6edf3; padding:10px 12px;
+    border-radius:8px; font-size:12px; line-height:1.5;
+    box-shadow:0 2px 8px rgba(0,0,0,0.4); min-width:200px;
+  }
+  .map-legend .ml-title { font-weight:600; font-size:12px; margin-bottom:4px; color:#9fd6ff; }
+  .map-legend .ml-row { display:flex; align-items:center; gap:6px; }
+  .map-legend .ml-note { color:#8b95a3; font-size:10px; margin-left:2px; }
+  .map-legend .ml-divider { height:1px; background:#2a3a4d; margin:6px 0; }
+  .map-legend .ml-star { color:#f4c842; font-size:14px; width:14px; text-align:center; }
+  .map-legend .ml-line { display:inline-block; width:18px; height:0; border-top-width:2px; border-top-style:solid; }
+  .map-legend .ml-feeder { border-top-color:#1f77b4; border-top-width:2px; }
+  .map-legend .ml-lateral { border-top-color:#bfc4cb; border-top-width:1px; }
+  .map-legend .ml-sw { display:inline-block; width:12px; height:12px; border:1px solid #334; border-radius:2px; }
 </style>
 </head>
 <body>
@@ -97,6 +111,29 @@ const TOWNS = [
 
 const map = L.map('map', { zoomControl:true, minZoom:9, maxZoom:16 })
               .setView([41.80,-72.73], 10);
+
+// Bottom-left legend / key
+const gridLegend = L.control({position:'bottomleft'});
+gridLegend.onAdd = function() {
+  const div = L.DomUtil.create('div','map-legend');
+  div.innerHTML = `
+    <div class="ml-title">Distribution grid</div>
+    <div class="ml-row"><span class="ml-star">&#9733;</span>Substation <span class="ml-note">(snapped to town center)</span></div>
+    <div class="ml-row"><span class="ml-line ml-feeder"></span>Backbone feeder <span class="ml-note">(colored by substation)</span></div>
+    <div class="ml-row"><span class="ml-line ml-lateral"></span>Lateral</div>
+    <div class="ml-divider"></div>
+    <div class="ml-title">Energy-load shading</div>
+    <div class="ml-row"><span class="ml-sw" style="background:#2c7fb8"></span>Low</div>
+    <div class="ml-row"><span class="ml-sw" style="background:#7fcdbb"></span>Medium</div>
+    <div class="ml-row"><span class="ml-sw" style="background:#fdae61"></span>High</div>
+    <div class="ml-row"><span class="ml-sw" style="background:#d7191c"></span>Very high</div>
+    <div class="ml-divider"></div>
+    <div class="ml-row ml-note">Area outside Hartford County is hidden.</div>
+  `;
+  L.DomEvent.disableClickPropagation(div);
+  return div;
+};
+gridLegend.addTo(map);
 
 const basemaps = {
   osm:   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -347,9 +384,14 @@ loadBoundary().then(geo => {
     color:"#0b0f14", weight:0, fillColor:"#0b0f14", fillOpacity:1,
     interactive:false,
   }).addTo(map);
+  // Mask sits ABOVE the energy circles so any part of them bleeding past the
+  // county boundary gets covered. The mask is a world-rect with the county
+  // shape punched out, so everything inside the county still shows through.
   mask.bringToFront();
-  // Keep energy markers above the mask
-  energyLayer.eachLayer(l => l.bringToFront());
+  // If the grid was already toggled on before boundary loaded, lift it back above the mask.
+  if (gridLayer && map.hasLayer(gridLayer)) {
+    gridLayer.eachLayer(l => l.bringToFront && l.bringToFront());
+  }
 
   const bounds = geoToLatLngBounds(geo);
   map.fitBounds(bounds, {padding:[10,10]});
