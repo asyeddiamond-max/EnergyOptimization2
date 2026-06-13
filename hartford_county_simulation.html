@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Hartford County — Grid + Storm + Restoration Simulation</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<style>
+  html, body { margin:0; padding:0; height:100%; font-family: system-ui, sans-serif; background:#0b0f14; }
+  #app { display:grid; grid-template-columns: 340px 1fr; height:100vh; }
+  #sidebar { background:#0f1720; color:#e6edf3; padding:16px; overflow:auto; }
+  #sidebar h1 { font-size:16px; margin:0 0 6px; }
+  #sidebar p  { font-size:12px; line-height:1.4; color:#9aa7b4; margin:0 0 12px; }
+  #map { height:100%; background:#0b0f14; }
+  .ctrl { background:#1b2530; padding:9px 12px; border-radius:8px; margin-bottom:8px; font-size:12px; }
+  .ctrl input[type=range] { width:100%; }
+  .ctrl input[type=number] { width:70px; background:#0b0f14; color:#e6edf3; border:1px solid #334; border-radius:4px; padding:2px 4px; }
+  .ctrl .small { font-size:10px; color:#7e8a98; margin-top:3px; }
+  .ctrl .row { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+  .stat-box { background:#142033; border:1px solid #1f3a5f; padding:8px 12px; border-radius:8px; margin-bottom:8px; }
+  .stat-box .big { font-size:20px; font-weight:700; }
+  .stat-box .lbl { font-size:10px; color:#9aa7b4; text-transform:uppercase; letter-spacing:0.5px; }
+  .stat-box .sub { font-size:11px; color:#7e8a98; margin-top:2px; }
+  button.action {
+    width:100%; border:none; padding:9px; border-radius:6px; font-size:13px; font-weight:600;
+    cursor:pointer; margin-bottom:6px; color:white;
+  }
+  .btn-grid    { background:linear-gradient(180deg,#3b82f6,#1d4ed8); }
+  .btn-storm   { background:linear-gradient(180deg,#dc2626,#991b1b); }
+  .btn-restore { background:linear-gradient(180deg,#10b981,#047857); }
+  .btn-reset   { background:#374151; }
+  button.action:hover { filter:brightness(1.1); }
+  #status { font-size:11px; color:#7e8a98; margin-top:8px; }
+  .map-legend {
+    background: rgba(15,23,32,0.92); color:#e6edf3; padding:10px 12px;
+    border-radius:8px; font-size:11px; line-height:1.6;
+    box-shadow:0 2px 8px rgba(0,0,0,0.4); min-width:200px;
+  }
+  .map-legend .ml-title { font-weight:600; color:#9fd6ff; margin-bottom:4px; font-size:12px; }
+  .map-legend .ml-row { display:flex; align-items:center; gap:6px; }
+  .map-legend .ml-note { color:#8b95a3; font-size:10px; }
+  .map-legend .ml-line { display:inline-block; width:18px; border-top:2px solid; }
+  .map-legend .sq { display:inline-block; width:10px; height:10px; background:#374151; border:1px solid #6b7280; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <h1>Hartford County — Storm &amp; Restoration</h1>
+    <p>Mock 100-substation distribution grid for Hartford County. Simulate storm outages, count affected customers, and plan crew-based restoration.</p>
+
+    <div class="ctrl">
+      <div class="row"><span>Substations: <b id="kVal">100</b></span></div>
+      <input type="range" id="kSlider" min="20" max="250" value="100" />
+      <div class="small">Substations placed via weighted k-means on town population.</div>
+    </div>
+
+    <div class="ctrl">
+      <div class="row"><span>Feeders / substation: <b id="fVal">5</b></span></div>
+      <input type="range" id="fSlider" min="3" max="10" value="5" />
+    </div>
+
+    <button class="action btn-grid" id="genGrid">Generate distribution grid</button>
+
+    <div class="ctrl">
+      <div class="row"><span>Storm outages: <b id="oVal">500</b></span></div>
+      <input type="range" id="oSlider" min="50" max="5000" value="500" step="50" />
+      <div class="small">Random failure points across feeders and laterals.</div>
+    </div>
+
+    <div class="ctrl">
+      <div class="row">
+        <span>Seed:</span>
+        <input type="number" id="seedInput" value="42" />
+      </div>
+      <div class="small">Same seed → identical storm. Reproducible.</div>
+    </div>
+
+    <button class="action btn-storm" id="simStorm">Simulate storm</button>
+
+    <div class="stat-box" style="border-color:#5f2a2a;background:#201212">
+      <div class="lbl">Customers without power</div>
+      <div class="big" style="color:#ff8585" id="affected">0</div>
+      <div class="sub" id="affectedPct">0% of county population</div>
+    </div>
+
+    <div class="stat-box">
+      <div class="lbl">Outage locations</div>
+      <div class="big" style="color:#fca5a5" id="outageCount">0</div>
+    </div>
+
+    <div class="ctrl">
+      <div class="row"><span>Repair crews: <b id="cVal">10</b></span></div>
+      <input type="range" id="cSlider" min="1" max="50" value="10" />
+    </div>
+
+    <button class="action btn-restore" id="planRestore">Plan restoration</button>
+
+    <div class="stat-box" style="border-color:#1f5f3a;background:#0d2017">
+      <div class="lbl">Total restoration time</div>
+      <div class="big" style="color:#7fcdbb" id="restoreTime">—</div>
+      <div class="sub" id="restoreDetail">— customers restored</div>
+    </div>
+
+    <button class="action btn-reset" id="resetAll">Reset storm</button>
+
+    <div id="status">Loading boundary…</div>
+  </aside>
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+const TOWNS = [
+  {name:"Hartford",lat:41.7637,lon:-72.6851,pop:121054},
+  {name:"New Britain",lat:41.6612,lon:-72.7795,pop:74992},
+  {name:"West Hartford",lat:41.7620,lon:-72.7420,pop:64083},
+  {name:"Bristol",lat:41.6718,lon:-72.9493,pop:60833},
+  {name:"Manchester",lat:41.7759,lon:-72.5215,pop:59713},
+  {name:"Enfield",lat:41.9762,lon:-72.5917,pop:42141},
+  {name:"East Hartford",lat:41.7823,lon:-72.6120,pop:51045},
+  {name:"Southington",lat:41.6001,lon:-72.8781,pop:43501},
+  {name:"Glastonbury",lat:41.7126,lon:-72.6081,pop:35159},
+  {name:"South Windsor",lat:41.8237,lon:-72.6223,pop:26918},
+  {name:"Windsor",lat:41.8525,lon:-72.6437,pop:29492},
+  {name:"Newington",lat:41.6981,lon:-72.7237,pop:30152},
+  {name:"Wethersfield",lat:41.7142,lon:-72.6526,pop:26492},
+  {name:"Rocky Hill",lat:41.6648,lon:-72.6648,pop:20845},
+  {name:"Bloomfield",lat:41.8281,lon:-72.7295,pop:21535},
+  {name:"Plainville",lat:41.6745,lon:-72.8589,pop:17716},
+  {name:"Farmington",lat:41.7201,lon:-72.8320,pop:26712},
+  {name:"Berlin",lat:41.6212,lon:-72.7456,pop:20175},
+  {name:"Avon",lat:41.8098,lon:-72.8303,pop:18871},
+  {name:"Simsbury",lat:41.8762,lon:-72.8009,pop:24517},
+  {name:"Windsor Locks",lat:41.9292,lon:-72.6234,pop:12613},
+  {name:"East Windsor",lat:41.9123,lon:-72.5453,pop:11190},
+  {name:"Suffield",lat:41.9837,lon:-72.6520,pop:15735},
+  {name:"Granby",lat:41.9526,lon:-72.7898,pop:11282},
+  {name:"Canton",lat:41.8348,lon:-72.8945,pop:10124},
+  {name:"Marlborough",lat:41.6320,lon:-72.4598,pop:6307},
+  {name:"East Granby",lat:41.9434,lon:-72.7320,pop:5184},
+  {name:"Hartland",lat:41.9856,lon:-72.9534,pop:1885},
+  {name:"Burlington",lat:41.7720,lon:-72.9590,pop:9701},
+];
+const TOTAL_POP = TOWNS.reduce((s,t)=>s+t.pop,0);
+const PALETTE = ["#ff7f0e","#8B4513","#fdbb84","#fc8d8d","#bcbcbc","#1fb8d1","#2ca02c","#9ed0e6","#c266a7","#a68272","#7e5fc4","#f4c842","#e377c2","#f7b6d2","#888888","#d62728","#1f77b4","#9c8fbf","#a7e09b","#7f7f7f","#d6c95a","#bcbd22","#17becf","#ffbb78","#98df8a"];
+
+// --- PRNG + utils ---
+function mulberry32(s){return function(){s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function dist(a,b){const R=3958.8,toR=d=>d*Math.PI/180;const dLa=toR(b.lat-a.lat),dLo=toR(b.lon-a.lon);const s=Math.sin(dLa/2)**2+Math.cos(toR(a.lat))*Math.cos(toR(b.lat))*Math.sin(dLo/2)**2;return 2*R*Math.asin(Math.sqrt(s));}
+function pointInRing(lon,lat,ring){let inside=false;for (let i=0,j=ring.length-1;i<ring.length;j=i++){const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];if (((yi>lat)!==(yj>lat)) && (lon<(xj-xi)*(lat-yi)/(yj-yi)+xi)) inside=!inside;}return inside;}
+function pointInGeo(lon,lat,geo){const polys=geo.type==="Polygon"?[geo.coordinates]:geo.coordinates;for (const poly of polys){if (!pointInRing(lon,lat,poly[0])) continue;let h=false;for (let i=1;i<poly.length;i++) if (pointInRing(lon,lat,poly[i])){h=true;break;}if (!h) return true;}return false;}
+function geoBounds(geo){let minLa=90,maxLa=-90,minLo=180,maxLo=-180;const v=r=>r.forEach(([lo,la])=>{minLa=Math.min(minLa,la);maxLa=Math.max(maxLa,la);minLo=Math.min(minLo,lo);maxLo=Math.max(maxLo,lo);});if (geo.type==="Polygon") v(geo.coordinates[0]); else geo.coordinates.forEach(p=>v(p[0]));return L.latLngBounds([minLa,minLo],[maxLa,maxLo]);}
+function buildMask(geo){const outer=[[-90,-180],[-90,180],[90,180],[90,-180],[-90,-180]];const holes=[];const push=r=>holes.push(r.map(([lo,la])=>[la,lo]));if (geo.type==="Polygon") push(geo.coordinates[0]);else geo.coordinates.forEach(p=>push(p[0]));return [outer,...holes];}
+async function loadBoundary(){const url="https://nominatim.openstreetmap.org/search?country=USA&state=Connecticut&county=Hartford+County&format=json&polygon_geojson=1&limit=1";const r=await fetch(url,{headers:{'Accept':'application/json'}});const d=await r.json();if (!d.length||!d[0].geojson) throw new Error("No boundary");return d[0].geojson;}
+
+// --- Map ---
+const map=L.map('map',{zoomControl:true,minZoom:9,maxZoom:16}).setView([41.80,-72.73],10);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; CARTO, OSM'}).addTo(map);
+
+const legend=L.control({position:'bottomleft'});
+legend.onAdd=function(){
+  const div=L.DomUtil.create('div','map-legend');
+  div.innerHTML=`
+    <div class="ml-title">Distribution simulation</div>
+    <div class="ml-row"><span style="color:#f4c842">&#9733;</span>Substation</div>
+    <div class="ml-row"><span class="ml-line" style="border-color:#1f77b4"></span>Feeder backbone (colored by substation)</div>
+    <div class="ml-row"><span class="ml-line" style="border-color:#bfc4cb;border-width:1px"></span>Lateral</div>
+    <div class="ml-row"><span style="color:#7f1d1d;font-weight:bold">&#10006;</span>Storm outage</div>
+    <div class="ml-row"><span class="sq"></span>Crew depot</div>
+    <div class="ml-row ml-note">Colored dots on outages = crew assignment + repair order.</div>
+  `;
+  return div;
+};
+legend.addTo(map);
+
+// --- Layers ---
+const lateralLayer=L.layerGroup().addTo(map);
+const feederLayer=L.layerGroup().addTo(map);
+const subLayer=L.layerGroup().addTo(map);
+const outageLayer=L.layerGroup().addTo(map);
+const repairLayer=L.layerGroup().addTo(map);
+const depotLayer=L.layerGroup().addTo(map);
+
+// --- Spatial accelerators (built once after boundary loads) ---
+// 1) inside-bitmap: a coarse grid over the county bbox where each cell stores
+//    a precomputed point-in-polygon result. Reduces O(P) ring tests to O(1) lookups.
+// 2) sqEuclid: cheap k-means distance (no trig).
+const GRID_N=256;
+let _insideBits=null, _gLatMin=0,_gLatMax=0,_gLonMin=0,_gLonMax=0,_gDLat=0,_gDLon=0;
+let _bitmapReady=false;
+function buildInsideBitmap(geo){
+  try {
+    const b=geoBounds(geo);
+    _gLatMin=b.getSouth(); _gLatMax=b.getNorth();
+    _gLonMin=b.getWest();  _gLonMax=b.getEast();
+    _gDLat=(_gLatMax-_gLatMin)/GRID_N;
+    _gDLon=(_gLonMax-_gLonMin)/GRID_N;
+    _insideBits=new Uint8Array(GRID_N*GRID_N);
+    let count=0;
+    for (let i=0;i<GRID_N;i++){
+      const lat=_gLatMin+(i+0.5)*_gDLat;
+      for (let j=0;j<GRID_N;j++){
+        const lon=_gLonMin+(j+0.5)*_gDLon;
+        if (pointInGeo(lon,lat,geo)){ _insideBits[i*GRID_N+j]=1; count++; }
+      }
+    }
+    _bitmapReady = count > 0;
+    console.log(`inside bitmap: ${count}/${GRID_N*GRID_N} cells inside county`);
+  } catch(e){
+    console.warn("bitmap build failed, will fall back to pointInGeo:", e);
+    _bitmapReady=false;
+  }
+}
+function insideFast(lon,lat){
+  // Fall back to pointInGeo if bitmap isn't ready — keeps generation correct even on bitmap failure.
+  if (!_bitmapReady) return countyGeo ? pointInGeo(lon,lat,countyGeo) : true;
+  if (lat<_gLatMin||lat>=_gLatMax||lon<_gLonMin||lon>=_gLonMax) return false;
+  const i=(lat-_gLatMin)/_gDLat|0, j=(lon-_gLonMin)/_gDLon|0;
+  return _insideBits[i*GRID_N+j]===1;
+}
+function sqEuclid(a,b){const dx=a.lat-b.lat,dy=a.lon-b.lon;return dx*dx+dy*dy;}
+
+// --- State ---
+let countyGeo=null;
+let substations=[];   // {lat,lon,color,popServed}
+let feeders=[];       // {subIdx, pts:[[lat,lon],...], popServed}
+let laterals=[];      // {feederIdx, pts, popServed}
+let storm=null;       // {outages:[{lat,lon,feederIdx,lateralIdx,custAffected}], totalCust}
+let plan=null;        // {crews:[{depot,jobs:[outageIdx,...],time}], totalTime}
+
+// --- UI refs ---
+const kS=document.getElementById('kSlider'), kV=document.getElementById('kVal');
+const fS=document.getElementById('fSlider'), fV=document.getElementById('fVal');
+const oS=document.getElementById('oSlider'), oV=document.getElementById('oVal');
+const cS=document.getElementById('cSlider'), cV=document.getElementById('cVal');
+const seedI=document.getElementById('seedInput');
+const status=document.getElementById('status');
+const affectedEl=document.getElementById('affected'), affectedPctEl=document.getElementById('affectedPct');
+const outageCountEl=document.getElementById('outageCount');
+const restoreTimeEl=document.getElementById('restoreTime'), restoreDetailEl=document.getElementById('restoreDetail');
+kS.oninput=()=>kV.textContent=kS.value;
+fS.oninput=()=>fV.textContent=fS.value;
+oS.oninput=()=>oV.textContent=oS.value;
+cS.oninput=()=>cV.textContent=cS.value;
+
+function starSVG(color,size=14){return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24"><polygon points="12,1 15,9 23,9 16.5,14 19,22 12,17 5,22 7.5,14 1,9 9,9" fill="${color}" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg>`;}
+
+// --- Step 1: Substation placement via weighted k-means on demand points ---
+function buildDemandPoints(rnd){
+  const pts=[];
+  TOWNS.forEach(t=>{
+    const n=Math.max(8,Math.round(Math.sqrt(t.pop)/2));
+    const w=t.pop/n;
+    for (let i=0;i<n;i++){
+      const r=0.005+rnd()*0.015, a=rnd()*Math.PI*2;
+      pts.push({lat:t.lat+Math.sin(a)*r*0.85,lon:t.lon+Math.cos(a)*r,w});
+    }
+  });
+  return pts;
+}
+function kmeans(pts,k,geo,rnd,iters=15){
+  // Flat typed arrays for hot loops
+  const N=pts.length;
+  const pLat=new Float64Array(N), pLon=new Float64Array(N), pW=new Float64Array(N);
+  for (let i=0;i<N;i++){pLat[i]=pts[i].lat;pLon[i]=pts[i].lon;pW[i]=pts[i].w;}
+  const cLat=new Float64Array(k), cLon=new Float64Array(k);
+  // k-means++ seeding with squared-Euclidean (no trig)
+  const first=Math.floor(rnd()*N);
+  cLat[0]=pLat[first]; cLon[0]=pLon[first];
+  const minD=new Float64Array(N); for (let i=0;i<N;i++){const dx=pLat[i]-cLat[0],dy=pLon[i]-cLon[0];minD[i]=dx*dx+dy*dy;}
+  for (let c=1;c<k;c++){
+    let sum=0; for (let i=0;i<N;i++) sum+=minD[i]*pW[i];
+    let r=rnd()*sum, idx=N-1;
+    for (let i=0;i<N;i++){r-=minD[i]*pW[i];if (r<=0){idx=i;break;}}
+    cLat[c]=pLat[idx]; cLon[c]=pLon[idx];
+    for (let i=0;i<N;i++){const dx=pLat[i]-cLat[c],dy=pLon[i]-cLon[c];const d=dx*dx+dy*dy;if (d<minD[i]) minD[i]=d;}
+  }
+  // Lloyd iterations
+  const sL=new Float64Array(k), sN=new Float64Array(k), sW=new Float64Array(k);
+  for (let it=0;it<iters;it++){
+    sL.fill(0); sN.fill(0); sW.fill(0);
+    for (let i=0;i<N;i++){
+      const lat=pLat[i],lon=pLon[i],w=pW[i];
+      let b=0,bd=Infinity;
+      for (let c=0;c<k;c++){const dx=lat-cLat[c],dy=lon-cLon[c];const d=dx*dx+dy*dy;if (d<bd){bd=d;b=c;}}
+      sL[b]+=lat*w; sN[b]+=lon*w; sW[b]+=w;
+    }
+    for (let c=0;c<k;c++){
+      if (sW[c]<=0) continue;
+      let nl=sL[c]/sW[c], ln=sN[c]/sW[c];
+      // Snap centroid back inside via the bitmap (was the slow path)
+      if (geo && !insideFast(ln,nl)){
+        let bestI=0,bd=Infinity;
+        for (let i=0;i<N;i++){const dx=pLat[i]-nl,dy=pLon[i]-ln;const d=dx*dx+dy*dy;if (d<bd){bd=d;bestI=i;}}
+        nl=pLat[bestI]; ln=pLon[bestI];
+      }
+      cLat[c]=nl; cLon[c]=ln;
+    }
+  }
+  const out=new Array(k); for (let c=0;c<k;c++) out[c]={lat:cLat[c],lon:cLon[c]};
+  return out;
+}
+
+// --- Step 2: Generate feeders (radial backbones) + laterals (random walks) ---
+function generateGrid(){
+  const seed=+seedI.value|0;
+  const rnd=mulberry32(seed+1);
+  const k=+kS.value, feedersPerSub=+fS.value;
+  status.textContent=`Placing ${k} substations…`;
+
+  const demand=buildDemandPoints(rnd);
+  const centers=kmeans(demand,k,countyGeo,rnd);
+
+  substations=centers.map((c,i)=>({lat:c.lat,lon:c.lon,color:PALETTE[i%PALETTE.length],popServed:0}));
+
+  // Assign each demand point to nearest substation → estimate popServed
+  demand.forEach(d=>{
+    let b=0,bd=Infinity;
+    substations.forEach((s,i)=>{const dd=dist(d,s);if (dd<bd){bd=dd;b=i;}});
+    substations[b].popServed+=d.w;
+  });
+
+  status.textContent=`Generating feeders and laterals…`;
+  feeders=[]; laterals=[];
+
+  // For each substation: f feeder backbones radiating outward
+  substations.forEach((s,si)=>{
+    const popPerFeeder=s.popServed/feedersPerSub;
+    for (let f=0;f<feedersPerSub;f++){
+      const baseAng=(f/feedersPerSub)*Math.PI*2+rnd()*0.4;
+      let lat=s.lat,lon=s.lon,ang=baseAng;
+      const pts=[[lat,lon]];
+      const segs=8+Math.floor(rnd()*8);
+      for (let g=0;g<segs;g++){
+        ang+=(rnd()-0.5)*0.5;
+        const step=0.004+rnd()*0.005;
+        lon+=Math.cos(ang)*step; lat+=Math.sin(ang)*step;
+        if (!insideFast(lon,lat)) break;
+        pts.push([lat,lon]);
+      }
+      if (pts.length<2) continue;
+      const fIdx=feeders.length;
+      feeders.push({subIdx:si,pts,popServed:popPerFeeder,color:s.color});
+
+      // Laterals: branch from each midpoint of the feeder
+      const lateralsPerFeeder=4+Math.floor(rnd()*5);
+      for (let l=0;l<lateralsPerFeeder;l++){
+        const anchor=pts[1+Math.floor(rnd()*(pts.length-1))];
+        let lLat=anchor[0],lLon=anchor[1],lAng=rnd()*Math.PI*2;
+        const lPts=[[lLat,lLon]];
+        const lSegs=3+Math.floor(rnd()*5);
+        for (let g=0;g<lSegs;g++){
+          lAng+=(rnd()-0.5)*1.0;
+          const lStep=0.0015+rnd()*0.0025;
+          lLon+=Math.cos(lAng)*lStep; lLat+=Math.sin(lAng)*lStep;
+          if (!insideFast(lLon,lLat)) break;
+          lPts.push([lLat,lLon]);
+        }
+        if (lPts.length<2) continue;
+        laterals.push({feederIdx:fIdx,pts:lPts,popServed:popPerFeeder/lateralsPerFeeder});
+      }
+    }
+  });
+
+  renderGrid();
+  console.log(`Generated: subs=${substations.length}, feeders=${feeders.length}, laterals=${laterals.length}`);
+  if (feeders.length === 0) {
+    status.textContent = `WARNING: 0 feeders generated. Check console for errors. Substations: ${substations.length}.`;
+    return;
+  }
+  status.textContent=`Grid: ${substations.length} substations, ${feeders.length} feeders, ${laterals.length} laterals. Ready to simulate storm.`;
+  // Reset downstream state
+  storm=null; plan=null;
+  outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
+  affectedEl.textContent='0'; affectedPctEl.textContent='0% of county population';
+  outageCountEl.textContent='0'; restoreTimeEl.textContent='—'; restoreDetailEl.textContent='— customers restored';
+}
+
+function renderGrid(){
+  lateralLayer.clearLayers(); feederLayer.clearLayers(); subLayer.clearLayers();
+  laterals.forEach(l=>L.polyline(l.pts,{color:"#bfc4cb",weight:0.6,opacity:0.75,interactive:false}).addTo(lateralLayer));
+  feeders.forEach(f=>L.polyline(f.pts,{color:f.color,weight:1.3,opacity:0.95,interactive:false}).addTo(feederLayer));
+  substations.forEach((s,i)=>{
+    const icon=L.divIcon({className:"sub-star",html:starSVG(s.color,14),iconSize:[14,14],iconAnchor:[7,7]});
+    L.marker([s.lat,s.lon],{icon,interactive:true}).addTo(subLayer)
+      .bindTooltip(`Substation ${i+1} — ${Math.round(s.popServed).toLocaleString()} customers`);
+  });
+  // Bring mask back to top
+  if (window._mask) window._mask.bringToFront();
+}
+
+// --- Step 3: Storm — pick N outage points on the network ---
+function simulateStorm(){
+  if (!feeders.length){status.textContent="Generate the grid first.";return;}
+  const seed=+seedI.value|0;
+  const rnd=mulberry32(seed*7919+13);
+  const N=+oS.value;
+  const outages=[];
+  // Outages are placed on a random line segment (feeder or lateral, weighted by laterals for realism)
+  const allSegs=[];
+  feeders.forEach((f,fi)=>{for (let s=0;s<f.pts.length-1;s++) allSegs.push({kind:'f',fi,s,popServed:f.popServed/(f.pts.length-1)});});
+  laterals.forEach((l,li)=>{for (let s=0;s<l.pts.length-1;s++) allSegs.push({kind:'l',li,s,popServed:l.popServed/(l.pts.length-1)});});
+
+  for (let i=0;i<N;i++){
+    const seg=allSegs[Math.floor(rnd()*allSegs.length)];
+    const t=rnd();
+    const arr=seg.kind==='f'?feeders[seg.fi].pts:laterals[seg.li].pts;
+    const a=arr[seg.s], b=arr[seg.s+1];
+    const lat=a[0]+(b[0]-a[0])*t, lon=a[1]+(b[1]-a[1])*t;
+    outages.push({lat,lon,kind:seg.kind,fi:seg.fi,li:seg.li,popLoss:seg.popServed});
+  }
+
+  // Customers affected = sum of popLoss, capped at county population.
+  // This is a simplified model: each outage drops a chunk of downstream customers
+  // proportional to the line segment's share of customers served.
+  let totalCust=outages.reduce((s,o)=>s+o.popLoss,0);
+  totalCust=Math.min(totalCust,TOTAL_POP);
+
+  storm={outages,totalCust};
+  plan=null;
+
+  // Render
+  outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
+  outages.forEach(o=>{
+    L.circleMarker([o.lat,o.lon],{
+      radius:2.5,color:"#000",weight:0.5,fillColor:"#7f1d1d",fillOpacity:0.9,interactive:false
+    }).addTo(outageLayer);
+  });
+
+  affectedEl.textContent=Math.round(totalCust).toLocaleString();
+  affectedPctEl.textContent=(100*totalCust/TOTAL_POP).toFixed(1)+"% of county population";
+  outageCountEl.textContent=N.toLocaleString();
+  restoreTimeEl.textContent='—'; restoreDetailEl.textContent='— customers restored';
+  status.textContent=`Storm: ${N.toLocaleString()} outages, ~${Math.round(totalCust).toLocaleString()} customers without power.`;
+}
+
+// --- Step 4: Restoration plan ---
+// Each crew starts at a depot, picks nearest unrepaired outage, repairs (fixed time + travel),
+// moves to next. Total restoration time = max(crew time across all crews).
+function planRestoration(){
+  if (!storm){status.textContent="Simulate a storm first.";return;}
+  const seed=+seedI.value|0;
+  const rnd=mulberry32(seed*31+99);
+  const M=+cS.value;
+  const REPAIR_HRS=1.5;        // hours per outage to repair
+  const TRAVEL_MPH=30;         // crew travel speed
+
+  // Depots: pick M depot locations as k-means centers of the outage points
+  const depotPts=storm.outages.map(o=>({lat:o.lat,lon:o.lon,w:1}));
+  const depots=kmeans(depotPts,Math.min(M,depotPts.length),countyGeo,rnd,15);
+  const crews=depots.map((d,i)=>({depot:d,color:PALETTE[i%PALETTE.length],jobs:[],time:0,curLat:d.lat,curLon:d.lon}));
+
+  // Greedy: repeatedly assign next outage to the crew that would finish it earliest.
+  const remaining=storm.outages.map((o,i)=>({o,i}));
+  while (remaining.length){
+    let bestCrew=-1,bestJob=-1,bestETA=Infinity;
+    for (let ci=0;ci<crews.length;ci++){
+      const c=crews[ci];
+      for (let ji=0;ji<remaining.length;ji++){
+        const j=remaining[ji];
+        const d=dist({lat:c.curLat,lon:c.curLon},j.o);
+        const eta=c.time + d/TRAVEL_MPH + REPAIR_HRS;
+        if (eta<bestETA){bestETA=eta;bestCrew=ci;bestJob=ji;}
+      }
+    }
+    const c=crews[bestCrew]; const {o,i}=remaining.splice(bestJob,1)[0];
+    c.jobs.push({outageIdx:i,o,etaFinish:bestETA});
+    c.time=bestETA; c.curLat=o.lat; c.curLon=o.lon;
+  }
+
+  // Above is O(M*N^2). For very large N this gets slow — but for N up to ~5000 with small M it's fine.
+  // To keep things snappy at N=5000 we switch to spatial-bucket nearest at high N:
+  // (Skipping in this prototype; user can lower outage slider if it gets slow.)
+
+  const totalTime=Math.max(...crews.map(c=>c.time));
+
+  plan={crews,totalTime};
+
+  // Render crew depots
+  depotLayer.clearLayers(); repairLayer.clearLayers();
+  crews.forEach(c=>{
+    const html=`<div style="width:14px;height:14px;background:${c.color};border:2px solid #111;"></div>`;
+    L.marker([c.depot.lat,c.depot.lon],{icon:L.divIcon({className:'crew-depot',html,iconSize:[14,14],iconAnchor:[7,7]})}).addTo(depotLayer)
+      .bindTooltip(`Crew ${c.color} depot`);
+  });
+  // Render repair jobs colored by crew, with numeric order (top-N labeled to avoid DOM overload)
+  crews.forEach(c=>{
+    c.jobs.forEach((j,order)=>{
+      const showNum=order<30; // label first 30 jobs per crew
+      const html=showNum
+        ? `<div style="width:14px;height:14px;border-radius:50%;background:${c.color};color:white;font-size:9px;font-weight:bold;line-height:14px;text-align:center;border:1px solid #111">${order+1}</div>`
+        : `<div style="width:6px;height:6px;border-radius:50%;background:${c.color};border:0.5px solid #111"></div>`;
+      const sz=showNum?14:6;
+      L.marker([j.o.lat,j.o.lon],{icon:L.divIcon({className:'',html,iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]}),interactive:false}).addTo(repairLayer);
+    });
+  });
+
+  restoreTimeEl.textContent=totalTime.toFixed(1)+" h";
+  restoreDetailEl.textContent=`${storm.outages.length.toLocaleString()} jobs across ${crews.length} crews`;
+  status.textContent=`Restoration: ${crews.length} crews finish all ${storm.outages.length.toLocaleString()} repairs in ${totalTime.toFixed(1)} hours.`;
+}
+
+function resetStorm(){
+  storm=null; plan=null;
+  outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
+  affectedEl.textContent='0'; affectedPctEl.textContent='0% of county population';
+  outageCountEl.textContent='0'; restoreTimeEl.textContent='—'; restoreDetailEl.textContent='— customers restored';
+  status.textContent='Storm cleared.';
+}
+
+document.getElementById('genGrid').onclick=generateGrid;
+document.getElementById('simStorm').onclick=simulateStorm;
+document.getElementById('planRestore').onclick=planRestoration;
+document.getElementById('resetAll').onclick=resetStorm;
+
+// --- Boot ---
+(async()=>{
+  let geo;
+  try {
+    geo=await loadBoundary();
+    countyGeo=geo;
+    buildInsideBitmap(geo);
+    L.geoJSON(geo,{style:{color:"#ef4444",weight:2.5,fill:false}}).addTo(map);
+    const b=geoBounds(geo);
+    map.fitBounds(b,{padding:[10,10]});
+    map.setMaxBounds(b.pad(0.05));
+    window._mask=L.polygon(buildMask(geo),{color:"#0b0f14",weight:0,fillColor:"#0b0f14",fillOpacity:1,interactive:false}).addTo(map);
+    window._mask.bringToFront();
+  } catch(e){
+    status.textContent="Boundary load failed: "+e.message;
+    return;
+  }
+  status.textContent="Ready. Click \"Generate distribution grid\" to start.";
+  // Auto-generate for first view
+  generateGrid();
+})();
+</script>
+</body>
+</html>

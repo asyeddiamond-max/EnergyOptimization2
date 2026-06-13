@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Hartford County — Real Grid + Outage Simulator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<style>
+  html, body { margin:0; padding:0; height:100%; font-family: system-ui, sans-serif; background:#0b0f14; }
+  #app { display:grid; grid-template-columns: 320px 1fr; height:100vh; }
+  #sidebar { background:#0f1720; color:#e6edf3; padding:18px; overflow:auto; }
+  #sidebar h1 { font-size:17px; margin:0 0 6px; }
+  #sidebar p  { font-size:12px; line-height:1.4; color:#9aa7b4; margin:0 0 14px; }
+  #map { height:100%; background:#0b0f14; }
+  .ctrl { background:#1b2530; padding:10px 12px; border-radius:8px; margin-bottom:10px; font-size:13px; }
+  .ctrl label { display:flex; align-items:center; gap:8px; cursor:pointer; }
+  .ctrl input[type=range] { width:100%; }
+  .stat-box { background:#142033; border:1px solid #1f3a5f; padding:10px 12px; border-radius:8px; margin-bottom:10px; }
+  .stat-box .big { font-size:22px; font-weight:700; color:#ff8585; }
+  .stat-box .lbl { font-size:11px; color:#9aa7b4; text-transform:uppercase; letter-spacing:0.5px; }
+  .stat-box .sub { font-size:11px; color:#7e8a98; margin-top:4px; }
+  #status { font-size:11px; color:#7e8a98; margin-top:8px; }
+  .map-legend {
+    background: rgba(15,23,32,0.92); color:#e6edf3; padding:10px 12px;
+    border-radius:8px; font-size:12px; line-height:1.5;
+    box-shadow:0 2px 8px rgba(0,0,0,0.4); min-width:200px;
+  }
+  .map-legend .ml-title { font-weight:600; font-size:12px; margin-bottom:4px; color:#9fd6ff; }
+  .map-legend .ml-row { display:flex; align-items:center; gap:6px; }
+  .map-legend .ml-note { color:#8b95a3; font-size:10px; }
+  .map-legend .ml-line { display:inline-block; width:18px; border-top:2px solid; }
+  .map-legend .ml-star { color:#f4c842; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <h1>Hartford County — Real Grid</h1>
+    <p>Real substations and transmission lines from OpenStreetMap. Use the outage slider to simulate random substation failures.</p>
+
+    <div class="ctrl">
+      <label style="flex-direction:column;align-items:stretch;gap:4px">
+        <span>Outage rate: <b id="outageVal">0%</b></span>
+        <input type="range" id="outageSlider" min="0" max="100" value="0" />
+      </label>
+      <div style="font-size:11px;color:#7e8a98;margin-top:4px">
+        Randomly knocks offline that % of substations.
+      </div>
+    </div>
+
+    <div class="stat-box">
+      <div class="lbl">People affected</div>
+      <div class="big" id="affected">0</div>
+      <div class="sub" id="affectedPct">0% of county population</div>
+    </div>
+
+    <div class="stat-box" style="border-color:#2a4d3a;background:#102019;">
+      <div class="lbl">Substations</div>
+      <div class="big" style="color:#7fcdbb" id="subCount">…</div>
+      <div class="sub" id="subOffline">0 offline</div>
+    </div>
+
+    <div id="status">Loading boundary and real grid data…</div>
+  </aside>
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+// Town centroids + populations — used to estimate people affected by outages.
+const TOWNS = [
+  {name:"Hartford",lat:41.7637,lon:-72.6851,pop:121054},
+  {name:"New Britain",lat:41.6612,lon:-72.7795,pop:74992},
+  {name:"West Hartford",lat:41.7620,lon:-72.7420,pop:64083},
+  {name:"Bristol",lat:41.6718,lon:-72.9493,pop:60833},
+  {name:"Manchester",lat:41.7759,lon:-72.5215,pop:59713},
+  {name:"Enfield",lat:41.9762,lon:-72.5917,pop:42141},
+  {name:"East Hartford",lat:41.7823,lon:-72.6120,pop:51045},
+  {name:"Southington",lat:41.6001,lon:-72.8781,pop:43501},
+  {name:"Glastonbury",lat:41.7126,lon:-72.6081,pop:35159},
+  {name:"South Windsor",lat:41.8237,lon:-72.6223,pop:26918},
+  {name:"Windsor",lat:41.8525,lon:-72.6437,pop:29492},
+  {name:"Newington",lat:41.6981,lon:-72.7237,pop:30152},
+  {name:"Wethersfield",lat:41.7142,lon:-72.6526,pop:26492},
+  {name:"Rocky Hill",lat:41.6648,lon:-72.6648,pop:20845},
+  {name:"Bloomfield",lat:41.8281,lon:-72.7295,pop:21535},
+  {name:"Plainville",lat:41.6745,lon:-72.8589,pop:17716},
+  {name:"Farmington",lat:41.7201,lon:-72.8320,pop:26712},
+  {name:"Berlin",lat:41.6212,lon:-72.7456,pop:20175},
+  {name:"Avon",lat:41.8098,lon:-72.8303,pop:18871},
+  {name:"Simsbury",lat:41.8762,lon:-72.8009,pop:24517},
+  {name:"Windsor Locks",lat:41.9292,lon:-72.6234,pop:12613},
+  {name:"East Windsor",lat:41.9123,lon:-72.5453,pop:11190},
+  {name:"Suffield",lat:41.9837,lon:-72.6520,pop:15735},
+  {name:"Granby",lat:41.9526,lon:-72.7898,pop:11282},
+  {name:"Canton",lat:41.8348,lon:-72.8945,pop:10124},
+  {name:"Marlborough",lat:41.6320,lon:-72.4598,pop:6307},
+  {name:"East Granby",lat:41.9434,lon:-72.7320,pop:5184},
+  {name:"Hartland",lat:41.9856,lon:-72.9534,pop:1885},
+  {name:"Burlington",lat:41.7720,lon:-72.9590,pop:9701},
+];
+const TOTAL_POP = TOWNS.reduce((s,t)=>s+t.pop,0);
+
+const map = L.map('map', { zoomControl:true, minZoom:9, maxZoom:16 }).setView([41.80,-72.73],10);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+  {maxZoom:19, attribution:'&copy; CARTO, OSM'}).addTo(map);
+
+// Bottom-left legend
+L.control({position:'bottomleft'}).onAdd = ()=>{}; // placeholder so eslint chills
+const legend = L.control({position:'bottomleft'});
+legend.onAdd = function(){
+  const div = L.DomUtil.create('div','map-legend');
+  div.innerHTML = `
+    <div class="ml-title">Real grid (OpenStreetMap)</div>
+    <div class="ml-row"><span class="ml-star">&#9733;</span>Substation (online)</div>
+    <div class="ml-row"><span class="ml-star" style="color:#555">&#9733;</span>Substation (offline)</div>
+    <div class="ml-row"><span class="ml-line" style="border-color:#1f77b4"></span>Transmission line</div>
+    <div class="ml-row ml-note">Outage % randomizes which substations are offline.<br/>Distribution feeders/laterals are not in OSM and are omitted.</div>
+  `;
+  return div;
+};
+legend.addTo(map);
+
+// --- Boundary load + mask ---
+function pointInRing(lon, lat, ring) {
+  let inside = false;
+  for (let i=0,j=ring.length-1;i<ring.length;j=i++){
+    const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
+    if (((yi>lat)!==(yj>lat)) && (lon<(xj-xi)*(lat-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+function pointInGeo(lon,lat,geo){
+  const polys = geo.type==="Polygon"?[geo.coordinates]:geo.coordinates;
+  for (const poly of polys){
+    if (!pointInRing(lon,lat,poly[0])) continue;
+    let h=false;
+    for (let i=1;i<poly.length;i++) if (pointInRing(lon,lat,poly[i])) {h=true;break;}
+    if (!h) return true;
+  }
+  return false;
+}
+function geoBounds(geo){
+  let minLat=90,maxLat=-90,minLon=180,maxLon=-180;
+  const v=r=>r.forEach(([lo,la])=>{minLat=Math.min(minLat,la);maxLat=Math.max(maxLat,la);minLon=Math.min(minLon,lo);maxLon=Math.max(maxLon,lo);});
+  if (geo.type==="Polygon") v(geo.coordinates[0]); else geo.coordinates.forEach(p=>v(p[0]));
+  return L.latLngBounds([minLat,minLon],[maxLat,maxLon]);
+}
+function buildMask(geo){
+  const outer = [[-90,-180],[-90,180],[90,180],[90,-180],[-90,-180]];
+  const holes = [];
+  const push = r => holes.push(r.map(([lo,la])=>[la,lo]));
+  if (geo.type==="Polygon") push(geo.coordinates[0]);
+  else geo.coordinates.forEach(p=>push(p[0]));
+  return [outer, ...holes];
+}
+
+async function loadBoundary(){
+  const url="https://nominatim.openstreetmap.org/search?country=USA&state=Connecticut&county=Hartford+County&format=json&polygon_geojson=1&limit=1";
+  const r=await fetch(url,{headers:{'Accept':'application/json'}});
+  const d=await r.json();
+  if (!d.length||!d[0].geojson) throw new Error("No boundary");
+  return d[0].geojson;
+}
+
+// --- Pre-fetched OSM grid cache (built from Overpass) ---
+async function loadGrid(){
+  const r = await fetch('./overpass_cache.json');
+  if (!r.ok) throw new Error("cache HTTP "+r.status);
+  return r.json();
+}
+
+// Haversine in miles
+function dist(a,b){
+  const R=3958.8, toR=d=>d*Math.PI/180;
+  const dLat=toR(b.lat-a.lat), dLon=toR(b.lon-a.lon);
+  const s=Math.sin(dLat/2)**2 + Math.cos(toR(a.lat))*Math.cos(toR(b.lat))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+
+// State
+let countyGeo=null, substations=[], lineLayer=L.layerGroup().addTo(map), subLayer=L.layerGroup().addTo(map);
+let townAssignment=[]; // index into substations for each town
+const status=document.getElementById('status');
+const outageSlider=document.getElementById('outageSlider');
+const outageVal=document.getElementById('outageVal');
+const affectedEl=document.getElementById('affected');
+const affectedPctEl=document.getElementById('affectedPct');
+const subCountEl=document.getElementById('subCount');
+const subOfflineEl=document.getElementById('subOffline');
+
+function starSVG(color, opacity=1){
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" style="opacity:${opacity}">
+    <polygon points="12,1 15,9 23,9 16.5,14 19,22 12,17 5,22 7.5,14 1,9 9,9"
+             fill="${color}" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
+}
+
+// Deterministic shuffle so same slider → same offline set
+function seededShuffle(arr, seed){
+  let s=seed|0; const out=arr.slice();
+  const rnd=()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+  for (let i=out.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[out[i],out[j]]=[out[j],out[i]];}
+  return out;
+}
+
+function assignTownsToSubs(){
+  townAssignment = TOWNS.map(t => {
+    let best=-1, bd=Infinity;
+    substations.forEach((s,i)=>{
+      const d = dist(t, s);
+      if (d<bd){bd=d; best=i;}
+    });
+    return best;
+  });
+}
+
+function recomputeOutage(){
+  const pct = +outageSlider.value;
+  outageVal.textContent = pct+"%";
+  const nOff = Math.round(substations.length * pct/100);
+  // Deterministic offline set per pct
+  const order = seededShuffle(substations.map((_,i)=>i), 12345 + pct);
+  const offline = new Set(order.slice(0, nOff));
+
+  let affected = 0;
+  TOWNS.forEach((t,ti) => {
+    const subIdx = townAssignment[ti];
+    if (offline.has(subIdx)) affected += t.pop;
+  });
+
+  affectedEl.textContent = affected.toLocaleString();
+  affectedPctEl.textContent = (100*affected/TOTAL_POP).toFixed(1)+"% of county population";
+  subOfflineEl.textContent = nOff+" offline";
+
+  // Re-render substations with offline styling
+  subLayer.clearLayers();
+  substations.forEach((s,i) => {
+    const off = offline.has(i);
+    const icon = L.divIcon({
+      className:"sub-star",
+      html: starSVG(off?"#444":"#f4c842", off?0.55:1),
+      iconSize:[18,18], iconAnchor:[9,9]
+    });
+    L.marker([s.lat,s.lon],{icon}).addTo(subLayer)
+      .bindTooltip(`${s.name||'Substation'}${off?' (OFFLINE)':''}`);
+  });
+}
+
+outageSlider.addEventListener('input', recomputeOutage);
+
+// --- Main load sequence ---
+(async () => {
+  let geo;
+  try {
+    geo = await loadBoundary();
+    countyGeo = geo;
+    L.geoJSON(geo,{style:{color:"#ef4444",weight:2.5,fill:false}}).addTo(map);
+    const bounds = geoBounds(geo);
+    map.fitBounds(bounds,{padding:[10,10]});
+    map.setMaxBounds(bounds.pad(0.05));
+    // Mask outside
+    L.polygon(buildMask(geo),{color:"#0b0f14",weight:0,fillColor:"#0b0f14",fillOpacity:1,interactive:false}).addTo(map).bringToFront();
+  } catch(e){
+    status.textContent = "Boundary load failed: "+e.message;
+    return;
+  }
+
+  status.textContent = "Loading pre-fetched OSM grid cache…";
+  let data;
+  try {
+    data = await loadGrid();
+  } catch(e){
+    status.textContent = "Cache load failed: "+e.message+" — open via Launch preview (not file://) so fetch works.";
+    return;
+  }
+
+  // Substations
+  (data.subs || []).forEach(s => {
+    if (!pointInGeo(s.lon, s.lat, countyGeo)) return;
+    substations.push({lat:s.lat, lon:s.lon, name: s.name || "Substation", voltage: s.voltage});
+  });
+  // Deduplicate close pairs (~0.3 mi)
+  const dedup = [];
+  substations.forEach(s => { if (!dedup.some(d => dist(d,s) < 0.3)) dedup.push(s); });
+  substations = dedup;
+
+  // Transmission lines: high-voltage thick blue, minor lines thinner gray-blue
+  (data.lines || []).forEach(ln => {
+    const pts = ln.g.filter(([la,lo]) => pointInGeo(lo,la,countyGeo));
+    if (pts.length < 2) return;
+    const hv = ln.k === 'H';
+    L.polyline(pts, {
+      color: hv ? "#1f77b4" : "#6b8aa6",
+      weight: hv ? 1.6 : 1.0,
+      opacity: hv ? 0.9 : 0.7,
+      interactive:false,
+    }).addTo(lineLayer);
+  });
+
+  subCountEl.textContent = substations.length;
+  status.textContent = `Loaded ${substations.length} substations, ${lineLayer.getLayers().length} transmission segments.`;
+
+  assignTownsToSubs();
+  recomputeOutage();
+})();
+</script>
+</body>
+</html>
