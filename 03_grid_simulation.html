@@ -1323,7 +1323,12 @@ function scheduleOnly(M, outages){
   return t;
 }
 
-function recommendCrewCount(){
+// Yield to the browser so the UI can repaint and the page stays responsive
+// during the heavy binary search. Without this, the synchronous loop blocks
+// the main thread for the full duration of all 10+ scheduleOnly calls.
+function yieldToBrowser(){ return new Promise(r => setTimeout(r, 0)); }
+
+async function recommendCrewCount(){
   if (!storm || !storm.outages.length){
     status.textContent="Simulate a storm first.";
     document.getElementById('recCrewDetail').textContent='— simulate a storm first';
@@ -1331,29 +1336,38 @@ function recommendCrewCount(){
   }
   const N = storm.outages.length;
   status.textContent = `Searching for optimal crew count over ${N.toLocaleString()} jobs…`;
-  // Floor time: M=N is the practical minimum (one crew per outage, no queueing).
-  // Beyond M=N extra crews idle, so we never need to test higher.
-  const floorTime = scheduleOnly(N, storm.outages);
-  const tolerance = 1.15;        // accept restoration times up to 15% above floor
-  const target = floorTime * tolerance;
-  // Binary search for smallest M with scheduleOnly(M) <= target.
-  // Cache to avoid recomputing.
+  await yieldToBrowser();
+
+  // Cap the search range so a 25K-outage storm doesn't trigger 14 full schedules.
+  // Empirically nothing above ~max(50, N/10) is ever optimal — beyond that point
+  // crews idle waiting for discoveries instead of working.
+  const upperBound = Math.min(N, Math.max(50, Math.ceil(N/10)));
+
   const cache = new Map();
-  cache.set(N, floorTime);
-  function tAt(M){
+  async function tAt(M){
     if (cache.has(M)) return cache.get(M);
+    status.textContent = `Searching… testing ${M.toLocaleString()} crews (${cache.size+1} of ~${Math.ceil(Math.log2(upperBound))+1} evaluations)`;
+    await yieldToBrowser();
     const t = scheduleOnly(M, storm.outages);
     cache.set(M, t);
     return t;
   }
-  let lo=1, hi=N;
+
+  // Floor: scheduleOnly at the upper bound. Past this, more crews don't help
+  // because the discovery ramp + mutual-aid waves bound how fast restoration
+  // can proceed anyway.
+  const floorTime = await tAt(upperBound);
+  const tolerance = 1.15;
+  const target = floorTime * tolerance;
+
+  let lo=1, hi=upperBound;
   while (lo<hi){
     const mid = (lo+hi)>>1;
-    if (tAt(mid) <= target) hi = mid;
+    if (await tAt(mid) <= target) hi = mid;
     else lo = mid+1;
   }
   const recM = lo;
-  const recT = tAt(recM);
+  const recT = await tAt(recM);
 
   function fmtH(hrs){
     if (hrs < 24) return hrs.toFixed(1) + " h";
@@ -1371,7 +1385,7 @@ function recommendCrewCount(){
     cV.textContent = cS.value;
     planRestoration();
   };
-  status.textContent = `Recommended ${recM.toLocaleString()} crews → ${fmtH(recT)} (floor ${fmtH(floorTime)} with ${N.toLocaleString()} crews).`;
+  status.textContent = `Recommended ${recM.toLocaleString()} crews → ${fmtH(recT)} (floor ${fmtH(floorTime)} at ${upperBound.toLocaleString()} crews).`;
 }
 
 document.getElementById('recommendCrews').onclick = recommendCrewCount;
