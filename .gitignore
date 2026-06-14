@@ -1,0 +1,35 @@
+# Generated artifacts — recompute from scripts, not committed by default.
+output/exports/*
+!output/exports/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+.env
+*.egg-info/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~
+
+# Local server / dev logs
+*.log
+nohup.out
+
+# Raw OSM dumps from one-off experiments
+*_raw.json
+*_subs.json
+overpass_*.json
+hartford_towns_raw.json
+
+# User's scratch / experimental simulation copies
+hartford_county_simulation*.html
+!03_grid_simulation.html

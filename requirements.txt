@@ -1,0 +1,8 @@
+# Only the Python scripts need anything installed; the interactive HTML
+# runs in the browser with CDN-loaded JS libraries (Leaflet, JSZip, shp-write).
+
+# 01_fetch_county_boundary.py and 02_fetch_town_boundaries.py use only the
+# Python standard library — no installs required for those.
+
+# 04_geojson_to_shapefile.py needs geopandas for the offline conversion path.
+geopandas>=0.14

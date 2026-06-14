@@ -4,9 +4,32 @@ An interactive browser-based model of a synthetic electric distribution grid cov
 
 ---
 
+## Repository layout
+
+```
+.
+├── 01_fetch_county_boundary.py   # cache Hartford polygon from OSM
+├── 02_fetch_town_boundaries.py   # cache the 29 town polygons from OSM
+├── 03_grid_simulation.html       # the main interactive (run via local server)
+├── 03_grid_inline_preview.html   # standalone SVG preview (no server needed)
+├── 04_geojson_to_shapefile.py    # offline GeoJSON → shapefile converter
+├── data/                         # cached OSM inputs (committed, ~300 KB)
+├── docs/                         # extended notes (algorithms, reality check)
+├── output/                       # generated artifacts (mostly gitignored)
+│   └── exports/                  # user GeoJSON / shapefile bundles land here
+├── source/                       # readable .txt mirrors of the HTML/JS
+├── SCALING.md                    # roadmap to statewide CT scaling
+├── LICENSE
+└── requirements.txt              # only needed for 04 (geopandas)
+```
+
+Each numbered file is a self-contained step. Run them in order the first time, or just open `03_grid_simulation.html` directly (the cached data in `data/` is committed so you don't need 01/02 unless you want to refresh from OSM).
+
+---
+
 ## What this is
 
-A single self-contained HTML file (`hartford_county_simulation.html`) plus a cached county boundary polygon (`hartford_boundary.json`) and a cached set of 29 town outlines (`hartford_towns.js`). It runs entirely in the browser using Leaflet and a CARTO basemap. No backend, no database, no build step.
+A single self-contained HTML file (`03_grid_simulation.html`) plus cached OSM data (`data/hartford_boundary.json` and `data/hartford_towns.js`). It runs entirely in the browser using Leaflet and a CARTO basemap. No backend, no database, no build step.
 
 When you open it, the model:
 
@@ -95,7 +118,7 @@ The HTML uses `fetch()` to load the boundary polygon, so you need a tiny web ser
 | PHP | `php -S localhost:8000` |
 | VS Code | Install the "Live Server" extension, right-click the HTML, "Open with Live Server" |
 
-Then open `http://localhost:8000/hartford_county_simulation.html` in any modern browser.
+Then open `http://localhost:8000/03_grid_simulation.html` in any modern browser.
 
 External CDN dependencies (auto-loaded at runtime — nothing to install):
 - **Leaflet 1.9.4** — the map library
@@ -307,7 +330,7 @@ If the in-browser shapefile path ever fails (CDN block, etc.), download the GeoJ
 
 ```bash
 pip install geopandas
-python scripts/geojson_to_shapefile.py path/to/hartford_grid_seed42_*.zip
+python 04_geojson_to_shapefile.py path/to/hartford_grid_seed42_*.zip
 ```
 
 The script writes a `<input>_shp/` folder next to the input with all the shapefiles. Same column schema either way.
@@ -316,18 +339,7 @@ The script writes a `<input>_shp/` folder next to the input with all the shapefi
 
 ## Files in this project
 
-```
-hartford_county_simulation.html   # the main interactive (HTML + CSS + JS)
-hartford_county_grid_inline.html  # standalone SVG preview (no server needed)
-hartford_boundary.json            # OSM Hartford County polygon (~30 KB)
-hartford_towns.js                 # 29 town polygons as JS variable (~140 KB)
-hartford_towns.geojson            # same town data as GeoJSON
-scripts/
-  geojson_to_shapefile.py         # offline GeoJSON → shapefile converter
-source/                           # readable .txt mirrors of the HTML/JS
-README.md                         # this file
-SCALING.md                        # roadmap to statewide CT scaling
-```
+See the top-of-README "Repository layout" section. In short: numbered scripts at the root, cached OSM data in `data/`, generated artifacts in `output/`, readable code mirrors in `source/`, extended docs in `docs/`, plus `SCALING.md` and this `README.md` at the root.
 
 ---
 
