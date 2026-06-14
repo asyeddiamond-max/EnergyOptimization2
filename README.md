@@ -14,15 +14,15 @@ An interactive browser-based model of a synthetic electric distribution grid cov
 ├── 03_grid_inline_preview.html    # standalone SVG preview (no server needed)
 ├── 04_geojson_to_shapefile.py     # offline GeoJSON to shapefile converter
 ├── 05_generate_artifacts.py       # produce matplotlib PNG snapshots in output/
-├── 05_generate_artifacts.ps1      # PowerShell fallback (SVG snapshots)
 ├── data/                          # cached OSM inputs (committed)
 ├── docs/                          # extended notes
 ├── output/                        # generated artifacts (mostly committed)
 │   ├── 03_grid_simulation.html    # copy of the live interactive
-│   ├── 03a_county_topology.svg    # geographic baseline
-│   ├── 03b_synthetic_grid.svg     # adds substations and feeders
-│   ├── 03c_storm_overlay.svg      # adds storm outages
-│   ├── 03d_outage_curve.svg       # customers without power vs hours
+│   ├── 03a_county_topology.png    # county outline + 29 towns + centroids
+│   ├── 03b_synthetic_grid.png     # adds substations, feeders, laterals
+│   ├── 03c_grid_outages.png       # adds a 500-outage storm
+│   ├── 03d_restoration_plan.png   # adds 10 crews with numbered repairs
+│   ├── 03e_outage_curve.png       # customers without power vs hours
 │   └── exports/                   # user GeoJSON / shapefile bundles (gitignored)
 ├── source/                        # readable .txt mirrors of the HTML/JS
 ├── SCALING.md                     # roadmap to statewide CT scaling
@@ -34,12 +34,14 @@ Each numbered file is a self-contained step. Run them in order the first time, o
 
 ### Regenerating the artifacts in output/
 
-The repo ships with pre-generated SVG snapshots in `output/` so you can see what the simulation produces without running anything. To regenerate them, use either:
+The repo ships with pre-generated PNG snapshots in `output/` so you can see what the simulation produces without running anything. To regenerate them:
 
-- `python 05_generate_artifacts.py` — matplotlib PNGs (requires `pip install matplotlib numpy`)
-- `pwsh 05_generate_artifacts.ps1` — SVG fallback that runs without Python
+```
+pip install matplotlib numpy
+python 05_generate_artifacts.py
+```
 
-Both reproduce the same set of artifacts (one as `.png`, the other as `.svg`).
+Outputs are deterministic at seed 42, so re-running produces bit-identical files.
 
 ---
 
