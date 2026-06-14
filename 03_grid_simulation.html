@@ -605,7 +605,7 @@ function nnGridFind(grid, cLat, cLon, done, oLat, oLon){
   let bestI=-1, bestSq=Infinity;
   // Expand outward in concentric rings. Stop when the closest possible point
   // in the next ring (distance = ring * cell) is farther than our current best.
-  for (let ring=0; ring<300; ring++){
+  for (let ring=0; ring<100; ring++){
     const ringMin = ring*NN_CELL_DEG;
     if (bestI!==-1 && ringMin*ringMin > bestSq) break;
     if (ring===0){
@@ -648,7 +648,7 @@ function nnGridFindVisible(grid, cLat, cLon, done, oLat, oLon, discTime, cTime){
   const ccx = Math.floor(cLon/NN_CELL_DEG);
   const ccy = Math.floor(cLat/NN_CELL_DEG);
   let bestI=-1, bestSq=Infinity;
-  for (let ring=0; ring<300; ring++){
+  for (let ring=0; ring<100; ring++){
     const ringMin = ring*NN_CELL_DEG;
     if (bestI!==-1 && ringMin*ringMin > bestSq) break;
     if (ring===0){
@@ -1323,9 +1323,6 @@ function scheduleOnly(M, outages){
   return t;
 }
 
-// Yield to the browser so the UI can repaint and the page stays responsive
-// during the heavy binary search. Without this, the synchronous loop blocks
-// the main thread for the full duration of all 10+ scheduleOnly calls.
 function yieldToBrowser(){ return new Promise(r => setTimeout(r, 0)); }
 
 async function recommendCrewCount(){
@@ -1335,27 +1332,179 @@ async function recommendCrewCount(){
     return;
   }
   const N = storm.outages.length;
-  status.textContent = `Searching for optimal crew count over ${N.toLocaleString()} jobs…`;
+  const seed = +seedI.value | 0;
+  const realistic = document.getElementById('realisticMode').checked;
+  status.textContent = `Preparing search over ${N.toLocaleString()} jobs…`;
   await yieldToBrowser();
 
-  // Cap the search range so a 25K-outage storm doesn't trigger 14 full schedules.
-  // Empirically nothing above ~max(50, N/10) is ever optimal — beyond that point
-  // crews idle waiting for discoveries instead of working.
+  // --- Precompute everything that doesn't depend on M ONCE, instead of
+  // rebuilding it inside every scheduleOnly call. At N=25K this brings the
+  // shared O(N log N) setup cost from "~10x repeated" down to "1x" across
+  // the whole binary search.
+  const TRAVEL_MPH       = realistic ? 25   : 30;
+  const ASSESSMENT_DELAY = realistic ? 12   : 0;
+  const WORKDAY_HOURS    = realistic ? 14   : 24;
+  const ROAD_MULTIPLIER  = realistic ? 1.5  : 1.0;
+  function clampToWorkday(t){
+    if (!realistic) return t;
+    const dayN = Math.floor(t/24);
+    const inDay = t - dayN*24;
+    return inDay > WORKDAY_HOURS ? (dayN+1)*24 : t;
+  }
+  const outages = storm.outages;
+  const oLat = new Float64Array(N), oLon = new Float64Array(N);
+  const discTime = new Float64Array(N);
+  for (let i=0;i<N;i++){ oLat[i]=outages[i].lat; oLon[i]=outages[i].lon; }
+  if (realistic){
+    const rndDisc = mulberry32(seed*991 + 7);
+    for (let i=0;i<N;i++){
+      const u = rndDisc();
+      if (u < 0.30){
+        discTime[i] = ASSESSMENT_DELAY + u * (1.0/0.30);
+      } else {
+        const v = (u - 0.30) / 0.70;
+        const tAfter = -Math.log(Math.max(1e-9, 1 - 0.99*v)) / 0.1;
+        discTime[i] = ASSESSMENT_DELAY + 1 + Math.min(36, tAfter);
+      }
+    }
+  }
+  let discOrder = null, discSortedTimes = null;
+  if (realistic){
+    discOrder = new Array(N);
+    for (let i=0;i<N;i++) discOrder[i] = i;
+    discOrder.sort((a,b) => discTime[a] - discTime[b]);
+    discSortedTimes = new Float64Array(N);
+    for (let i=0;i<N;i++) discSortedTimes[i] = discTime[discOrder[i]];
+  }
+  const nnGrid = buildNNGrid(oLat,oLon,N);
+  let criticalCount = 0;
+  if (realistic){
+    for (let i=0;i<N;i++) if (outages[i].critical) criticalCount++;
+  }
+  await yieldToBrowser();
+
+  // Inline schedule that reuses the precomputed arrays above.
+  function scheduleFast(M){
+    const rndRepair = mulberry32(seed*1117 + 23);
+    let _bmHave=false, _bmZ=0;
+    function nextNormal(){
+      if (_bmHave){ _bmHave=false; return _bmZ; }
+      const u1 = Math.max(1e-10, rndRepair());
+      const u2 = rndRepair();
+      const mag = Math.sqrt(-2*Math.log(u1));
+      _bmHave=true; _bmZ = mag*Math.sin(2*Math.PI*u2);
+      return mag*Math.cos(2*Math.PI*u2);
+    }
+    function sampleRepair(){
+      if (!realistic) return 1.5;
+      return Math.max(0.25, Math.min(12, Math.exp(Math.log(2) + 0.857*nextNormal())));
+    }
+    let depots;
+    if (M <= 200){
+      const rndK = mulberry32(seed*31 + 99);
+      const pts = outages.map(o=>({lat:o.lat,lon:o.lon,w:1}));
+      depots = kmeans(pts, Math.min(M, pts.length), countyGeo, rndK, 8);
+    } else {
+      depots = [];
+      for (let i=0;i<M;i++){const s=outages[i%N]; depots.push({lat:s.lat,lon:s.lon});}
+    }
+    let crewArrivals;
+    if (realistic && M >= 6){
+      const nInit = Math.ceil(M*0.5);
+      const nW1   = Math.ceil(M*0.3);
+      const nW2   = M - nInit - nW1;
+      crewArrivals = [];
+      for (let i=0;i<nInit;i++) crewArrivals.push(ASSESSMENT_DELAY);
+      for (let i=0;i<nW1;i++)   crewArrivals.push(ASSESSMENT_DELAY + 24);
+      for (let i=0;i<nW2;i++)   crewArrivals.push(ASSESSMENT_DELAY + 48);
+    } else {
+      crewArrivals = new Array(M).fill(ASSESSMENT_DELAY);
+    }
+    const crews = depots.map((d,i)=>({time:crewArrivals[i], curLat:d.lat, curLon:d.lon}));
+    const done = new Uint8Array(N);
+    if (realistic){
+      for (let i=0;i<N;i++) if (!outages[i].critical) done[i]=1;
+    }
+    let remaining = realistic ? criticalCount : N;
+    let inCriticalPhase = realistic && criticalCount > 0;
+    let firstUndoneDisc = 0;
+    function nextDiscoveryAfter(t){
+      if (!realistic) return Infinity;
+      while (firstUndoneDisc < N && done[discOrder[firstUndoneDisc]]) firstUndoneDisc++;
+      if (firstUndoneDisc >= N) return Infinity;
+      let lo = firstUndoneDisc, hi = N;
+      while (lo < hi){
+        const mid = (lo+hi)>>1;
+        if (discSortedTimes[mid] > t) hi = mid;
+        else lo = mid+1;
+      }
+      for (let i = lo; i < N; i++){
+        if (!done[discOrder[i]]) return discSortedTimes[i];
+      }
+      return Infinity;
+    }
+    function hPush(h,it){h.push(it);let i=h.length-1;while (i>0){const p=(i-1)>>1;if (h[p][0]<=h[i][0]) break;const t=h[i];h[i]=h[p];h[p]=t;i=p;}}
+    function hPop(h){const top=h[0];const last=h.pop();if (h.length>0){h[0]=last;let i=0;const L=h.length;while (true){const l=2*i+1,r=2*i+2;let s=i;if (l<L&&h[l][0]<h[s][0]) s=l;if (r<L&&h[r][0]<h[s][0]) s=r;if (s===i) break;const t=h[i];h[i]=h[s];h[s]=t;i=s;}}return top;}
+    const heap=[];
+    for (let c=0;c<crews.length;c++) hPush(heap,[crewArrivals[c],c]);
+    while (remaining>0){
+      const top=hPop(heap);
+      const cTime=top[0], ci=top[1];
+      const crew=crews[ci];
+      const cLat=crew.curLat, cLon=crew.curLon;
+      const bestI = realistic
+        ? nnGridFindVisible(nnGrid, cLat, cLon, done, oLat, oLon, discTime, cTime)
+        : nnGridFind(nnGrid, cLat, cLon, done, oLat, oLon);
+      if (bestI===-1){
+        if (inCriticalPhase){
+          for (let i=0;i<N;i++) if (!outages[i].critical) done[i]=0;
+          remaining = N - criticalCount;
+          inCriticalPhase = false;
+          firstUndoneDisc = 0;
+          hPush(heap,[cTime,ci]);
+          continue;
+        }
+        if (realistic){
+          const nextT = nextDiscoveryAfter(cTime);
+          if (!isFinite(nextT)) break;
+          crew.time = nextT;
+          hPush(heap,[nextT,ci]);
+          continue;
+        }
+        break;
+      }
+      done[bestI]=1; remaining--;
+      if (remaining===0 && inCriticalPhase){
+        for (let i=0;i<N;i++) if (!outages[i].critical) done[i]=0;
+        remaining = N - criticalCount;
+        inCriticalPhase = false;
+        firstUndoneDisc = 0;
+      }
+      const o=outages[bestI];
+      const miles = dist({lat:cLat,lon:cLon}, o) * ROAD_MULTIPLIER;
+      const repairH = sampleRepair();
+      let eta = cTime + miles/TRAVEL_MPH + repairH;
+      eta = clampToWorkday(eta);
+      crew.time=eta; crew.curLat=o.lat; crew.curLon=o.lon;
+      hPush(heap,[eta,ci]);
+    }
+    let t=0; for (const c of crews) if (c.time>t) t=c.time;
+    return t;
+  }
+
   const upperBound = Math.min(N, Math.max(50, Math.ceil(N/10)));
 
   const cache = new Map();
   async function tAt(M){
     if (cache.has(M)) return cache.get(M);
-    status.textContent = `Searching… testing ${M.toLocaleString()} crews (${cache.size+1} of ~${Math.ceil(Math.log2(upperBound))+1} evaluations)`;
+    const expectedSteps = Math.ceil(Math.log2(upperBound))+1;
+    status.textContent = `Searching… testing ${M.toLocaleString()} crews (${cache.size+1} of ~${expectedSteps} evaluations)`;
     await yieldToBrowser();
-    const t = scheduleOnly(M, storm.outages);
+    const t = scheduleFast(M);
     cache.set(M, t);
     return t;
   }
 
-  // Floor: scheduleOnly at the upper bound. Past this, more crews don't help
-  // because the discovery ramp + mutual-aid waves bound how fast restoration
-  // can proceed anyway.
   const floorTime = await tAt(upperBound);
   const tolerance = 1.15;
   const target = floorTime * tolerance;
