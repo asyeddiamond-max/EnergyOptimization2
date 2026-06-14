@@ -1520,7 +1520,7 @@ async function recommendCrewCount(){
   await yieldToBrowser();
 
   // Inline schedule that reuses the precomputed arrays above.
-  function scheduleFast(M){
+  async function scheduleFast(M, baseProgress, progressSpan){
     const rndRepair = mulberry32(seed*1117 + 23);
     let _bmHave=false, _bmZ=0;
     function nextNormal(){
@@ -1623,6 +1623,16 @@ async function recommendCrewCount(){
       eta = clampToWorkday(eta);
       crew.time=eta; crew.curLat=o.lat; crew.curLon=o.lon;
       hPush(heap,[eta,ci]);
+
+      // Yield inside the scheduler too — a single scheduleFast at upperBound
+      // can exceed Chrome's 5 s main-thread limit even with yields between
+      // binary-search iterations. Chunk every 4000 assignments so each
+      // microtask runs ~50-100 ms tops.
+      if ((N - remaining) % 4000 === 0){
+        const innerPct = (N - remaining) / N;
+        setRecProgress(baseProgress + progressSpan * innerPct);
+        await new Promise(r => setTimeout(r, 0));
+      }
     }
     let t=0; for (const c of crews) if (c.time>t) t=c.time;
     return t;
@@ -1636,9 +1646,11 @@ async function recommendCrewCount(){
     const expectedSteps = Math.ceil(Math.log2(upperBound))+1;
     const step = cache.size + 1;
     status.textContent = `Searching… testing ${M.toLocaleString()} crews (${step} of ~${expectedSteps} evaluations)`;
-    setRecProgress(100 * step / (expectedSteps + 1));
+    const baseProgress = 100 * (step - 1) / (expectedSteps + 1);
+    const progressSpan = 100 / (expectedSteps + 1);
+    setRecProgress(baseProgress);
     await yieldToBrowser();
-    const t = scheduleFast(M);
+    const t = await scheduleFast(M, baseProgress, progressSpan);
     cache.set(M, t);
     return t;
   }
