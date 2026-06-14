@@ -103,6 +103,13 @@
       </div>
     </div>
 
+    <div class="ctrl" style="background:#fef3c7;border-color:#fcd34d;">
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#78350f;line-height:1.4;">
+        <input type="checkbox" id="realisticMode" checked style="margin-top:2px;flex-shrink:0;" />
+        <span><b style="color:#92400e">Realistic mode</b> — adds the factors that make real storms take days, not hours: 12 h damage assessment delay before crews dispatch, 14 h workday with overnight downtime, tiered priority (critical facilities first → high-impact outages → individuals), 3 h average repair time, and sectionalizers that halve per-outage customer impact. Turn off to see the optimistic baseline.</span>
+      </label>
+    </div>
+
     <div class="section-label">1 · Distribution grid</div>
 
     <div class="ctrl">
@@ -122,7 +129,7 @@
 
     <div class="ctrl">
       <div class="row"><span>Storm outages: <b id="oVal">500</b></span></div>
-      <input type="range" id="oSlider" min="50" max="5000" value="500" step="50" />
+      <input type="range" id="oSlider" min="50" max="25000" value="500" step="100" />
       <div class="small">How many failure points to place across feeders and laterals.</div>
     </div>
 
@@ -154,7 +161,30 @@
       <div class="sub" id="restoreDetail">— customers restored</div>
     </div>
 
+    <div class="ctrl" style="background:#fff7ed;border-color:#fdba74;">
+      <div style="font-size:11px;color:#9a3412;line-height:1.45;margin-bottom:6px;">
+        Finds the smallest crew count that gets restoration within 15% of the theoretical floor (the time achieved when crews = outages).
+      </div>
+      <button class="action" id="recommendCrews" style="background:linear-gradient(135deg,#fb923c,#c2410c);margin-bottom:8px">Find optimal crew count</button>
+      <div class="stat-box" style="background:#fffbeb;border-color:#fcd34d;margin-bottom:0;">
+        <div class="lbl">Recommended crews</div>
+        <div class="big" id="recCrewCount" style="color:#b45309">—</div>
+        <div class="sub" id="recCrewDetail">— click button after simulating a storm</div>
+        <button id="applyRecCrews" style="display:none;margin-top:8px;width:100%;border:1px solid #fcd34d;background:white;color:#b45309;padding:6px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Apply to slider</button>
+      </div>
+    </div>
+
     <button class="action btn-reset" id="resetAll">Reset storm</button>
+
+    <div class="section-label">4 · Export</div>
+
+    <div class="ctrl" style="background:#f0f9ff;border-color:#bae6fd;">
+      <div style="font-size:11px;color:#0c4a6e;line-height:1.45;margin-bottom:8px;">
+        Save the current grid + storm + restoration plan as GIS files you can open in QGIS, ArcGIS, geopandas, or R.
+      </div>
+      <button class="action" id="exportGeoJSON" style="background:linear-gradient(135deg,#0ea5e9,#0369a1);margin-bottom:6px">Download GeoJSON</button>
+      <button class="action" id="exportShapefile" style="background:linear-gradient(135deg,#6366f1,#3730a3);margin-bottom:0">Download Shapefile (zip)</button>
+    </div>
 
     <div id="status">Loading boundary…</div>
   </aside>
@@ -163,6 +193,8 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://unpkg.com/shp-write@0.3.1/shpwrite.js"></script>
 <script src="./hartford_towns.js"></script>
 <script>
 const TOWNS = [
@@ -250,6 +282,11 @@ legend.addTo(map);
 const lateralLayer=L.layerGroup().addTo(map);
 const feederLayer=L.layerGroup().addTo(map);
 const subLayer=L.layerGroup().addTo(map);
+const outageCanvas=L.canvas({padding:0.2});
+// Canvas renderers for feeders/laterals/repair-dots so we don't generate
+// thousands of SVG DOM elements at high substation/storm/crew counts.
+const gridCanvas=L.canvas({padding:0.4});
+const repairCanvas=L.canvas({padding:0.2});
 const outageLayer=L.layerGroup().addTo(map);
 const repairLayer=L.layerGroup().addTo(map);
 const depotLayer=L.layerGroup().addTo(map);
@@ -468,8 +505,8 @@ function generateGrid(){
 
 function renderGrid(){
   lateralLayer.clearLayers(); feederLayer.clearLayers(); subLayer.clearLayers();
-  laterals.forEach(l=>L.polyline(l.pts,{color:"#bfc4cb",weight:0.6,opacity:0.75,interactive:false}).addTo(lateralLayer));
-  feeders.forEach(f=>L.polyline(f.pts,{color:f.color,weight:1.3,opacity:0.95,interactive:false}).addTo(feederLayer));
+  laterals.forEach(l=>L.polyline(l.pts,{renderer:gridCanvas,color:"#bfc4cb",weight:0.6,opacity:0.75,interactive:false}).addTo(lateralLayer));
+  feeders.forEach(f=>L.polyline(f.pts,{renderer:gridCanvas,color:f.color,weight:1.3,opacity:0.95,interactive:false}).addTo(feederLayer));
   substations.forEach((s,i)=>{
     const icon=L.divIcon({className:"sub-star",html:starSVG(s.color,14),iconSize:[14,14],iconAnchor:[7,7]});
     L.marker([s.lat,s.lon],{icon,interactive:true}).addTo(subLayer)
@@ -485,6 +522,15 @@ function simulateStorm(){
   const seed=+seedI.value|0;
   const rnd=mulberry32(seed*7919+13);
   const N=+oS.value;
+  const realistic=document.getElementById('realisticMode').checked;
+  // Sectionalizer model: in reality, protective devices isolate just the broken
+  // segment between two switches rather than killing the whole downstream branch.
+  // Real impact per outage is ~half the simple "drop everything downstream" model.
+  const popMultiplier = realistic ? 0.5 : 1.0;
+  // Tier-1 critical-facility share: hospitals, water plants, fire stations, etc.
+  // ~2% of outage locations are flagged for top-priority restoration.
+  const critRate = realistic ? 0.02 : 0;
+
   const outages=[];
   // Outages are placed on a random line segment (feeder or lateral, weighted by laterals for realism)
   const allSegs=[];
@@ -497,12 +543,14 @@ function simulateStorm(){
     const arr=seg.kind==='f'?feeders[seg.fi].pts:laterals[seg.li].pts;
     const a=arr[seg.s], b=arr[seg.s+1];
     const lat=a[0]+(b[0]-a[0])*t, lon=a[1]+(b[1]-a[1])*t;
-    outages.push({lat,lon,kind:seg.kind,fi:seg.fi,li:seg.li,popLoss:seg.popServed});
+    outages.push({
+      lat, lon, kind:seg.kind, fi:seg.fi, li:seg.li,
+      popLoss: seg.popServed * popMultiplier,
+      critical: rnd() < critRate,
+    });
   }
 
   // Customers affected = sum of popLoss, capped at county population.
-  // This is a simplified model: each outage drops a chunk of downstream customers
-  // proportional to the line segment's share of customers served.
   let totalCust=outages.reduce((s,o)=>s+o.popLoss,0);
   totalCust=Math.min(totalCust,TOTAL_POP);
 
@@ -512,8 +560,16 @@ function simulateStorm(){
   // Render
   outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
   outages.forEach(o=>{
+    // Critical-facility outages (tier 1) get a slightly bigger, brighter marker
+    // so they stand out from the dark-red cloud of ordinary failures.
     L.circleMarker([o.lat,o.lon],{
-      radius:2.5,color:"#000",weight:0.5,fillColor:"#7f1d1d",fillOpacity:0.9,interactive:false
+      renderer:outageCanvas,
+      radius: o.critical ? 4 : 2.5,
+      color: o.critical ? "#facc15" : "#000",
+      weight: o.critical ? 1.2 : 0.5,
+      fillColor: o.critical ? "#dc2626" : "#7f1d1d",
+      fillOpacity: 0.92,
+      interactive:false
     }).addTo(outageLayer);
   });
 
@@ -524,6 +580,67 @@ function simulateStorm(){
   status.textContent=`Storm: ${N.toLocaleString()} outages, ~${Math.round(totalCust).toLocaleString()} customers without power.`;
 }
 
+// --- Spatial grid hash for nearest-outage queries ---
+// At 25K outages × 5K crews, the per-crew linear scan dominates. This grid
+// indexes outages into ~500m cells; nearest queries inspect just a handful of
+// cells outward until the next ring can't possibly contain a closer point.
+// Average query cost is roughly O(log N) instead of O(N).
+const NN_CELL_DEG = 0.005; // ≈ 500 m at this latitude
+function buildNNGrid(oLat,oLon,N){
+  const grid = new Map();
+  for (let i=0;i<N;i++){
+    const cx = Math.floor(oLon[i]/NN_CELL_DEG);
+    const cy = Math.floor(oLat[i]/NN_CELL_DEG);
+    const key = cx*100000+cy;
+    let arr = grid.get(key);
+    if (!arr){ arr=[]; grid.set(key,arr); }
+    arr.push(i);
+  }
+  return grid;
+}
+function nnGridFind(grid, cLat, cLon, done, oLat, oLon){
+  const ccx = Math.floor(cLon/NN_CELL_DEG);
+  const ccy = Math.floor(cLat/NN_CELL_DEG);
+  let bestI=-1, bestSq=Infinity;
+  // Expand outward in concentric rings. Stop when the closest possible point
+  // in the next ring (distance = ring * cell) is farther than our current best.
+  for (let ring=0; ring<300; ring++){
+    const ringMin = ring*NN_CELL_DEG;
+    if (bestI!==-1 && ringMin*ringMin > bestSq) break;
+    if (ring===0){
+      const key = ccx*100000+ccy;
+      const cell = grid.get(key);
+      if (cell){
+        for (let k=0;k<cell.length;k++){
+          const i = cell[k];
+          if (done[i]) continue;
+          const dx=oLat[i]-cLat, dy=oLon[i]-cLon;
+          const sq=dx*dx+dy*dy;
+          if (sq<bestSq){bestSq=sq; bestI=i;}
+        }
+      }
+    } else {
+      // Iterate just the OUTER ring at radius `ring`
+      for (let dx=-ring; dx<=ring; dx++){
+        for (let dy=-ring; dy<=ring; dy++){
+          if (dx!==-ring && dx!==ring && dy!==-ring && dy!==ring) continue;
+          const key = (ccx+dx)*100000+(ccy+dy);
+          const cell = grid.get(key);
+          if (!cell) continue;
+          for (let k=0;k<cell.length;k++){
+            const i = cell[k];
+            if (done[i]) continue;
+            const ddx=oLat[i]-cLat, ddy=oLon[i]-cLon;
+            const sq=ddx*ddx+ddy*ddy;
+            if (sq<bestSq){bestSq=sq; bestI=i;}
+          }
+        }
+      }
+    }
+  }
+  return bestI;
+}
+
 // --- Step 4: Restoration plan ---
 // Each crew starts at a depot, picks nearest unrepaired outage, repairs (fixed time + travel),
 // moves to next. Total restoration time = max(crew time across all crews).
@@ -532,10 +649,24 @@ function planRestoration(){
   const seed=+seedI.value|0;
   const rnd=mulberry32(seed*31+99);
   const M=+cS.value;
-  const REPAIR_HRS=1.5;
-  const TRAVEL_MPH=30;
   const N=storm.outages.length;
-  status.textContent=`Planning restoration: ${M.toLocaleString()} crews, ${N.toLocaleString()} jobs…`;
+  // --- Realism parameters ---
+  // When realistic mode is on, the scheduler models the real-world delays that
+  // turn a "12-hour theoretical" restoration into the 2–7-day reality reported
+  // in Eversource storm filings: assessment delay, night-ops downtime, tiered
+  // priority, longer per-repair time.
+  const realistic = document.getElementById('realisticMode').checked;
+  const REPAIR_HRS       = realistic ? 3.0  : 1.5;   // diagnosis + repair + verify
+  const TRAVEL_MPH       = realistic ? 25   : 30;    // slower under storm conditions
+  const ASSESSMENT_DELAY = realistic ? 12   : 0;     // hours before any crew dispatches
+  const WORKDAY_HOURS    = realistic ? 14   : 24;    // 6 am – 8 pm daylight ops
+  function clampToWorkday(t){
+    if (!realistic) return t;
+    const dayN = Math.floor(t/24);
+    const inDay = t - dayN*24;
+    return inDay > WORKDAY_HOURS ? (dayN+1)*24 : t;
+  }
+  status.textContent=`Planning restoration: ${M.toLocaleString()} crews, ${N.toLocaleString()} jobs${realistic?' (realistic mode)':''}…`;
 
   // Depot placement
   //  - small M: k-means on outage points (gives nicely spread depots)
@@ -548,40 +679,61 @@ function planRestoration(){
     depots=[];
     for (let i=0;i<M;i++){const src=storm.outages[i%N]; depots.push({lat:src.lat,lon:src.lon});}
   }
-  const crews=depots.map((d,i)=>({depot:d,color:PALETTE[i%PALETTE.length],jobs:[],time:0,curLat:d.lat,curLon:d.lon}));
+  const crews=depots.map((d,i)=>({depot:d,color:PALETTE[i%PALETTE.length],jobs:[],time:ASSESSMENT_DELAY,curLat:d.lat,curLon:d.lon}));
 
-  // Fast scheduler — O(N * (log M + N)) instead of O(M * N^2).
-  //  - Min-heap on (crew.time, crew_idx) so picking the next free crew is O(log M).
-  //  - Each free crew grabs the nearest unrepaired outage via squared-Euclidean scan (no trig).
-  //  - Mark-done array (no splice) keeps inner-loop cache-friendly.
+  // Fast scheduler — grid-hash O(log N) nearest-outage lookup, min-heap on crews.
   const oLat=new Float64Array(N), oLon=new Float64Array(N);
   for (let i=0;i<N;i++){oLat[i]=storm.outages[i].lat; oLon[i]=storm.outages[i].lon;}
   const done=new Uint8Array(N);
-  let remaining=N;
+
+  // Realistic mode: schedule in tiers. Tier 1 = critical facilities; the rest
+  // is processed only after every critical site has a crew assigned.
+  let criticalCount = 0;
+  if (realistic) {
+    for (let i=0;i<N;i++){
+      if (storm.outages[i].critical) criticalCount++;
+      else done[i]=1;   // hide non-critical for the first tier
+    }
+  }
+  let remaining = realistic ? criticalCount : N;
+  let inCriticalPhase = realistic && criticalCount > 0;
 
   function hPush(h,item){h.push(item);let i=h.length-1;while (i>0){const p=(i-1)>>1;if (h[p][0]<=h[i][0]) break;const t=h[i];h[i]=h[p];h[p]=t;i=p;}}
   function hPop(h){const top=h[0];const last=h.pop();if (h.length>0){h[0]=last;let i=0;const L=h.length;while (true){const l=2*i+1,r=2*i+2;let s=i;if (l<L&&h[l][0]<h[s][0]) s=l;if (r<L&&h[r][0]<h[s][0]) s=r;if (s===i) break;const t=h[i];h[i]=h[s];h[s]=t;i=s;}}return top;}
 
+  const nnGrid=buildNNGrid(oLat,oLon,N);
+
   const heap=[];
-  for (let c=0;c<crews.length;c++) hPush(heap,[0,c]);
+  for (let c=0;c<crews.length;c++) hPush(heap,[ASSESSMENT_DELAY,c]);
 
   while (remaining>0){
     const top=hPop(heap);
     const ci=top[1];
     const crew=crews[ci];
     const cLat=crew.curLat, cLon=crew.curLon;
-    let bestI=-1, bestSq=Infinity;
-    for (let i=0;i<N;i++){
-      if (done[i]) continue;
-      const dx=oLat[i]-cLat, dy=oLon[i]-cLon;
-      const sq=dx*dx+dy*dy;
-      if (sq<bestSq){bestSq=sq; bestI=i;}
+    const bestI = nnGridFind(nnGrid, cLat, cLon, done, oLat, oLon);
+    if (bestI===-1){
+      // Either critical tier just drained, or nothing else to assign.
+      if (inCriticalPhase) {
+        // Open up the non-critical outages and keep going.
+        for (let i=0;i<N;i++) if (!storm.outages[i].critical) done[i]=0;
+        remaining = N - criticalCount;
+        inCriticalPhase = false;
+        hPush(heap,[crew.time,ci]); // crew goes back into the queue at its current time
+        continue;
+      }
+      break;
     }
-    if (bestI===-1) break;
     done[bestI]=1; remaining--;
+    if (remaining===0 && inCriticalPhase){
+      for (let i=0;i<N;i++) if (!storm.outages[i].critical) done[i]=0;
+      remaining = N - criticalCount;
+      inCriticalPhase = false;
+    }
     const o=storm.outages[bestI];
     const d=dist({lat:cLat,lon:cLon},o);
-    const eta=crew.time + d/TRAVEL_MPH + REPAIR_HRS;
+    let eta = crew.time + d/TRAVEL_MPH + REPAIR_HRS;
+    eta = clampToWorkday(eta);   // push past overnight if it'd extend into the night band
     crew.jobs.push({outageIdx:bestI,o,etaFinish:eta});
     crew.time=eta; crew.curLat=o.lat; crew.curLon=o.lon;
     hPush(heap,[eta,ci]);
@@ -591,33 +743,57 @@ function planRestoration(){
   for (const c of crews) if (c.time>totalTime) totalTime=c.time;
   plan={crews,totalTime};
 
-  // Render — keep the same visual style at every scale: colored depot squares
-  // for every crew, numbered colored circles for each crew's first 30 jobs,
-  // small colored dots after that. No cap is applied so the look matches the
-  // existing screenshots; at extreme scale (5,000+ crews × thousands of jobs)
-  // pan/zoom will be slower since we're driving Leaflet's SVG renderer.
+  // Render — visual style preserved at every scale, with graceful degradation
+  // to Canvas-rendered shapes once DOM markers would dominate the frame budget.
+  //  - Depots: SVG divIcons up to 500 crews; Canvas squares above.
+  //  - Numbered repair circles: SVG divIcons until 1,500 total are placed;
+  //    after that, Canvas dots (still colored per crew, just unnumbered).
   depotLayer.clearLayers(); repairLayer.clearLayers();
 
-  crews.forEach(c=>{
-    const html=`<div style="width:14px;height:14px;background:${c.color};border:2px solid #111;"></div>`;
-    L.marker([c.depot.lat,c.depot.lon],{icon:L.divIcon({className:'crew-depot',html,iconSize:[14,14],iconAnchor:[7,7]})}).addTo(depotLayer)
-      .bindTooltip(`Crew ${c.color} depot`);
-  });
-
-  crews.forEach(c=>{
-    c.jobs.forEach((j,order)=>{
-      const showNum = order<30;
-      const html = showNum
-        ? `<div style="width:14px;height:14px;border-radius:50%;background:${c.color};color:white;font-size:9px;font-weight:bold;line-height:14px;text-align:center;border:1px solid #111">${order+1}</div>`
-        : `<div style="width:6px;height:6px;border-radius:50%;background:${c.color};border:0.5px solid #111"></div>`;
-      const sz = showNum ? 14 : 6;
-      L.marker([j.o.lat,j.o.lon],{icon:L.divIcon({className:'',html,iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]}),interactive:false}).addTo(repairLayer);
+  const DEPOT_SVG_LIMIT = 500;
+  if (crews.length <= DEPOT_SVG_LIMIT) {
+    crews.forEach(c=>{
+      const html=`<div style="width:14px;height:14px;background:${c.color};border:2px solid #111;"></div>`;
+      L.marker([c.depot.lat,c.depot.lon],{icon:L.divIcon({className:'crew-depot',html,iconSize:[14,14],iconAnchor:[7,7]})}).addTo(depotLayer)
+        .bindTooltip(`Crew ${c.color} depot`);
     });
-  });
+  } else {
+    // Canvas square via a circleMarker (Leaflet has no canvas square primitive)
+    crews.forEach(c=>{
+      L.circleMarker([c.depot.lat,c.depot.lon],{
+        renderer:repairCanvas, radius:5, color:"#111", weight:1.2, fillColor:c.color, fillOpacity:1, interactive:false
+      }).addTo(depotLayer);
+    });
+  }
 
-  restoreTimeEl.textContent=totalTime.toFixed(1)+" h";
-  restoreDetailEl.textContent=`${N.toLocaleString()} jobs across ${crews.length.toLocaleString()} crews`;
-  status.textContent=`Restoration: ${crews.length.toLocaleString()} crews finish all ${N.toLocaleString()} repairs in ${totalTime.toFixed(1)} hours.`;
+  const NUMBERED_BUDGET = 1500;
+  let numbered = 0;
+  for (const c of crews){
+    for (let order=0; order<c.jobs.length; order++){
+      const j = c.jobs[order];
+      if (order < 30 && numbered < NUMBERED_BUDGET) {
+        const html = `<div style="width:14px;height:14px;border-radius:50%;background:${c.color};color:white;font-size:9px;font-weight:bold;line-height:14px;text-align:center;border:1px solid #111">${order+1}</div>`;
+        L.marker([j.o.lat,j.o.lon],{icon:L.divIcon({className:'',html,iconSize:[14,14],iconAnchor:[7,7]}),interactive:false}).addTo(repairLayer);
+        numbered++;
+      } else {
+        L.circleMarker([j.o.lat,j.o.lon],{
+          renderer:repairCanvas,radius:3,color:"#111",weight:0.5,fillColor:c.color,fillOpacity:0.95,interactive:false
+        }).addTo(repairLayer);
+      }
+    }
+  }
+
+  // Display: hours under a day, days + hours past 24 h (realistic scenarios run for days).
+  function fmtDuration(hrs){
+    if (hrs < 24) return hrs.toFixed(1) + " h";
+    const d = Math.floor(hrs/24);
+    const h = Math.round(hrs - d*24);
+    return d + " d " + h + " h";
+  }
+  restoreTimeEl.textContent = fmtDuration(totalTime);
+  const modeNote = realistic ? ' · realistic mode' : ' · optimistic baseline';
+  restoreDetailEl.textContent=`${N.toLocaleString()} jobs across ${crews.length.toLocaleString()} crews${modeNote}`;
+  status.textContent=`Restoration: ${crews.length.toLocaleString()} crews finish all ${N.toLocaleString()} repairs in ${fmtDuration(totalTime)}${realistic?' (includes 12 h assessment + overnight downtime)':''}.`;
 }
 
 function resetStorm(){
@@ -632,6 +808,334 @@ document.getElementById('genGrid').onclick=generateGrid;
 document.getElementById('simStorm').onclick=simulateStorm;
 document.getElementById('planRestore').onclick=planRestoration;
 document.getElementById('resetAll').onclick=resetStorm;
+
+// --- Export: GeoJSON + Shapefile ---
+// Convert the in-memory simulation state to standard GIS layers.
+function buildFeatureCollections(){
+  const seed = +seedI.value|0;
+  const stamp = new Date().toISOString().replace(/[:.]/g,'-');
+
+  // Layer 1: substations (Point) — sub_id, lat, lon, pop_serv, n_feeders, color_hex
+  const subsFC = { type:"FeatureCollection", features: substations.map((s,i)=>({
+    type:"Feature",
+    geometry:{ type:"Point", coordinates:[+s.lon.toFixed(6), +s.lat.toFixed(6)] },
+    properties:{
+      sub_id: i+1,
+      lat: +s.lat.toFixed(6),
+      lon: +s.lon.toFixed(6),
+      pop_serv: Math.round(s.popServed),
+      n_feeders: feeders.filter(f=>f.subIdx===i).length,
+      color_hex: s.color,
+    },
+  })) };
+
+  // Layer 2: feeders (LineString)
+  const feedsFC = { type:"FeatureCollection", features: feeders.map((f,i)=>{
+    let lengthKm = 0;
+    for (let k=1;k<f.pts.length;k++){
+      const a={lat:f.pts[k-1][0],lon:f.pts[k-1][1]}, b={lat:f.pts[k][0],lon:f.pts[k][1]};
+      lengthKm += dist(a,b)*1.60934;
+    }
+    return {
+      type:"Feature",
+      geometry:{ type:"LineString", coordinates: f.pts.map(p=>[+p[1].toFixed(6),+p[0].toFixed(6)]) },
+      properties:{
+        feed_id: i+1,
+        sub_id: f.subIdx+1,
+        pop_serv: Math.round(f.popServed),
+        length_km: +lengthKm.toFixed(3),
+        color_hex: f.color,
+      },
+    };
+  }) };
+
+  // Layer 3: laterals (LineString)
+  const latsFC = { type:"FeatureCollection", features: laterals.map((l,i)=>{
+    let lengthKm = 0;
+    for (let k=1;k<l.pts.length;k++){
+      const a={lat:l.pts[k-1][0],lon:l.pts[k-1][1]}, b={lat:l.pts[k][0],lon:l.pts[k][1]};
+      lengthKm += dist(a,b)*1.60934;
+    }
+    return {
+      type:"Feature",
+      geometry:{ type:"LineString", coordinates: l.pts.map(p=>[+p[1].toFixed(6),+p[0].toFixed(6)]) },
+      properties:{
+        lat_id: i+1,
+        feed_id: l.feederIdx+1,
+        pop_serv: Math.round(l.popServed),
+        length_km: +lengthKm.toFixed(3),
+      },
+    };
+  }) };
+
+  // Layer 4: outages (Point) — only if a storm has been simulated
+  const outFC = { type:"FeatureCollection", features: (storm? storm.outages: []).map((o,i)=>({
+    type:"Feature",
+    geometry:{ type:"Point", coordinates:[+o.lon.toFixed(6), +o.lat.toFixed(6)] },
+    properties:{
+      out_id: i+1,
+      seed,
+      kind: o.kind === 'f' ? 'feeder' : 'lateral',
+      feed_id: o.kind==='f' ? o.fi+1 : -1,
+      lat_id:  o.kind==='l' ? o.li+1 : -1,
+      pop_loss: Math.round(o.popLoss),
+    },
+  })) };
+
+  // Layer 5: restoration plan (Point) — only if a plan has been computed
+  const planFC = { type:"FeatureCollection", features: [] };
+  if (plan) {
+    plan.crews.forEach((c,ci)=>{
+      c.jobs.forEach((j,order)=>{
+        planFC.features.push({
+          type:"Feature",
+          geometry:{ type:"Point", coordinates:[+j.o.lon.toFixed(6), +j.o.lat.toFixed(6)] },
+          properties:{
+            job_ord: order+1,
+            crew_id: ci+1,
+            out_id:  j.outageIdx+1,
+            eta_h: +j.etaFinish.toFixed(3),
+            depot_lat: +c.depot.lat.toFixed(6),
+            depot_lon: +c.depot.lon.toFixed(6),
+          },
+        });
+      });
+    });
+  }
+
+  const manifest = {
+    schema_version: 1,
+    generator: "hartford_county_simulation",
+    generated_utc: new Date().toISOString(),
+    crs: "EPSG:4326",
+    inputs: {
+      seed,
+      substations: +kS.value,
+      feeders_per_sub: +fS.value,
+      storm_outages: +oS.value,
+      repair_crews: +cS.value,
+    },
+    counts: {
+      substations: substations.length,
+      feeders: feeders.length,
+      laterals: laterals.length,
+      outages: outFC.features.length,
+      restoration_jobs: planFC.features.length,
+    },
+  };
+
+  return { subsFC, feedsFC, latsFC, outFC, planFC, manifest, stamp };
+}
+
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
+}
+
+async function exportGeoJSON(){
+  if (!substations.length){ status.textContent="Generate the grid first."; return; }
+  const { subsFC, feedsFC, latsFC, outFC, planFC, manifest, stamp } = buildFeatureCollections();
+  const bundle = {
+    manifest,
+    substations: subsFC,
+    feeders: feedsFC,
+    laterals: latsFC,
+    outages: outFC,
+    restoration_plan: planFC,
+  };
+  if (typeof JSZip !== 'undefined'){
+    const zip = new JSZip();
+    zip.file("manifest.json", JSON.stringify(manifest, null, 2));
+    zip.file("substations.geojson",     JSON.stringify(subsFC));
+    zip.file("feeders.geojson",         JSON.stringify(feedsFC));
+    zip.file("laterals.geojson",        JSON.stringify(latsFC));
+    zip.file("outages.geojson",         JSON.stringify(outFC));
+    zip.file("restoration_plan.geojson",JSON.stringify(planFC));
+    const blob = await zip.generateAsync({ type:"blob" });
+    downloadBlob(blob, `hartford_grid_seed${manifest.inputs.seed}_${stamp}.zip`);
+    status.textContent = `Exported GeoJSON zip (${manifest.counts.substations} subs, ${manifest.counts.feeders} feeders, ${manifest.counts.laterals} laterals).`;
+  } else {
+    downloadBlob(new Blob([JSON.stringify(bundle, null, 2)], {type:"application/json"}), `hartford_grid_seed${manifest.inputs.seed}_${stamp}.json`);
+    status.textContent = "Exported combined GeoJSON (JSZip not loaded → single file).";
+  }
+}
+
+async function exportShapefile(){
+  if (!substations.length){ status.textContent="Generate the grid first."; return; }
+  if (typeof shpwrite === 'undefined' || typeof JSZip === 'undefined'){
+    status.textContent = "Shapefile libraries did not load. Use Download GeoJSON instead.";
+    return;
+  }
+  const { subsFC, feedsFC, latsFC, outFC, planFC, manifest, stamp } = buildFeatureCollections();
+  const layers = [
+    { name:"substations",     fc: subsFC,  hasGeom: subsFC.features.length>0 },
+    { name:"feeders",         fc: feedsFC, hasGeom: feedsFC.features.length>0 },
+    { name:"laterals",        fc: latsFC,  hasGeom: latsFC.features.length>0 },
+    { name:"outages",         fc: outFC,   hasGeom: outFC.features.length>0 },
+    { name:"restoration_plan",fc: planFC,  hasGeom: planFC.features.length>0 },
+  ];
+  const master = new JSZip();
+  master.file("manifest.json", JSON.stringify(manifest, null, 2));
+  for (const layer of layers) {
+    if (!layer.hasGeom) continue;
+    try {
+      const blob = shpwrite.zip(layer.fc); // returns base64 string in 0.3.x
+      // shp-write 0.3.x returns a base64-encoded zip. Decode and unpack into master zip.
+      const raw = atob(blob);
+      const inner = await JSZip.loadAsync(raw, { binary:true });
+      for (const path in inner.files) {
+        const f = inner.files[path];
+        if (!f.dir) {
+          const data = await f.async("uint8array");
+          // Prefix with layer name to avoid collisions
+          master.file(`${layer.name}/${path}`, data);
+        }
+      }
+    } catch(e) {
+      console.warn(`shp-write failed on ${layer.name}:`, e);
+    }
+  }
+  const blob = await master.generateAsync({ type:"blob" });
+  downloadBlob(blob, `hartford_grid_seed${manifest.inputs.seed}_${stamp}_shp.zip`);
+  status.textContent = `Exported shapefile bundle (${manifest.counts.substations} subs, ${manifest.counts.feeders} feeders, ${manifest.counts.laterals} laterals).`;
+}
+
+document.getElementById('exportGeoJSON').onclick = exportGeoJSON;
+document.getElementById('exportShapefile').onclick = exportShapefile;
+
+// --- Recommendation: smallest crew count that's within tolerance of the time floor ---
+// Pure scheduler — same algorithm as planRestoration() but no DOM rendering,
+// no PALETTE color tagging, no plan-state mutation. Returns just totalTime.
+function scheduleOnly(M, outages){
+  const N = outages.length;
+  if (N === 0 || M === 0) return 0;
+  // Mirror the realism settings used by planRestoration so the recommendation
+  // matches the actual restoration time the user will see.
+  const realistic = document.getElementById('realisticMode').checked;
+  const REPAIR_HRS       = realistic ? 3.0  : 1.5;
+  const TRAVEL_MPH       = realistic ? 25   : 30;
+  const ASSESSMENT_DELAY = realistic ? 12   : 0;
+  const WORKDAY_HOURS    = realistic ? 14   : 24;
+  function clampToWorkday(t){
+    if (!realistic) return t;
+    const dayN = Math.floor(t/24);
+    const inDay = t - dayN*24;
+    return inDay > WORKDAY_HOURS ? (dayN+1)*24 : t;
+  }
+  // Depots: small M → distinct k-means clusters; large M → cycle outage points.
+  let depots;
+  if (M <= 200) {
+    const rnd = mulberry32((+seedI.value|0)*31 + 99);
+    const pts = outages.map(o=>({lat:o.lat,lon:o.lon,w:1}));
+    depots = kmeans(pts, Math.min(M, pts.length), countyGeo, rnd, 8);
+  } else {
+    depots = [];
+    for (let i=0;i<M;i++){const s=outages[i%N]; depots.push({lat:s.lat,lon:s.lon});}
+  }
+  const crews = depots.map(d=>({time:ASSESSMENT_DELAY, curLat:d.lat, curLon:d.lon}));
+  const oLat = new Float64Array(N), oLon = new Float64Array(N);
+  for (let i=0;i<N;i++){oLat[i]=outages[i].lat; oLon[i]=outages[i].lon;}
+  const done = new Uint8Array(N);
+  // Tier 1 (critical-facility) first if realistic.
+  let criticalCount = 0;
+  if (realistic) {
+    for (let i=0;i<N;i++){
+      if (outages[i].critical) criticalCount++;
+      else done[i] = 1;
+    }
+  }
+  let remaining = realistic ? criticalCount : N;
+  let inCriticalPhase = realistic && criticalCount > 0;
+  function hPush(h,it){h.push(it);let i=h.length-1;while (i>0){const p=(i-1)>>1;if (h[p][0]<=h[i][0]) break;const t=h[i];h[i]=h[p];h[p]=t;i=p;}}
+  function hPop(h){const top=h[0];const last=h.pop();if (h.length>0){h[0]=last;let i=0;const L=h.length;while (true){const l=2*i+1,r=2*i+2;let s=i;if (l<L&&h[l][0]<h[s][0]) s=l;if (r<L&&h[r][0]<h[s][0]) s=r;if (s===i) break;const t=h[i];h[i]=h[s];h[s]=t;i=s;}}return top;}
+  const nnGrid=buildNNGrid(oLat,oLon,N);
+  const heap=[];
+  for (let c=0;c<crews.length;c++) hPush(heap,[ASSESSMENT_DELAY,c]);
+  while (remaining>0){
+    const [_,ci]=hPop(heap); const crew=crews[ci];
+    const cLat=crew.curLat, cLon=crew.curLon;
+    const bestI = nnGridFind(nnGrid, cLat, cLon, done, oLat, oLon);
+    if (bestI===-1){
+      if (inCriticalPhase){
+        for (let i=0;i<N;i++) if (!outages[i].critical) done[i]=0;
+        remaining = N - criticalCount;
+        inCriticalPhase = false;
+        hPush(heap,[crew.time,ci]);
+        continue;
+      }
+      break;
+    }
+    done[bestI]=1; remaining--;
+    if (remaining===0 && inCriticalPhase){
+      for (let i=0;i<N;i++) if (!outages[i].critical) done[i]=0;
+      remaining = N - criticalCount;
+      inCriticalPhase = false;
+    }
+    const o=outages[bestI];
+    const d=dist({lat:cLat,lon:cLon}, o);
+    let eta = crew.time + d/TRAVEL_MPH + REPAIR_HRS;
+    eta = clampToWorkday(eta);
+    crew.time=eta; crew.curLat=o.lat; crew.curLon=o.lon;
+    hPush(heap,[eta,ci]);
+  }
+  let t=0; for (const c of crews) if (c.time>t) t=c.time;
+  return t;
+}
+
+function recommendCrewCount(){
+  if (!storm || !storm.outages.length){
+    status.textContent="Simulate a storm first.";
+    document.getElementById('recCrewDetail').textContent='— simulate a storm first';
+    return;
+  }
+  const N = storm.outages.length;
+  status.textContent = `Searching for optimal crew count over ${N.toLocaleString()} jobs…`;
+  // Floor time: M=N is the practical minimum (one crew per outage, no queueing).
+  // Beyond M=N extra crews idle, so we never need to test higher.
+  const floorTime = scheduleOnly(N, storm.outages);
+  const tolerance = 1.15;        // accept restoration times up to 15% above floor
+  const target = floorTime * tolerance;
+  // Binary search for smallest M with scheduleOnly(M) <= target.
+  // Cache to avoid recomputing.
+  const cache = new Map();
+  cache.set(N, floorTime);
+  function tAt(M){
+    if (cache.has(M)) return cache.get(M);
+    const t = scheduleOnly(M, storm.outages);
+    cache.set(M, t);
+    return t;
+  }
+  let lo=1, hi=N;
+  while (lo<hi){
+    const mid = (lo+hi)>>1;
+    if (tAt(mid) <= target) hi = mid;
+    else lo = mid+1;
+  }
+  const recM = lo;
+  const recT = tAt(recM);
+
+  function fmtH(hrs){
+    if (hrs < 24) return hrs.toFixed(1) + " h";
+    const d = Math.floor(hrs/24);
+    const h = Math.round(hrs - d*24);
+    return d + " d " + h + " h";
+  }
+  document.getElementById('recCrewCount').textContent = recM.toLocaleString();
+  document.getElementById('recCrewDetail').innerHTML =
+    `${fmtH(recT)} restoration · within 15% of ${fmtH(floorTime)} floor`;
+  const applyBtn = document.getElementById('applyRecCrews');
+  applyBtn.style.display = 'block';
+  applyBtn.onclick = () => {
+    cS.value = Math.min(recM, +cS.max);
+    cV.textContent = cS.value;
+    planRestoration();
+  };
+  status.textContent = `Recommended ${recM.toLocaleString()} crews → ${fmtH(recT)} (floor ${fmtH(floorTime)} with ${N.toLocaleString()} crews).`;
+}
+
+document.getElementById('recommendCrews').onclick = recommendCrewCount;
 
 // --- Boot ---
 (async()=>{
