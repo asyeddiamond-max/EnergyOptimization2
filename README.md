@@ -10,9 +10,8 @@ An interactive browser-based model of a synthetic electric distribution grid cov
 
 No install required. Works in any modern browser — sliders, map, storm simulation, restoration plan, and GIS export all run client-side.
 
-Two lighter standalone previews (single SVG, no Leaflet basemap, no server needed):
-- [**Grid + storm preview →**](https://asyeddiamond-max.github.io/EnergyOptimization2/03_grid_inline_preview.html) — substations and storm-outage shading
-- [**Restoration preview →**](https://asyeddiamond-max.github.io/EnergyOptimization2/03_restoration_inline_preview.html) — adds the crew scheduler with depots and numbered repair circles
+For a lighter standalone preview (single SVG, no Leaflet basemap, no server needed):
+[**Open the inline preview →**](https://asyeddiamond-max.github.io/EnergyOptimization2/03_grid_inline_preview.html)
 
 ---
 
@@ -23,14 +22,14 @@ Two lighter standalone previews (single SVG, no Leaflet basemap, no server neede
 ├── 01_fetch_county_boundary.py    # cache Hartford polygon from OSM
 ├── 02_fetch_town_boundaries.py    # cache the 29 town polygons from OSM
 ├── 03_grid_simulation.html        # the main interactive (run via local server)
-├── 03_grid_inline_preview.html    # standalone SVG preview: grid + storm
-├── 03_restoration_inline_preview.html  # standalone SVG preview: + scheduler
+├── 03_grid_inline_preview.html    # lighter standalone SVG preview
 ├── 04_geojson_to_shapefile.py     # offline GeoJSON to shapefile converter
 ├── 05_generate_artifacts.py       # produce matplotlib PNG snapshots in output/
-├── data/                          # cached OSM inputs (committed)
-├── docs/                          # extended notes
-├── output/                        # generated artifacts (mostly committed)
-│   ├── 03_grid_simulation.html    # copy of the live interactive
+├── data/                          # cached OSM inputs
+│   ├── hartford_boundary.json
+│   ├── hartford_towns.geojson
+│   └── hartford_towns.js
+├── output/                        # generated artifacts
 │   ├── 03a_county_topology.png    # county outline + 29 towns + centroids
 │   ├── 03b_synthetic_grid.png     # adds substations, feeders, laterals
 │   ├── 03c_grid_outages.png       # adds a 500-outage storm
@@ -38,9 +37,9 @@ Two lighter standalone previews (single SVG, no Leaflet basemap, no server neede
 │   ├── 03e_outage_curve.png       # customers without power vs hours
 │   ├── 03f_substations_on_county.png  # clean substations-only reference
 │   └── exports/                   # user GeoJSON / shapefile bundles (gitignored)
-├── source/                        # readable .txt mirrors of the HTML/JS
-├── SCALING.md                     # roadmap to statewide CT scaling
+├── README.md
 ├── LICENSE
+├── .gitignore
 └── requirements.txt               # geopandas (for 04), matplotlib (for 05)
 ```
 
@@ -111,7 +110,7 @@ When realistic mode is **off**, the original simplified model runs — 1.5 h rep
    - **Real:** the Hartford County boundary, the 29 town polygons, town centroids, and 2020-census populations.
    - **Synthetic:** every substation, feeder, lateral, outage location, and crew depot. Real distribution-network topology is not public information.
 
-4. **Lay the groundwork for outage-optimization research.** The current simulation answers descriptive questions: *if a storm hits, how many customers go dark, and how long does restoration take with N crews?* The next step (see `SCALING.md`) is normative.
+4. **Lay the groundwork for outage-optimization research.** The current simulation answers descriptive questions: *if a storm hits, how many customers go dark, and how long does restoration take with N crews?* The natural next step is normative — where should substations actually go, and how should crews be pre-positioned to minimize expected customer-minutes-out.
 
 5. **Be portable.** A single HTML file + a few JSONs. No npm. No Docker. No login. You can email it to a collaborator, post it on a class website, or run it offline.
 
@@ -371,7 +370,7 @@ The script writes a `<input>_shp/` folder next to the input with all the shapefi
 
 ## Files in this project
 
-See the top-of-README "Repository layout" section. In short: numbered scripts at the root, cached OSM data in `data/`, generated artifacts in `output/`, readable code mirrors in `source/`, extended docs in `docs/`, plus `SCALING.md` and this `README.md` at the root.
+See the top-of-README "Repository layout" section. In short: numbered scripts at the root, cached OSM data in `data/`, generated artifacts in `output/`, plus `README.md`, `LICENSE`, `.gitignore`, and `requirements.txt` at the root.
 
 ---
 
