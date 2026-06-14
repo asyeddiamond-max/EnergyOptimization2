@@ -4,6 +4,17 @@ An interactive browser-based model of a synthetic electric distribution grid cov
 
 ---
 
+## Try it live
+
+[**Open the simulation →**](https://asyeddiamond-max.github.io/EnergyOptimization2/03_grid_simulation.html)
+
+No install required. Works in any modern browser — sliders, map, storm simulation, restoration plan, and GIS export all run client-side.
+
+For the lighter standalone preview (single SVG, no Leaflet basemap):
+[**Open the inline preview →**](https://asyeddiamond-max.github.io/EnergyOptimization2/03_grid_inline_preview.html)
+
+---
+
 ## Repository layout
 
 ```
