@@ -61,6 +61,22 @@
   .btn-grid    { background:linear-gradient(135deg,#5b8def,#1d4ed8); }
   .btn-storm   { background:linear-gradient(135deg,#f97316,#dc2626); }
   .btn-restore { background:linear-gradient(135deg,#34d399,#047857); }
+  .progress {
+    display:none; height:8px; background:#e5e7eb; border-radius:4px;
+    margin: 6px 0 10px; overflow:hidden; position:relative;
+  }
+  .progress.active { display:block; }
+  .progress > .bar {
+    height:100%; width:0%; transition: width 120ms ease-out;
+    background:linear-gradient(90deg, #34d399, #10b981);
+  }
+  .progress > .bar.orange {
+    background:linear-gradient(90deg, #fb923c, #ea580c);
+  }
+  .progress > .label {
+    position:absolute; top:-18px; right:0;
+    font-size:10px; color:#64748b; font-weight:600;
+  }
   .btn-reset   { background:linear-gradient(135deg,#94a3b8,#475569); }
   button.action:hover { filter:brightness(1.06); transform: translateY(-1px); }
   button.action:active { transform: translateY(0); }
@@ -155,6 +171,7 @@
     </div>
 
     <button class="action btn-restore" id="planRestore">Plan restoration</button>
+    <div class="progress" id="planProgress"><span class="label" id="planProgressLabel">0%</span><div class="bar" id="planProgressBar"></div></div>
 
     <div class="stat-box stat-restore">
       <div class="lbl">Total restoration time</div>
@@ -167,6 +184,7 @@
         Finds the smallest crew count that gets restoration within 15% of the theoretical floor (the time achieved when crews = outages).
       </div>
       <button class="action" id="recommendCrews" style="background:linear-gradient(135deg,#fb923c,#c2410c);margin-bottom:8px">Find optimal crew count</button>
+      <div class="progress" id="recProgress"><span class="label" id="recProgressLabel">0%</span><div class="bar orange" id="recProgressBar"></div></div>
       <div class="stat-box" style="background:#fffbeb;border-color:#fcd34d;margin-bottom:0;">
         <div class="lbl">Recommended crews</div>
         <div class="big" id="recCrewCount" style="color:#b45309">—</div>
@@ -423,6 +441,26 @@ const status=document.getElementById('status');
 const affectedEl=document.getElementById('affected'), affectedPctEl=document.getElementById('affectedPct');
 const outageCountEl=document.getElementById('outageCount');
 const restoreTimeEl=document.getElementById('restoreTime'), restoreDetailEl=document.getElementById('restoreDetail');
+const _planProgress=document.getElementById('planProgress');
+const _planProgressBar=document.getElementById('planProgressBar');
+const _planProgressLabel=document.getElementById('planProgressLabel');
+const _recProgress=document.getElementById('recProgress');
+const _recProgressBar=document.getElementById('recProgressBar');
+const _recProgressLabel=document.getElementById('recProgressLabel');
+function setPlanProgress(pct, visible){
+  if (visible === false){ _planProgress.classList.remove('active'); return; }
+  _planProgress.classList.add('active');
+  const v = Math.max(0, Math.min(100, Math.round(pct)));
+  _planProgressBar.style.width = v + "%";
+  _planProgressLabel.textContent = v + "%";
+}
+function setRecProgress(pct, visible){
+  if (visible === false){ _recProgress.classList.remove('active'); return; }
+  _recProgress.classList.add('active');
+  const v = Math.max(0, Math.min(100, Math.round(pct)));
+  _recProgressBar.style.width = v + "%";
+  _recProgressLabel.textContent = v + "%";
+}
 kS.oninput=()=>kV.textContent=kS.value;
 fS.oninput=()=>fV.textContent=fS.value;
 oS.oninput=()=>oV.textContent=oS.value;
@@ -774,6 +812,7 @@ function nnGridFindVisible(grid, cLat, cLon, done, oLat, oLon, discTime, cTime){
 // pre-dispatch damage assessment delay.
 async function planRestoration(){
   if (!storm){status.textContent="Simulate a storm first.";return;}
+  setPlanProgress(0);
   const seed=+seedI.value|0;
   const rnd=mulberry32(seed*31+99);
   const M=+cS.value;
@@ -969,6 +1008,7 @@ async function planRestoration(){
     if ((N - remaining) % 3000 === 0){
       const pct = Math.round(100 * (N - remaining) / N);
       status.textContent = `Planning restoration… ${pct}% (${(N-remaining).toLocaleString()}/${N.toLocaleString()} jobs scheduled)`;
+      setPlanProgress(pct);
       await new Promise(r => setTimeout(r, 0));
     }
   }
@@ -1036,6 +1076,8 @@ async function planRestoration(){
   const modeNote = realistic ? ' · realistic mode' : ' · optimistic baseline';
   restoreDetailEl.textContent=`${N.toLocaleString()} jobs across ${crews.length.toLocaleString()} crews${modeNote}`;
   status.textContent=`Restoration: ${crews.length.toLocaleString()} crews finish all ${N.toLocaleString()} repairs in ${fmtDuration(totalTime)}${realistic?' (includes 12 h assessment + overnight downtime)':''}.`;
+  setPlanProgress(100);
+  setTimeout(()=>setPlanProgress(0,false), 800);
 }
 
 function resetStorm(){
@@ -1424,6 +1466,7 @@ async function recommendCrewCount(){
     document.getElementById('recCrewDetail').textContent='— simulate a storm first';
     return;
   }
+  setRecProgress(0);
   const N = storm.outages.length;
   const seed = +seedI.value | 0;
   const realistic = document.getElementById('realisticMode').checked;
@@ -1591,7 +1634,9 @@ async function recommendCrewCount(){
   async function tAt(M){
     if (cache.has(M)) return cache.get(M);
     const expectedSteps = Math.ceil(Math.log2(upperBound))+1;
-    status.textContent = `Searching… testing ${M.toLocaleString()} crews (${cache.size+1} of ~${expectedSteps} evaluations)`;
+    const step = cache.size + 1;
+    status.textContent = `Searching… testing ${M.toLocaleString()} crews (${step} of ~${expectedSteps} evaluations)`;
+    setRecProgress(100 * step / (expectedSteps + 1));
     await yieldToBrowser();
     const t = scheduleFast(M);
     cache.set(M, t);
@@ -1628,6 +1673,8 @@ async function recommendCrewCount(){
     planRestoration();
   };
   status.textContent = `Recommended ${recM.toLocaleString()} crews → ${fmtH(recT)} (floor ${fmtH(floorTime)} at ${upperBound.toLocaleString()} crews).`;
+  setRecProgress(100);
+  setTimeout(()=>setRecProgress(0,false), 800);
 }
 
 document.getElementById('recommendCrews').onclick = recommendCrewCount;
