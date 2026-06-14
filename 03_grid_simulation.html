@@ -107,7 +107,7 @@
     <div class="ctrl" style="background:#fef3c7;border-color:#fcd34d;">
       <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#78350f;line-height:1.4;">
         <input type="checkbox" id="realisticMode" checked style="margin-top:2px;flex-shrink:0;" />
-        <span><b style="color:#92400e">Realistic mode</b> — adds the factors that make real storms take days, not hours: 12 h damage assessment delay before crews dispatch, 14 h workday with overnight downtime, tiered priority (critical facilities first → high-impact outages → individuals), 3 h average repair time, and sectionalizers that halve per-outage customer impact. Turn off to see the optimistic baseline.</span>
+        <span><b style="color:#92400e">Realistic mode</b> — adds the seven factors that turn an "optimistic 12-hour" restoration into the 2-7 day reality seen in Eversource storm filings: (1) rolling-horizon scheduling (crews only see outages discovered so far, no future commitments), (2) stochastic repair times (log-normal, median 2 h, 90th-percentile 6 h, instead of a fixed value), (3) damage-assessment ramp (30% of outages visible after the first hour, the rest revealed exponentially over 36 h), (4) mutual-aid waves (50% of crews dispatch at hour 12, +30% at hour 36, +20% at hour 60), (5) road-network proxy (haversine × 1.5 for debris and indirectness), (6) 14 h daylight workday with overnight downtime, (7) tiered priority (critical facilities first, sectionalizers halve per-outage impact). Turn off to see the optimistic single-shot baseline.</span>
       </label>
     </div>
 
@@ -642,9 +642,64 @@ function nnGridFind(grid, cLat, cLon, done, oLat, oLon){
   return bestI;
 }
 
+// Visibility-aware variant — used by the rolling-horizon scheduler so a crew
+// can only see outages whose discovery time has passed.
+function nnGridFindVisible(grid, cLat, cLon, done, oLat, oLon, discTime, cTime){
+  const ccx = Math.floor(cLon/NN_CELL_DEG);
+  const ccy = Math.floor(cLat/NN_CELL_DEG);
+  let bestI=-1, bestSq=Infinity;
+  for (let ring=0; ring<300; ring++){
+    const ringMin = ring*NN_CELL_DEG;
+    if (bestI!==-1 && ringMin*ringMin > bestSq) break;
+    if (ring===0){
+      const key = ccx*100000+ccy;
+      const cell = grid.get(key);
+      if (cell){
+        for (let k=0;k<cell.length;k++){
+          const i = cell[k];
+          if (done[i]) continue;
+          if (discTime[i] > cTime) continue;
+          const dx=oLat[i]-cLat, dy=oLon[i]-cLon;
+          const sq=dx*dx+dy*dy;
+          if (sq<bestSq){bestSq=sq; bestI=i;}
+        }
+      }
+    } else {
+      for (let dx=-ring; dx<=ring; dx++){
+        for (let dy=-ring; dy<=ring; dy++){
+          if (dx!==-ring && dx!==ring && dy!==-ring && dy!==ring) continue;
+          const key = (ccx+dx)*100000+(ccy+dy);
+          const cell = grid.get(key);
+          if (!cell) continue;
+          for (let k=0;k<cell.length;k++){
+            const i = cell[k];
+            if (done[i]) continue;
+            if (discTime[i] > cTime) continue;
+            const ddx=oLat[i]-cLat, ddy=oLon[i]-cLon;
+            const sq=ddx*ddx+ddy*ddy;
+            if (sq<bestSq){bestSq=sq; bestI=i;}
+          }
+        }
+      }
+    }
+  }
+  return bestI;
+}
+
 // --- Step 4: Restoration plan ---
-// Each crew starts at a depot, picks nearest unrepaired outage, repairs (fixed time + travel),
-// moves to next. Total restoration time = max(crew time across all crews).
+// Rolling-horizon greedy scheduler. In realistic mode the scheduler models:
+//   1. Rolling horizon — crews only see outages discovered up to "now"; no
+//      future-knowledge commitments.
+//   2. Stochastic repair durations — log-normal (median 2 h, 90th percentile 6 h)
+//      instead of a fixed time.
+//   3. Damage-assessment ramp — 30% of outages visible within an hour of
+//      dispatch; the rest revealed exponentially over the next 24-36 hours.
+//   4. Mutual-aid waves — initial 50% of crews dispatched at hour 12; +30% at
+//      hour 36; +20% at hour 60.
+//   5. Road-network proxy — actual travel time = haversine x 1.5 (debris,
+//      road indirectness, no straight-line driving in storm conditions).
+// Plus the existing 14h workday clamp, tier-1 critical priority, and 12h
+// pre-dispatch damage assessment delay.
 function planRestoration(){
   if (!storm){status.textContent="Simulate a storm first.";return;}
   const seed=+seedI.value|0;
@@ -657,10 +712,10 @@ function planRestoration(){
   // in Eversource storm filings: assessment delay, night-ops downtime, tiered
   // priority, longer per-repair time.
   const realistic = document.getElementById('realisticMode').checked;
-  const REPAIR_HRS       = realistic ? 3.0  : 1.5;   // diagnosis + repair + verify
-  const TRAVEL_MPH       = realistic ? 25   : 30;    // slower under storm conditions
-  const ASSESSMENT_DELAY = realistic ? 12   : 0;     // hours before any crew dispatches
-  const WORKDAY_HOURS    = realistic ? 14   : 24;    // 6 am – 8 pm daylight ops
+  const TRAVEL_MPH       = realistic ? 25   : 30;
+  const ASSESSMENT_DELAY = realistic ? 12   : 0;
+  const WORKDAY_HOURS    = realistic ? 14   : 24;
+  const ROAD_MULTIPLIER  = realistic ? 1.5  : 1.0;   // item 5: real driving > haversine
   function clampToWorkday(t){
     if (!realistic) return t;
     const dayN = Math.floor(t/24);
@@ -669,9 +724,46 @@ function planRestoration(){
   }
   status.textContent=`Planning restoration: ${M.toLocaleString()} crews, ${N.toLocaleString()} jobs${realistic?' (realistic mode)':''}…`;
 
+  // Item 2: stochastic repair duration — log-normal centered on 2 h median,
+  // 90th-percentile 6 h, capped at 12 h for sanity. Independent stream from
+  // (seed * 1117 + 23) so the same scenario re-runs to the same durations.
+  const rndRepair = mulberry32(seed*1117 + 23);
+  let _bmHave = false, _bmZ = 0;
+  function nextNormal(){
+    if (_bmHave){ _bmHave=false; return _bmZ; }
+    const u1 = Math.max(1e-10, rndRepair());
+    const u2 = rndRepair();
+    const mag = Math.sqrt(-2*Math.log(u1));
+    _bmHave = true;
+    _bmZ = mag * Math.sin(2*Math.PI*u2);
+    return mag * Math.cos(2*Math.PI*u2);
+  }
+  function sampleRepairHours(){
+    if (!realistic) return 1.5;
+    return Math.max(0.25, Math.min(12, Math.exp(Math.log(2) + 0.857 * nextNormal())));
+  }
+
+  // Item 3: damage-assessment ramp — discovery time per outage.
+  //  - 30% of outages are visible within the first hour after dispatch.
+  //  - the remaining 70% reveal exponentially over the next ~36 h (until t=48).
+  const oLat=new Float64Array(N), oLon=new Float64Array(N);
+  const discTime = new Float64Array(N);
+  for (let i=0;i<N;i++){ oLat[i]=storm.outages[i].lat; oLon[i]=storm.outages[i].lon; }
+  if (realistic){
+    const rndDisc = mulberry32(seed*991 + 7);
+    for (let i=0;i<N;i++){
+      const u = rndDisc();
+      if (u < 0.30){
+        discTime[i] = ASSESSMENT_DELAY + u * (1.0/0.30);   // 0–1 h after dispatch
+      } else {
+        const v = (u - 0.30) / 0.70;                       // 0..1
+        const tAfter = -Math.log(Math.max(1e-9, 1 - 0.99*v)) / 0.1;
+        discTime[i] = ASSESSMENT_DELAY + 1 + Math.min(36, tAfter);
+      }
+    }
+  }
+
   // Depot placement
-  //  - small M: k-means on outage points (gives nicely spread depots)
-  //  - large M: skip k-means (cost grows as O(M*N) per iter); seed depots from outage points cycling
   let depots;
   if (M <= 200) {
     const depotPts=storm.outages.map(o=>({lat:o.lat,lon:o.lon,w:1}));
@@ -680,20 +772,33 @@ function planRestoration(){
     depots=[];
     for (let i=0;i<M;i++){const src=storm.outages[i%N]; depots.push({lat:src.lat,lon:src.lon});}
   }
-  const crews=depots.map((d,i)=>({depot:d,color:PALETTE[i%PALETTE.length],jobs:[],time:ASSESSMENT_DELAY,curLat:d.lat,curLon:d.lon}));
 
-  // Fast scheduler — grid-hash O(log N) nearest-outage lookup, min-heap on crews.
-  const oLat=new Float64Array(N), oLon=new Float64Array(N);
-  for (let i=0;i<N;i++){oLat[i]=storm.outages[i].lat; oLon[i]=storm.outages[i].lon;}
+  // Item 4: mutual-aid waves. Initial 50% dispatch after assessment; +30% at
+  // hour 36 (i.e. 24 h after dispatch); +20% at hour 60 (48 h after dispatch).
+  let crewArrivals;
+  if (realistic && M >= 6){
+    const nInit = Math.ceil(M * 0.5);
+    const nW1   = Math.ceil(M * 0.3);
+    const nW2   = M - nInit - nW1;
+    crewArrivals = [];
+    for (let i=0;i<nInit;i++) crewArrivals.push(ASSESSMENT_DELAY);
+    for (let i=0;i<nW1;i++)   crewArrivals.push(ASSESSMENT_DELAY + 24);
+    for (let i=0;i<nW2;i++)   crewArrivals.push(ASSESSMENT_DELAY + 48);
+  } else {
+    crewArrivals = new Array(M).fill(ASSESSMENT_DELAY);
+  }
+  const crews=depots.map((d,i)=>({
+    depot:d, color:PALETTE[i%PALETTE.length], jobs:[],
+    time:crewArrivals[i], curLat:d.lat, curLon:d.lon, arrival:crewArrivals[i],
+  }));
+
   const done=new Uint8Array(N);
-
-  // Realistic mode: schedule in tiers. Tier 1 = critical facilities; the rest
-  // is processed only after every critical site has a crew assigned.
+  // Tier-1 critical-facility priority (existing behavior, retained).
   let criticalCount = 0;
-  if (realistic) {
+  if (realistic){
     for (let i=0;i<N;i++){
       if (storm.outages[i].critical) criticalCount++;
-      else done[i]=1;   // hide non-critical for the first tier
+      else done[i]=1;
     }
   }
   let remaining = realistic ? criticalCount : N;
@@ -705,26 +810,48 @@ function planRestoration(){
   const nnGrid=buildNNGrid(oLat,oLon,N);
 
   const heap=[];
-  for (let c=0;c<crews.length;c++) hPush(heap,[ASSESSMENT_DELAY,c]);
+  for (let c=0;c<crews.length;c++) hPush(heap,[crewArrivals[c],c]);
+
+  // Item 1: rolling horizon. Each crew only sees outages discovered by their
+  // current sim time, so the plan is built one job at a time as the clock
+  // advances. A crew that frees up before any new outage is visible waits.
+  function nextDiscoveryAfter(t){
+    let best = Infinity;
+    for (let i=0;i<N;i++){
+      if (done[i]) continue;
+      if (discTime[i] > t && discTime[i] < best) best = discTime[i];
+    }
+    return best;
+  }
 
   while (remaining>0){
     const top=hPop(heap);
-    const ci=top[1];
+    const cTime = top[0], ci=top[1];
     const crew=crews[ci];
     const cLat=crew.curLat, cLon=crew.curLon;
-    const bestI = nnGridFind(nnGrid, cLat, cLon, done, oLat, oLon);
+    const bestI = realistic
+      ? nnGridFindVisible(nnGrid, cLat, cLon, done, oLat, oLon, discTime, cTime)
+      : nnGridFind(nnGrid, cLat, cLon, done, oLat, oLon);
+
     if (bestI===-1){
-      // Either critical tier just drained, or nothing else to assign.
-      if (inCriticalPhase) {
-        // Open up the non-critical outages and keep going.
+      if (inCriticalPhase){
         for (let i=0;i<N;i++) if (!storm.outages[i].critical) done[i]=0;
         remaining = N - criticalCount;
         inCriticalPhase = false;
-        hPush(heap,[crew.time,ci]); // crew goes back into the queue at its current time
+        hPush(heap,[cTime,ci]);
+        continue;
+      }
+      if (realistic){
+        // No visible work yet — fast-forward this crew to the next discovery time.
+        const nextT = nextDiscoveryAfter(cTime);
+        if (!isFinite(nextT)) break;
+        crew.time = nextT;
+        hPush(heap,[nextT,ci]);
         continue;
       }
       break;
     }
+
     done[bestI]=1; remaining--;
     if (remaining===0 && inCriticalPhase){
       for (let i=0;i<N;i++) if (!storm.outages[i].critical) done[i]=0;
@@ -732,9 +859,10 @@ function planRestoration(){
       inCriticalPhase = false;
     }
     const o=storm.outages[bestI];
-    const d=dist({lat:cLat,lon:cLon},o);
-    let eta = crew.time + d/TRAVEL_MPH + REPAIR_HRS;
-    eta = clampToWorkday(eta);   // push past overnight if it'd extend into the night band
+    const driveMiles = dist({lat:cLat,lon:cLon},o) * ROAD_MULTIPLIER;
+    const repairH = sampleRepairHours();
+    let eta = cTime + driveMiles/TRAVEL_MPH + repairH;
+    eta = clampToWorkday(eta);
     crew.jobs.push({outageIdx:bestI,o,etaFinish:eta});
     crew.time=eta; crew.curLat=o.lat; crew.curLon=o.lon;
     hPush(heap,[eta,ci]);
@@ -1012,39 +1140,86 @@ document.getElementById('exportShapefile').onclick = exportShapefile;
 function scheduleOnly(M, outages){
   const N = outages.length;
   if (N === 0 || M === 0) return 0;
-  // Mirror the realism settings used by planRestoration so the recommendation
-  // matches the actual restoration time the user will see.
+  // Mirror the realism modeled by planRestoration so the recommendation tracks
+  // what the user will actually see when they click Plan restoration.
+  const seed = +seedI.value | 0;
   const realistic = document.getElementById('realisticMode').checked;
-  const REPAIR_HRS       = realistic ? 3.0  : 1.5;
   const TRAVEL_MPH       = realistic ? 25   : 30;
   const ASSESSMENT_DELAY = realistic ? 12   : 0;
   const WORKDAY_HOURS    = realistic ? 14   : 24;
+  const ROAD_MULTIPLIER  = realistic ? 1.5  : 1.0;
   function clampToWorkday(t){
     if (!realistic) return t;
     const dayN = Math.floor(t/24);
     const inDay = t - dayN*24;
     return inDay > WORKDAY_HOURS ? (dayN+1)*24 : t;
   }
-  // Depots: small M → distinct k-means clusters; large M → cycle outage points.
+
+  // Stochastic repair durations — same generator settings as planRestoration,
+  // re-seeded each call so the binary search compares apples to apples.
+  const rndRepair = mulberry32(seed*1117 + 23);
+  let _bmHave=false, _bmZ=0;
+  function nextNormal(){
+    if (_bmHave){ _bmHave=false; return _bmZ; }
+    const u1 = Math.max(1e-10, rndRepair());
+    const u2 = rndRepair();
+    const mag = Math.sqrt(-2*Math.log(u1));
+    _bmHave=true; _bmZ = mag*Math.sin(2*Math.PI*u2);
+    return mag*Math.cos(2*Math.PI*u2);
+  }
+  function sampleRepair(){
+    if (!realistic) return 1.5;
+    return Math.max(0.25, Math.min(12, Math.exp(Math.log(2) + 0.857*nextNormal())));
+  }
+
+  const oLat = new Float64Array(N), oLon = new Float64Array(N);
+  const discTime = new Float64Array(N);
+  for (let i=0;i<N;i++){oLat[i]=outages[i].lat; oLon[i]=outages[i].lon;}
+  if (realistic){
+    const rndDisc = mulberry32(seed*991 + 7);
+    for (let i=0;i<N;i++){
+      const u = rndDisc();
+      if (u < 0.30){
+        discTime[i] = ASSESSMENT_DELAY + u * (1.0/0.30);
+      } else {
+        const v = (u - 0.30) / 0.70;
+        const tAfter = -Math.log(Math.max(1e-9, 1 - 0.99*v)) / 0.1;
+        discTime[i] = ASSESSMENT_DELAY + 1 + Math.min(36, tAfter);
+      }
+    }
+  }
+
   let depots;
   if (M <= 200) {
-    const rnd = mulberry32((+seedI.value|0)*31 + 99);
+    const rnd = mulberry32(seed*31 + 99);
     const pts = outages.map(o=>({lat:o.lat,lon:o.lon,w:1}));
     depots = kmeans(pts, Math.min(M, pts.length), countyGeo, rnd, 8);
   } else {
     depots = [];
     for (let i=0;i<M;i++){const s=outages[i%N]; depots.push({lat:s.lat,lon:s.lon});}
   }
-  const crews = depots.map(d=>({time:ASSESSMENT_DELAY, curLat:d.lat, curLon:d.lon}));
-  const oLat = new Float64Array(N), oLon = new Float64Array(N);
-  for (let i=0;i<N;i++){oLat[i]=outages[i].lat; oLon[i]=outages[i].lon;}
+
+  // Mutual-aid waves (item 4)
+  let crewArrivals;
+  if (realistic && M >= 6){
+    const nInit = Math.ceil(M * 0.5);
+    const nW1   = Math.ceil(M * 0.3);
+    const nW2   = M - nInit - nW1;
+    crewArrivals = [];
+    for (let i=0;i<nInit;i++) crewArrivals.push(ASSESSMENT_DELAY);
+    for (let i=0;i<nW1;i++)   crewArrivals.push(ASSESSMENT_DELAY + 24);
+    for (let i=0;i<nW2;i++)   crewArrivals.push(ASSESSMENT_DELAY + 48);
+  } else {
+    crewArrivals = new Array(M).fill(ASSESSMENT_DELAY);
+  }
+
+  const crews = depots.map((d,i)=>({time:crewArrivals[i], curLat:d.lat, curLon:d.lon}));
   const done = new Uint8Array(N);
-  // Tier 1 (critical-facility) first if realistic.
   let criticalCount = 0;
-  if (realistic) {
+  if (realistic){
     for (let i=0;i<N;i++){
       if (outages[i].critical) criticalCount++;
-      else done[i] = 1;
+      else done[i]=1;
     }
   }
   let remaining = realistic ? criticalCount : N;
@@ -1053,17 +1228,36 @@ function scheduleOnly(M, outages){
   function hPop(h){const top=h[0];const last=h.pop();if (h.length>0){h[0]=last;let i=0;const L=h.length;while (true){const l=2*i+1,r=2*i+2;let s=i;if (l<L&&h[l][0]<h[s][0]) s=l;if (r<L&&h[r][0]<h[s][0]) s=r;if (s===i) break;const t=h[i];h[i]=h[s];h[s]=t;i=s;}}return top;}
   const nnGrid=buildNNGrid(oLat,oLon,N);
   const heap=[];
-  for (let c=0;c<crews.length;c++) hPush(heap,[ASSESSMENT_DELAY,c]);
+  for (let c=0;c<crews.length;c++) hPush(heap,[crewArrivals[c],c]);
+  function nextDiscoveryAfter(t){
+    let best = Infinity;
+    for (let i=0;i<N;i++){
+      if (done[i]) continue;
+      if (discTime[i] > t && discTime[i] < best) best = discTime[i];
+    }
+    return best;
+  }
   while (remaining>0){
-    const [_,ci]=hPop(heap); const crew=crews[ci];
+    const top=hPop(heap);
+    const cTime=top[0], ci=top[1];
+    const crew=crews[ci];
     const cLat=crew.curLat, cLon=crew.curLon;
-    const bestI = nnGridFind(nnGrid, cLat, cLon, done, oLat, oLon);
+    const bestI = realistic
+      ? nnGridFindVisible(nnGrid, cLat, cLon, done, oLat, oLon, discTime, cTime)
+      : nnGridFind(nnGrid, cLat, cLon, done, oLat, oLon);
     if (bestI===-1){
       if (inCriticalPhase){
         for (let i=0;i<N;i++) if (!outages[i].critical) done[i]=0;
         remaining = N - criticalCount;
         inCriticalPhase = false;
-        hPush(heap,[crew.time,ci]);
+        hPush(heap,[cTime,ci]);
+        continue;
+      }
+      if (realistic){
+        const nextT = nextDiscoveryAfter(cTime);
+        if (!isFinite(nextT)) break;
+        crew.time = nextT;
+        hPush(heap,[nextT,ci]);
         continue;
       }
       break;
@@ -1075,8 +1269,9 @@ function scheduleOnly(M, outages){
       inCriticalPhase = false;
     }
     const o=outages[bestI];
-    const d=dist({lat:cLat,lon:cLon}, o);
-    let eta = crew.time + d/TRAVEL_MPH + REPAIR_HRS;
+    const miles = dist({lat:cLat,lon:cLon}, o) * ROAD_MULTIPLIER;
+    const repairH = sampleRepair();
+    let eta = cTime + miles/TRAVEL_MPH + repairH;
     eta = clampToWorkday(eta);
     crew.time=eta; crew.curLat=o.lat; crew.curLon=o.lon;
     hPush(heap,[eta,ci]);

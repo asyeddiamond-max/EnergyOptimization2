@@ -79,24 +79,27 @@ Every random choice is controlled by a single integer seed, so any given configu
 
 ## Realistic mode
 
-A new yellow toggle at the top of the sidebar (just under the seed) controls whether the simulation uses a "perfectly-coordinated theoretical operation" model or one calibrated against published Eversource storm-after-action reports. **The toggle is ON by default.**
+A yellow toggle at the top of the sidebar (just under the seed) controls whether the simulation uses a perfectly-coordinated theoretical operation or one calibrated against published Eversource storm-after-action reports. **The toggle is ON by default.**
 
-When realistic mode is **on**:
+When realistic mode is **on**, the scheduler models seven real-world factors that turn an "optimistic 12-hour" restoration into the 2-7 day reality:
 
-| Real-world factor | What the model now does |
-|---|---|
-| Damage assessment | All crews stay at depot for the first **12 hours** while the utility surveys the network. No repairs happen during this window. |
-| Workday vs. night ops | Each "day" is **14 work hours** (6 am – 8 pm). When a crew's running clock crosses 8 pm, it pauses overnight and resumes the next morning at 6 am. Real utilities suspend most pole-and-wire work after dark for safety. |
-| Per-outage repair time | Bumped from 1.5 h to **3 h** to include diagnosis, repair, and re-energization verification. |
-| Crew travel speed | Dropped from 30 mph to **25 mph** to reflect storm debris, detours, and reduced visibility. |
-| Sectionalizers | Per-outage customer loss is **halved**. Real protective devices isolate only the segment between two switches rather than killing the whole downstream branch. |
-| Critical-facility priority | ~**2% of outage locations are tagged "critical"** (hospitals, fire stations, water plants, etc.). The scheduler completes every critical-tier outage before touching anything else. On the map these render as larger, yellow-outlined markers. |
+| # | Factor | What the model does |
+|---|---|---|
+| 1 | **Rolling-horizon scheduling** | The scheduler commits one job at a time as the clock advances. A crew that frees up at hour 6 can only consider outages discovered by hour 6 — no future-knowledge optimization. This is the workhorse pattern utilities actually run (15-minute re-solves against current state). |
+| 2 | **Stochastic repair durations** | Each repair time is sampled from a log-normal distribution (median 2 h, 90th percentile 6 h, capped at 12 h) instead of a fixed value. Captures the real spread between "tripped fuse" jobs and "broken pole" jobs. |
+| 3 | **Damage-assessment ramp** | Outages reveal over time, not all at t=0. 30% are visible within an hour of dispatch; the remaining 70% reveal exponentially over the next 24-36 hours as patrols complete. A crew with no visible work fast-forwards to the next discovery time. |
+| 4 | **Mutual-aid waves** | 50% of the slider's crew count dispatch immediately (after the 12 h assessment delay). +30% arrive at hour 36 (24 h later, in-region mutual aid). +20% arrive at hour 60 (48 h later, out-of-state). Matches the typical wave pattern of major-storm responses. |
+| 5 | **Road-network proxy** | Actual driving time = haversine × **1.5** to account for road indirectness and storm-debris detours. (A full OSRM/Valhalla road-graph integration is in `SCALING.md` as future work; this is the cheap first-order proxy.) |
+| 6 | **14 h daylight workday** | When a crew's running clock crosses 8 pm, it pauses overnight and resumes at 6 am. Real utilities suspend most pole-and-wire work after dark for safety. |
+| 7 | **Tiered priority + sectionalizers** | ~2% of outages are flagged critical (hospitals, fire stations, water plants) and scheduled first. Per-outage customer loss is halved (real protective devices isolate just the broken segment). |
 
-When realistic mode is **off**, the original simplified model runs — 1.5 h repairs, 30 mph travel, 24/7 crews, no assessment delay, no tiering, full downstream loss per outage. Useful as the "best-case theoretical floor" you'd compare reality against.
+Plus the **12 hour pre-dispatch damage-assessment delay** — every crew sits at its depot until hour 12 while the utility surveys the network.
+
+When realistic mode is **off**, the original optimistic single-shot baseline runs — 1.5 h fixed repair time, 30 mph straight-line travel, all outages visible at t=0, no waves, no workday cap, no tiering, full downstream loss per outage. Useful as the "perfect-information theoretical floor" you'd compare a real stochastic policy against.
 
 **Order-of-magnitude effect on a 5,000-outage Sandy-scale storm:**
-- *Optimistic baseline (off):* ~9–15 hours to full restoration
-- *Realistic mode (on):* ~3–5 days to full restoration — within range of the 2–7-day public Eversource reports for major storms.
+- *Optimistic baseline (off):* ~9-15 hours to full restoration.
+- *Realistic mode (on):* ~3-7 days to full restoration — within range of the 2-7 day public Eversource reports for major storms.
 
 ---
 

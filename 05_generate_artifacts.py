@@ -230,51 +230,115 @@ def haversine_miles(la1, lo1, la2, lo2):
     return 2 * R * math.asin(math.sqrt(s))
 
 
-def plan_restoration(outages, m_crews, rnd, realistic=True):
+def plan_restoration(outages, m_crews, rnd_master, realistic=True):
+    """Rolling-horizon greedy scheduler with all 5 items 1-5 modeled when realistic=True.
+
+    Returns (crews, total_time, timeline) where timeline = list of (hour, remaining).
+    """
     if not outages or m_crews == 0:
         return [], 0.0, []
-    REPAIR_HRS = 3.0 if realistic else 1.5
+    import heapq
+    import math as _math
     TRAVEL_MPH = 25 if realistic else 30
     ASSESSMENT_DELAY = 12 if realistic else 0
     WORKDAY_HOURS = 14 if realistic else 24
+    ROAD_MULTIPLIER = 1.5 if realistic else 1.0
     N = len(outages)
-    # Depots: cycle outage points (simplified; full version k-means for small M).
+
+    def clamp(t):
+        if not realistic:
+            return t
+        dn = int(t // 24); ind = t - dn * 24
+        return (dn + 1) * 24 if ind > WORKDAY_HOURS else t
+
+    # Independent RNG streams for repair durations and discovery times,
+    # so a binary search over m doesn't shuffle the realized values.
+    rnd_repair = mulberry32(1117)
+    rnd_disc   = mulberry32(991)
+
+    def sample_repair():
+        if not realistic:
+            return 1.5
+        # Box-Muller normal
+        u1 = max(1e-10, rnd_repair())
+        u2 = rnd_repair()
+        z = _math.sqrt(-2 * _math.log(u1)) * _math.cos(2 * _math.pi * u2)
+        return max(0.25, min(12.0, _math.exp(_math.log(2) + 0.857 * z)))
+
+    # Item 3: discovery times
+    disc_time = [0.0] * N
+    if realistic:
+        for i in range(N):
+            u = rnd_disc()
+            if u < 0.30:
+                disc_time[i] = ASSESSMENT_DELAY + u * (1.0 / 0.30)
+            else:
+                v = (u - 0.30) / 0.70
+                t_after = -_math.log(max(1e-9, 1 - 0.99 * v)) / 0.1
+                disc_time[i] = ASSESSMENT_DELAY + 1 + min(36.0, t_after)
+
+    # Item 4: mutual-aid waves
+    if realistic and m_crews >= 6:
+        n_init = _math.ceil(m_crews * 0.5)
+        n_w1   = _math.ceil(m_crews * 0.3)
+        n_w2   = m_crews - n_init - n_w1
+        arrivals = ([ASSESSMENT_DELAY] * n_init +
+                    [ASSESSMENT_DELAY + 24] * n_w1 +
+                    [ASSESSMENT_DELAY + 48] * n_w2)
+    else:
+        arrivals = [ASSESSMENT_DELAY] * m_crews
+
     depots = [outages[i % N] for i in range(m_crews)]
-    crews = [{"depot": d, "time": ASSESSMENT_DELAY, "lat": d[0], "lon": d[1], "jobs": []} for d in depots]
+    crews = [{"depot": d, "time": arrivals[i], "lat": d[0], "lon": d[1], "jobs": []}
+             for i, d in enumerate(depots)]
     done = [False] * N
     remaining = N
-    # Min-heap by (time, crew_idx)
-    import heapq
-    heap = [(ASSESSMENT_DELAY, c) for c in range(m_crews)]
+    heap = [(arrivals[c], c) for c in range(m_crews)]
     heapq.heapify(heap)
-    # Customer-out timeline samples (step decay).
     timeline = [(0.0, N)]
+
+    def next_discovery_after(t):
+        best = float("inf")
+        for i in range(N):
+            if done[i]:
+                continue
+            if disc_time[i] > t and disc_time[i] < best:
+                best = disc_time[i]
+        return best
+
     while remaining > 0:
         t_now, ci = heapq.heappop(heap)
         crew = crews[ci]
+        # Item 1 + 3: rolling-horizon find-nearest-visible
         best, bd = -1, float("inf")
         for i in range(N):
             if done[i]:
                 continue
-            d = (outages[i][0] - crew["lat"]) ** 2 + (outages[i][1] - crew["lon"]) ** 2
+            if realistic and disc_time[i] > t_now:
+                continue
+            dx = outages[i][0] - crew["lat"]; dy = outages[i][1] - crew["lon"]
+            d = dx * dx + dy * dy
             if d < bd:
                 bd, best = d, i
         if best == -1:
+            # No visible work; fast-forward to next discovery (realistic) or quit (baseline)
+            if realistic:
+                nxt = next_discovery_after(t_now)
+                if not _math.isfinite(nxt):
+                    break
+                crew["time"] = nxt
+                heapq.heappush(heap, (nxt, ci))
+                continue
             break
         done[best] = True
         remaining -= 1
-        miles = haversine_miles(crew["lat"], crew["lon"], outages[best][0], outages[best][1])
-        eta = crew["time"] + miles / TRAVEL_MPH + REPAIR_HRS
-        # Workday clamp
-        day_n = int(eta // 24)
-        in_day = eta - day_n * 24
-        if in_day > WORKDAY_HOURS:
-            eta = (day_n + 1) * 24
+        miles = haversine_miles(crew["lat"], crew["lon"], outages[best][0], outages[best][1]) * ROAD_MULTIPLIER
+        repair_h = sample_repair()
+        eta = clamp(crew["time"] + miles / TRAVEL_MPH + repair_h)
         crew["time"] = eta
         crew["lat"], crew["lon"] = outages[best]
         crew["jobs"].append((outages[best], eta))
         heapq.heappush(heap, (eta, ci))
-        # Record outage curve every ~50 repairs
         if remaining % max(1, N // 80) == 0:
             timeline.append((eta, remaining))
     total = max(c["time"] for c in crews)
@@ -396,11 +460,6 @@ def main():
     fig.savefig(OUT / "03e_outage_curve.png", dpi=110, bbox_inches="tight", facecolor="#f8fafc")
     plt.close(fig)
     print("Wrote output/03e_outage_curve.png")
-
-    # Copy the live interactive into output/ for discoverability.
-    import shutil
-    shutil.copy(ROOT / "03_grid_simulation.html", OUT / "03_grid_simulation.html")
-    print("Copied 03_grid_simulation.html into output/")
 
     print("\nDone.")
 
