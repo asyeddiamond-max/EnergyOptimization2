@@ -8,22 +8,38 @@ An interactive browser-based model of a synthetic electric distribution grid cov
 
 ```
 .
-├── 01_fetch_county_boundary.py   # cache Hartford polygon from OSM
-├── 02_fetch_town_boundaries.py   # cache the 29 town polygons from OSM
-├── 03_grid_simulation.html       # the main interactive (run via local server)
-├── 03_grid_inline_preview.html   # standalone SVG preview (no server needed)
-├── 04_geojson_to_shapefile.py    # offline GeoJSON → shapefile converter
-├── data/                         # cached OSM inputs (committed, ~300 KB)
-├── docs/                         # extended notes (algorithms, reality check)
-├── output/                       # generated artifacts (mostly gitignored)
-│   └── exports/                  # user GeoJSON / shapefile bundles land here
-├── source/                       # readable .txt mirrors of the HTML/JS
-├── SCALING.md                    # roadmap to statewide CT scaling
+├── 01_fetch_county_boundary.py    # cache Hartford polygon from OSM
+├── 02_fetch_town_boundaries.py    # cache the 29 town polygons from OSM
+├── 03_grid_simulation.html        # the main interactive (run via local server)
+├── 03_grid_inline_preview.html    # standalone SVG preview (no server needed)
+├── 04_geojson_to_shapefile.py     # offline GeoJSON to shapefile converter
+├── 05_generate_artifacts.py       # produce matplotlib PNG snapshots in output/
+├── 05_generate_artifacts.ps1      # PowerShell fallback (SVG snapshots)
+├── data/                          # cached OSM inputs (committed)
+├── docs/                          # extended notes
+├── output/                        # generated artifacts (mostly committed)
+│   ├── 03_grid_simulation.html    # copy of the live interactive
+│   ├── 03a_county_topology.svg    # geographic baseline
+│   ├── 03b_synthetic_grid.svg     # adds substations and feeders
+│   ├── 03c_storm_overlay.svg      # adds storm outages
+│   ├── 03d_outage_curve.svg       # customers without power vs hours
+│   └── exports/                   # user GeoJSON / shapefile bundles (gitignored)
+├── source/                        # readable .txt mirrors of the HTML/JS
+├── SCALING.md                     # roadmap to statewide CT scaling
 ├── LICENSE
-└── requirements.txt              # only needed for 04 (geopandas)
+└── requirements.txt               # geopandas (for 04), matplotlib (for 05)
 ```
 
 Each numbered file is a self-contained step. Run them in order the first time, or just open `03_grid_simulation.html` directly (the cached data in `data/` is committed so you don't need 01/02 unless you want to refresh from OSM).
+
+### Regenerating the artifacts in output/
+
+The repo ships with pre-generated SVG snapshots in `output/` so you can see what the simulation produces without running anything. To regenerate them, use either:
+
+- `python 05_generate_artifacts.py` — matplotlib PNGs (requires `pip install matplotlib numpy`)
+- `pwsh 05_generate_artifacts.ps1` — SVG fallback that runs without Python
+
+Both reproduce the same set of artifacts (one as `.png`, the other as `.svg`).
 
 ---
 

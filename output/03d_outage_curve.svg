@@ -1,0 +1,37 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" width="100%" style="background:#f8fafc">
+<rect x="0" y="0" width="800" height="400" fill="#f8fafc"/>
+<text x="400" y="22" text-anchor="middle" font-family="system-ui,sans-serif" font-size="15" font-weight="600" fill="#1e293b">Outage curve: 70,000 customers out at t=0, 36 h restoration in realistic mode</text>
+<line x1="70" y1="40" x2="70" y2="360" stroke="#94a3b8" stroke-width="1"/>
+<line x1="70" y1="360" x2="770" y2="360" stroke="#94a3b8" stroke-width="1"/>
+<text x="62" y="364" text-anchor="end" font-family="system-ui,sans-serif" font-size="11" fill="#475569">0</text>
+<line x1="67" y1="360" x2="70" y2="360" stroke="#94a3b8"/>
+<text x="62" y="284" text-anchor="end" font-family="system-ui,sans-serif" font-size="11" fill="#475569">17500</text>
+<line x1="67" y1="280" x2="70" y2="280" stroke="#94a3b8"/>
+<text x="62" y="204" text-anchor="end" font-family="system-ui,sans-serif" font-size="11" fill="#475569">35000</text>
+<line x1="67" y1="200" x2="70" y2="200" stroke="#94a3b8"/>
+<text x="62" y="124" text-anchor="end" font-family="system-ui,sans-serif" font-size="11" fill="#475569">52500</text>
+<line x1="67" y1="120" x2="70" y2="120" stroke="#94a3b8"/>
+<text x="62" y="44" text-anchor="end" font-family="system-ui,sans-serif" font-size="11" fill="#475569">70000</text>
+<line x1="67" y1="40" x2="70" y2="40" stroke="#94a3b8"/>
+<text x="70" y="378" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#475569">0h</text>
+<line x1="70" y1="360" x2="70" y2="363" stroke="#94a3b8"/>
+<text x="186.666666666667" y="378" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#475569">6h</text>
+<line x1="186.666666666667" y1="360" x2="186.666666666667" y2="363" stroke="#94a3b8"/>
+<text x="303.333333333333" y="378" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#475569">12h</text>
+<line x1="303.333333333333" y1="360" x2="303.333333333333" y2="363" stroke="#94a3b8"/>
+<text x="420" y="378" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#475569">18h</text>
+<line x1="420" y1="360" x2="420" y2="363" stroke="#94a3b8"/>
+<text x="536.666666666667" y="378" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#475569">24h</text>
+<line x1="536.666666666667" y1="360" x2="536.666666666667" y2="363" stroke="#94a3b8"/>
+<text x="653.333333333333" y="378" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#475569">30h</text>
+<line x1="653.333333333333" y1="360" x2="653.333333333333" y2="363" stroke="#94a3b8"/>
+<text x="770" y="378" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#475569">36h</text>
+<line x1="770" y1="360" x2="770" y2="363" stroke="#94a3b8"/>
+<text x="420" y="392" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" fill="#334155">hours since storm</text>
+<text x="18" y="200" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" fill="#334155" transform="rotate(-90 18 200)">customers without power</text>
+<polygon points="70,360 70,40 89.4,40 108.9,40 128.3,40 147.8,40 167.2,40 186.7,40 206.1,40 225.6,40 245,40 264.4,40 283.9,40 303.3,40 322.8,88 342.2,136 361.7,184 381.1,232 400.6,244.8 420,257.6 439.4,270.4 458.9,283.2 478.3,296 497.8,308.8 517.2,321.6 536.7,328 556.1,330.6 575.6,333.1 595,335.7 614.4,338.2 633.9,340.8 653.3,343.4 672.8,345.9 692.2,348.5 711.7,351 731.1,353.6 750.6,356.2 770,358.7 770,360" fill="#fecaca" fill-opacity="0.55"/>
+<polyline points="70,40 89.4,40 108.9,40 128.3,40 147.8,40 167.2,40 186.7,40 206.1,40 225.6,40 245,40 264.4,40 283.9,40 303.3,40 322.8,88 342.2,136 361.7,184 381.1,232 400.6,244.8 420,257.6 439.4,270.4 458.9,283.2 478.3,296 497.8,308.8 517.2,321.6 536.7,328 556.1,330.6 575.6,333.1 595,335.7 614.4,338.2 633.9,340.8 653.3,343.4 672.8,345.9 692.2,348.5 711.7,351 731.1,353.6 750.6,356.2 770,358.7" fill="none" stroke="#dc2626" stroke-width="2.2" stroke-linejoin="round"/>
+<line x1="303.333333333333" y1="40" x2="303.333333333333" y2="360" stroke="#94a3b8" stroke-dasharray="4 3" stroke-width="1"/>
+<text x="307.333333333333" y="55" font-family="system-ui,sans-serif" font-size="11" fill="#64748b">crews dispatched after 12 h assessment</text>
+</svg>
+
