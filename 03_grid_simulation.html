@@ -815,13 +815,35 @@ function planRestoration(){
   // Item 1: rolling horizon. Each crew only sees outages discovered by their
   // current sim time, so the plan is built one job at a time as the clock
   // advances. A crew that frees up before any new outage is visible waits.
+  // Pre-sort outage indices by discovery time + maintain a "first undone"
+  // pointer so nextDiscoveryAfter() runs in O(log N) instead of O(N) — at
+  // M=5K crews × N=25K outages this was the dominant cost.
+  let discOrder = null;
+  const discSortedTimes = realistic ? new Float64Array(N) : null;
+  let firstUndoneDisc = 0;
+  if (realistic){
+    discOrder = new Array(N);
+    for (let i=0;i<N;i++) discOrder[i] = i;
+    discOrder.sort((a,b) => discTime[a] - discTime[b]);
+    for (let i=0;i<N;i++) discSortedTimes[i] = discTime[discOrder[i]];
+  }
   function nextDiscoveryAfter(t){
-    let best = Infinity;
-    for (let i=0;i<N;i++){
-      if (done[i]) continue;
-      if (discTime[i] > t && discTime[i] < best) best = discTime[i];
+    if (!realistic) return Infinity;
+    // Skip past done entries at the front of the sorted list (amortized O(1))
+    while (firstUndoneDisc < N && done[discOrder[firstUndoneDisc]]) firstUndoneDisc++;
+    if (firstUndoneDisc >= N) return Infinity;
+    // Binary search for the first index in [firstUndoneDisc, N) with discTime > t
+    let lo = firstUndoneDisc, hi = N;
+    while (lo < hi){
+      const mid = (lo + hi) >> 1;
+      if (discSortedTimes[mid] > t) hi = mid;
+      else lo = mid + 1;
     }
-    return best;
+    // Linear scan from lo for first undone entry
+    for (let i = lo; i < N; i++){
+      if (!done[discOrder[i]]) return discSortedTimes[i];
+    }
+    return Infinity;
   }
 
   while (remaining>0){
@@ -838,6 +860,7 @@ function planRestoration(){
         for (let i=0;i<N;i++) if (!storm.outages[i].critical) done[i]=0;
         remaining = N - criticalCount;
         inCriticalPhase = false;
+        firstUndoneDisc = 0;   // un-marked entries may live anywhere in the sorted list
         hPush(heap,[cTime,ci]);
         continue;
       }
@@ -857,6 +880,7 @@ function planRestoration(){
       for (let i=0;i<N;i++) if (!storm.outages[i].critical) done[i]=0;
       remaining = N - criticalCount;
       inCriticalPhase = false;
+      firstUndoneDisc = 0;
     }
     const o=storm.outages[bestI];
     const driveMiles = dist({lat:cLat,lon:cLon},o) * ROAD_MULTIPLIER;
@@ -1229,13 +1253,30 @@ function scheduleOnly(M, outages){
   const nnGrid=buildNNGrid(oLat,oLon,N);
   const heap=[];
   for (let c=0;c<crews.length;c++) hPush(heap,[crewArrivals[c],c]);
+  // Same O(log N) optimization as planRestoration — sorted-index nextDiscoveryAfter.
+  let discOrder = null;
+  const discSortedTimes = realistic ? new Float64Array(N) : null;
+  let firstUndoneDisc = 0;
+  if (realistic){
+    discOrder = new Array(N);
+    for (let i=0;i<N;i++) discOrder[i] = i;
+    discOrder.sort((a,b) => discTime[a] - discTime[b]);
+    for (let i=0;i<N;i++) discSortedTimes[i] = discTime[discOrder[i]];
+  }
   function nextDiscoveryAfter(t){
-    let best = Infinity;
-    for (let i=0;i<N;i++){
-      if (done[i]) continue;
-      if (discTime[i] > t && discTime[i] < best) best = discTime[i];
+    if (!realistic) return Infinity;
+    while (firstUndoneDisc < N && done[discOrder[firstUndoneDisc]]) firstUndoneDisc++;
+    if (firstUndoneDisc >= N) return Infinity;
+    let lo = firstUndoneDisc, hi = N;
+    while (lo < hi){
+      const mid = (lo + hi) >> 1;
+      if (discSortedTimes[mid] > t) hi = mid;
+      else lo = mid + 1;
     }
-    return best;
+    for (let i = lo; i < N; i++){
+      if (!done[discOrder[i]]) return discSortedTimes[i];
+    }
+    return Infinity;
   }
   while (remaining>0){
     const top=hPop(heap);
@@ -1250,6 +1291,7 @@ function scheduleOnly(M, outages){
         for (let i=0;i<N;i++) if (!outages[i].critical) done[i]=0;
         remaining = N - criticalCount;
         inCriticalPhase = false;
+        firstUndoneDisc = 0;
         hPush(heap,[cTime,ci]);
         continue;
       }
@@ -1267,6 +1309,7 @@ function scheduleOnly(M, outages){
       for (let i=0;i<N;i++) if (!outages[i].critical) done[i]=0;
       remaining = N - criticalCount;
       inCriticalPhase = false;
+      firstUndoneDisc = 0;
     }
     const o=outages[bestI];
     const miles = dist({lat:cLat,lon:cLon}, o) * ROAD_MULTIPLIER;
