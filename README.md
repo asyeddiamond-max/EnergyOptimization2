@@ -6,12 +6,13 @@ An interactive browser-based model of a synthetic electric distribution grid cov
 
 ## Try it live
 
-[**Open the simulation →**](https://asyeddiamond-max.github.io/EnergyOptimization2/03_grid_simulation.html)
+[**Open the full simulation →**](https://asyeddiamond-max.github.io/EnergyOptimization2/03_grid_simulation.html)
 
 No install required. Works in any modern browser — sliders, map, storm simulation, restoration plan, and GIS export all run client-side.
 
-For the lighter standalone preview (single SVG, no Leaflet basemap):
-[**Open the inline preview →**](https://asyeddiamond-max.github.io/EnergyOptimization2/03_grid_inline_preview.html)
+Two lighter standalone previews (single SVG, no Leaflet basemap, no server needed):
+- [**Grid + storm preview →**](https://asyeddiamond-max.github.io/EnergyOptimization2/03_grid_inline_preview.html) — substations and storm-outage shading
+- [**Restoration preview →**](https://asyeddiamond-max.github.io/EnergyOptimization2/03_restoration_inline_preview.html) — adds the crew scheduler with depots and numbered repair circles
 
 ---
 
@@ -22,7 +23,8 @@ For the lighter standalone preview (single SVG, no Leaflet basemap):
 ├── 01_fetch_county_boundary.py    # cache Hartford polygon from OSM
 ├── 02_fetch_town_boundaries.py    # cache the 29 town polygons from OSM
 ├── 03_grid_simulation.html        # the main interactive (run via local server)
-├── 03_grid_inline_preview.html    # standalone SVG preview (no server needed)
+├── 03_grid_inline_preview.html    # standalone SVG preview: grid + storm
+├── 03_restoration_inline_preview.html  # standalone SVG preview: + scheduler
 ├── 04_geojson_to_shapefile.py     # offline GeoJSON to shapefile converter
 ├── 05_generate_artifacts.py       # produce matplotlib PNG snapshots in output/
 ├── data/                          # cached OSM inputs (committed)
@@ -34,6 +36,7 @@ For the lighter standalone preview (single SVG, no Leaflet basemap):
 │   ├── 03c_grid_outages.png       # adds a 500-outage storm
 │   ├── 03d_restoration_plan.png   # adds 10 crews with numbered repairs
 │   ├── 03e_outage_curve.png       # customers without power vs hours
+│   ├── 03f_substations_on_county.png  # clean substations-only reference
 │   └── exports/                   # user GeoJSON / shapefile bundles (gitignored)
 ├── source/                        # readable .txt mirrors of the HTML/JS
 ├── SCALING.md                     # roadmap to statewide CT scaling

@@ -321,6 +321,15 @@ def main():
     rnd_grid = mulberry32(42)
     demand = build_demand_points(rnd_grid)
     substations = kmeans_simple(demand, 100, rnd_grid)
+
+    # 03f — substations on the actual county outline (clean reference view)
+    fig, ax = new_axes(f"100 synthetic substations inside Hartford County (seed 42, no feeders shown)")
+    draw_geography(ax)
+    draw_substations(ax, substations)
+    fig.savefig(OUT / "03f_substations_on_county.png", dpi=110, bbox_inches="tight", facecolor="#f8fafc")
+    plt.close(fig)
+    print("Wrote output/03f_substations_on_county.png")
+
     feeders, laterals = generate_feeders_and_laterals(substations, rnd_grid, feeders_per_sub=5)
 
     fig, ax = new_axes(f"Synthetic distribution grid: 100 substations, {len(feeders)} feeders, {len(laterals)} laterals (seed 42)")

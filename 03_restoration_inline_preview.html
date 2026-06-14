@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Hartford County — Restoration Plan (Inline SVG)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<style>
+  html, body { margin:0; padding:0; font-family: system-ui, -apple-system, sans-serif; background:#f5f7fb; color:#1a2332; }
+  .page { max-width: 760px; margin: 24px auto; padding: 0 16px; }
+  .card { background:white; border:1px solid #e6ebf3; border-radius:12px; padding:16px; box-shadow:0 1px 2px rgba(15,31,58,0.06); }
+  h1 { font-size:18px; margin:0 0 6px; color:#0f1f3a; }
+  .sub { font-size:12px; color:#5a6b85; margin:0 0 14px; }
+  #hcMap { width:100%; height:auto; background:#eef3fb; border-radius:8px; display:block; }
+  .controls { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-top:12px; }
+  .ctl label { font-size:12px; color:#5a6b85; display:block; margin-bottom:4px; }
+  .ctl label b { color:#1d4ed8; font-weight:500; }
+  .ctl input[type=range] { width:100%; accent-color:#5b8def; }
+  .btn { width:100%; margin-top:12px; padding:10px; border:none; border-radius:8px; background:linear-gradient(135deg,#34d399,#047857); color:white; font-weight:600; font-size:13px; cursor:pointer; }
+  .btn:hover { filter:brightness(1.05); }
+  .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:12px; }
+  .stat { background:#eef3fb; border-radius:8px; padding:10px 12px; }
+  .stat .lbl { font-size:11px; color:#5a6b85; text-transform:uppercase; letter-spacing:0.5px; font-weight:600; }
+  .stat .big { font-size:22px; font-weight:700; line-height:1.1; margin-top:2px; }
+  .stat-affected { background:#fff5f5; }  .stat-affected .big { color:#dc2626; }
+  .stat-time     { background:#ecfdf5; }  .stat-time     .big { color:#047857; }
+  .note { font-size:11px; color:#6b7a93; margin-top:12px; line-height:1.5; }
+  .note code { background:#eef3fb; padding:1px 5px; border-radius:4px; font-family:ui-monospace,monospace; font-size:11px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="card">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+      <h1>Hartford County restoration plan</h1>
+      <div class="sub" style="margin:0">Pick substation, storm, and crew counts to see a crew-restoration schedule</div>
+    </div>
+    <svg id="hcMap" viewBox="0 0 700 560">
+      <path id="hcBoundary" fill="rgba(220,38,38,0.04)" stroke="#dc2626" stroke-width="2.5" stroke-linejoin="round" />
+      <g id="hcTowns"></g>
+      <g id="hcSubs"></g>
+      <g id="hcOutages"></g>
+      <g id="hcDepots"></g>
+      <g id="hcRepairs"></g>
+    </svg>
+    <div class="controls">
+      <div class="ctl">
+        <label>Substations: <b id="hcKVal">60</b></label>
+        <input type="range" min="10" max="200" value="60" step="1" id="hcKSlider" />
+      </div>
+      <div class="ctl">
+        <label>Storm outages: <b id="hcOVal">300</b></label>
+        <input type="range" min="50" max="2000" value="300" step="50" id="hcOSlider" />
+      </div>
+      <div class="ctl">
+        <label>Repair crews: <b id="hcCVal">10</b></label>
+        <input type="range" min="1" max="100" value="10" step="1" id="hcCSlider" />
+      </div>
+    </div>
+    <button class="btn" id="hcPlanBtn">Plan restoration</button>
+    <div class="stats">
+      <div class="stat">
+        <div class="lbl">Outage locations</div>
+        <div class="big" id="hcStatN">0</div>
+      </div>
+      <div class="stat stat-affected">
+        <div class="lbl">Customers affected</div>
+        <div class="big" id="hcStatA">0</div>
+      </div>
+      <div class="stat stat-time">
+        <div class="lbl">Total restoration time</div>
+        <div class="big" id="hcStatT">—</div>
+      </div>
+    </div>
+    <div class="note">
+      Standalone restoration preview — no map tiles, no controls beyond the three sliders + one button. Realistic-mode assumptions baked in: 12 h damage-assessment delay before crews dispatch, 14 h workday with overnight downtime, 3 h average repair time, 25 mph travel under storm conditions. For the full Leaflet interactive with shapefile export and the optimal-crew-count recommender, open <code>03_grid_simulation.html</code>.
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  const VB_W=700, VB_H=560, PAD=14;
+  const LON_MIN=-73.03, LON_MAX=-72.41, LAT_MIN=41.55, LAT_MAX=42.04;
+  const px = lon => (lon-LON_MIN)/(LON_MAX-LON_MIN) * (VB_W-2*PAD) + PAD;
+  const py = lat => (LAT_MAX-lat)/(LAT_MAX-LAT_MIN) * (VB_H-2*PAD) + PAD;
+
+  const POLY = [[-73.0113996,41.9677446],[-72.9904118,41.9689198],[-72.9427753,41.9711975],[-72.8959491,41.9730845],[-72.8923897,41.9605182],[-72.8945318,41.9548934],[-72.8955343,41.9517432],[-72.8971247,41.9480011],[-72.8988506,41.942357],[-72.9065928,41.9216865],[-72.9172795,41.8968424],[-72.940942,41.8943137],[-72.9451947,41.8805495],[-72.9461853,41.8772674],[-72.9463397,41.8740643],[-72.950709,41.8626218],[-72.9543334,41.8488719],[-72.9524613,41.8475659],[-72.9519914,41.8455408],[-72.9524978,41.8438446],[-72.9513581,41.842591],[-72.9465823,41.8435353],[-72.943689,41.843527],[-72.9410389,41.8429291],[-72.938162,41.8415399],[-72.9374359,41.8374566],[-72.9410394,41.8276757],[-72.981414,41.8025953],[-72.9944774,41.8009652],[-72.9995498,41.8003506],[-73.0105437,41.7989564],[-73.0166686,41.7981925],[-73.0161081,41.7939367],[-73.0155088,41.790594],[-73.014705,41.7871632],[-73.0136458,41.7815475],[-73.0132147,41.7795765],[-73.0127397,41.7774799],[-73.0122644,41.7752624],[-73.0116512,41.7724732],[-73.0098538,41.764234],[-73.0067943,41.7500984],[-73.0000186,41.7202124],[-72.9979206,41.7098453],[-72.9945807,41.6944407],[-72.9911914,41.6796882],[-72.9864515,41.6550618],[-72.9849093,41.6479041],[-72.9802278,41.6398758],[-72.9713307,41.6406522],[-72.9380006,41.640548],[-72.936025,41.6263645],[-72.9347922,41.6182837],[-72.9337761,41.6112251],[-72.9349549,41.6008674],[-72.9385633,41.588239],[-72.9404623,41.580234],[-72.9428359,41.5702286],[-72.9435912,41.5669787],[-72.9361661,41.5579968],[-72.9216443,41.5596274],[-72.9011398,41.5620673],[-72.8821862,41.5639645],[-72.8546656,41.5465361],[-72.8454729,41.5512105],[-72.8479465,41.5658618],[-72.8397657,41.5687207],[-72.8298253,41.5620763],[-72.8255292,41.562411],[-72.8237082,41.554607],[-72.8175938,41.5550023],[-72.80976,41.5624004],[-72.8009176,41.5731822],[-72.7830215,41.575351],[-72.7800793,41.5756922],[-72.755308,41.578583],[-72.7428456,41.5944076],[-72.7272963,41.6018125],[-72.7216071,41.6033446],[-72.7146699,41.6045357],[-72.7155965,41.6055069],[-72.715823,41.6062915],[-72.7156413,41.6253869],[-72.7139284,41.6276361],[-72.6663034,41.6344304],[-72.6422638,41.6378843],[-72.6305249,41.6332905],[-72.6126709,41.6351166],[-72.5723767,41.6396561],[-72.5484199,41.6423158],[-72.4924906,41.6258365],[-72.4872764,41.6174049],[-72.473556,41.5948999],[-72.4639173,41.5840187],[-72.4500331,41.585813],[-72.4355681,41.5875335],[-72.4288214,41.5883901],[-72.4196533,41.5897743],[-72.4154204,41.5930281],[-72.4125172,41.5971303],[-72.4097781,41.6025508],[-72.4094115,41.6155647],[-72.4078701,41.6252324],[-72.4089793,41.6289495],[-72.4115431,41.6330101],[-72.4135257,41.6344914],[-72.4138591,41.6365211],[-72.4143632,41.6374266],[-72.4158953,41.640134],[-72.4516207,41.6870989],[-72.4635541,41.7429247],[-72.4711264,41.7845249],[-72.4729904,41.7948933],[-72.4744368,41.8029015],[-72.4760611,41.811949],[-72.4830496,41.8124157],[-72.4958611,41.8109557],[-72.5025376,41.8342774],[-72.500627,41.8428666],[-72.5144256,41.8578344],[-72.5173309,41.8699055],[-72.5152263,41.8994661],[-72.5136634,41.9421246],[-72.4965186,41.9675566],[-72.5087835,42.0323031],[-72.5170761,42.0344459],[-72.5717,42.0303293],[-72.6036307,42.0251333],[-72.6401914,42.0320477],[-72.71096,42.0369216],[-72.7558941,42.0363492],[-72.7568961,42.0341901],[-72.75508,42.0327232],[-72.7522281,42.0307211],[-72.7520155,42.028947],[-72.7543632,42.0259965],[-72.7568725,42.0213287],[-72.7607673,42.0227127],[-72.7644973,42.0220668],[-72.7658882,42.0195649],[-72.7629989,42.0197542],[-72.7601418,42.0173443],[-72.7591574,42.0158448],[-72.7598816,42.0153286],[-72.7620187,42.0141105],[-72.7620618,42.0103899],[-72.7619593,42.0089504],[-72.7661523,42.0078242],[-72.8137839,42.0367437],[-72.8744965,42.0376818],[-72.9441226,42.0380515],[-72.9957645,42.0385447],[-73.0174639,42.0102127]];
+
+  const TOWNS = [
+    {n:"Hartford",lat:41.7637,lon:-72.6851,pop:121054},
+    {n:"New Britain",lat:41.6612,lon:-72.7795,pop:74992},
+    {n:"West Hartford",lat:41.7620,lon:-72.7420,pop:64083},
+    {n:"Bristol",lat:41.6718,lon:-72.9493,pop:60833},
+    {n:"Manchester",lat:41.7759,lon:-72.5215,pop:59713},
+    {n:"East Hartford",lat:41.7823,lon:-72.6120,pop:51045},
+    {n:"Southington",lat:41.6001,lon:-72.8781,pop:43501},
+    {n:"Enfield",lat:41.9762,lon:-72.5917,pop:42141},
+    {n:"Glastonbury",lat:41.7126,lon:-72.6081,pop:35159},
+    {n:"Newington",lat:41.6981,lon:-72.7237,pop:30152},
+    {n:"Windsor",lat:41.8525,lon:-72.6437,pop:29492},
+    {n:"South Windsor",lat:41.8237,lon:-72.6223,pop:26918},
+    {n:"Farmington",lat:41.7201,lon:-72.8320,pop:26712},
+    {n:"Wethersfield",lat:41.7142,lon:-72.6526,pop:26492},
+    {n:"Simsbury",lat:41.8762,lon:-72.8009,pop:24517},
+    {n:"Bloomfield",lat:41.8281,lon:-72.7295,pop:21535},
+    {n:"Rocky Hill",lat:41.6648,lon:-72.6648,pop:20845},
+    {n:"Berlin",lat:41.6212,lon:-72.7456,pop:20175},
+    {n:"Avon",lat:41.8098,lon:-72.8303,pop:18871},
+    {n:"Plainville",lat:41.6745,lon:-72.8589,pop:17716},
+    {n:"Suffield",lat:41.9837,lon:-72.6520,pop:15735},
+    {n:"Windsor Locks",lat:41.9292,lon:-72.6234,pop:12613},
+    {n:"Granby",lat:41.9526,lon:-72.7898,pop:11282},
+    {n:"East Windsor",lat:41.9123,lon:-72.5453,pop:11190},
+    {n:"Canton",lat:41.8348,lon:-72.8945,pop:10124},
+    {n:"Burlington",lat:41.7720,lon:-72.9590,pop:9701},
+    {n:"Marlborough",lat:41.6320,lon:-72.4598,pop:6307},
+    {n:"East Granby",lat:41.9434,lon:-72.7320,pop:5184},
+    {n:"Hartland",lat:41.9856,lon:-72.9534,pop:1885},
+  ];
+  const PALETTE = ["#ff7f0e","#1f77b4","#2ca02c","#d62728","#9467bd","#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf","#1fb8d1","#c266a7","#7e5fc4","#f4c842","#a68272"];
+
+  // Draw boundary + town centroids once
+  const bel = document.getElementById('hcBoundary');
+  let d=''; POLY.forEach((c,i)=>{d += (i===0?'M':'L')+px(c[0]).toFixed(1)+' '+py(c[1]).toFixed(1)+' ';}); d+='Z';
+  bel.setAttribute('d', d);
+  const tG = document.getElementById('hcTowns');
+  TOWNS.forEach(t => {
+    const cx = px(t.lon), cy = py(t.lat), r = 2 + Math.sqrt(t.pop)/40;
+    const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('cx',cx.toFixed(1)); c.setAttribute('cy',cy.toFixed(1)); c.setAttribute('r',r.toFixed(1));
+    c.setAttribute('fill','#16a34a'); c.setAttribute('fill-opacity','0.16');
+    c.setAttribute('stroke','#15803d'); c.setAttribute('stroke-width','1');
+    const ttl = document.createElementNS('http://www.w3.org/2000/svg','title');
+    ttl.textContent = t.n + ': ' + t.pop.toLocaleString();
+    c.appendChild(ttl); tG.appendChild(c);
+  });
+
+  function mulberry32(s){return function(){s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+  function buildDemand(rnd){
+    const pts=[];
+    TOWNS.forEach(t=>{
+      const n=Math.max(6,Math.round(Math.sqrt(t.pop)/3)), w=t.pop/n;
+      for (let i=0;i<n;i++){const r=0.005+rnd()*0.012,a=rnd()*Math.PI*2;pts.push({lat:t.lat+Math.sin(a)*r*0.85,lon:t.lon+Math.cos(a)*r,w});}
+    });
+    return pts;
+  }
+  function kmeans(pts,k,rnd,iters=10){
+    const N=pts.length;
+    const cLat=new Float64Array(k), cLon=new Float64Array(k);
+    const first=Math.floor(rnd()*N); cLat[0]=pts[first].lat; cLon[0]=pts[first].lon;
+    const minD=new Float64Array(N);
+    for (let i=0;i<N;i++){const dx=pts[i].lat-cLat[0],dy=pts[i].lon-cLon[0];minD[i]=dx*dx+dy*dy;}
+    for (let c=1;c<k;c++){
+      let s=0; for (let i=0;i<N;i++) s+=minD[i]*pts[i].w;
+      let r=rnd()*s, idx=N-1;
+      for (let i=0;i<N;i++){r-=minD[i]*pts[i].w; if (r<=0){idx=i;break;}}
+      cLat[c]=pts[idx].lat; cLon[c]=pts[idx].lon;
+      for (let i=0;i<N;i++){const dx=pts[i].lat-cLat[c],dy=pts[i].lon-cLon[c];const d=dx*dx+dy*dy;if (d<minD[i]) minD[i]=d;}
+    }
+    const sL=new Float64Array(k), sN=new Float64Array(k), sW=new Float64Array(k);
+    for (let it=0;it<iters;it++){
+      sL.fill(0); sN.fill(0); sW.fill(0);
+      for (let i=0;i<N;i++){const p=pts[i];let b=0,bd=Infinity;for (let c=0;c<k;c++){const dx=p.lat-cLat[c],dy=p.lon-cLon[c];const d=dx*dx+dy*dy;if (d<bd){bd=d;b=c;}}sL[b]+=p.lat*p.w;sN[b]+=p.lon*p.w;sW[b]+=p.w;}
+      for (let c=0;c<k;c++) if (sW[c]>0){cLat[c]=sL[c]/sW[c]; cLon[c]=sN[c]/sW[c];}
+    }
+    const out=[]; for (let c=0;c<k;c++) out.push({lat:cLat[c],lon:cLon[c]});
+    return out;
+  }
+  function generateOutages(N, rnd){
+    const out=[];
+    const totalPop = TOWNS.reduce((s,t)=>s+t.pop,0);
+    for (let i=0;i<N;i++){
+      let r=rnd()*totalPop, cum=0, town=TOWNS[0];
+      for (const t of TOWNS){cum+=t.pop; if (r<=cum){town=t; break;}}
+      const lat = town.lat + ((rnd()-0.5)*0.025);
+      const lon = town.lon + ((rnd()-0.5)*0.030);
+      out.push({lat,lon,pop:town.pop/N*5});
+    }
+    return out;
+  }
+  function haversineMi(la1,lo1,la2,lo2){
+    const R=3958.8, toR=Math.PI/180;
+    const dLa=(la2-la1)*toR, dLo=(lo2-lo1)*toR;
+    const s=Math.sin(dLa/2)**2+Math.cos(la1*toR)*Math.cos(la2*toR)*Math.sin(dLo/2)**2;
+    return 2*R*Math.asin(Math.sqrt(s));
+  }
+  // Greedy scheduler with realistic constants (12 h delay, 14 h workday, 3 h repair)
+  function planRestoration(outages, M, rnd){
+    const N=outages.length;
+    const REPAIR=3.0, TRAVEL_MPH=25, DELAY=12, WORK=14;
+    const clamp = t => { const dN=Math.floor(t/24), inD=t-dN*24; return inD>WORK?(dN+1)*24:t; };
+    // Depots: cycle outage points
+    const crews=[]; for (let i=0;i<M;i++){const o=outages[i%N]; crews.push({lat:o.lat,lon:o.lon,depot:{lat:o.lat,lon:o.lon},time:DELAY,jobs:[],color:PALETTE[i%PALETTE.length]});}
+    const done=new Uint8Array(N); let remaining=N;
+    // Min-heap on (time, crew_idx)
+    const heap=[];
+    function hPush(it){heap.push(it); let i=heap.length-1; while (i>0){const p=(i-1)>>1; if (heap[p][0]<=heap[i][0]) break; const t=heap[i];heap[i]=heap[p];heap[p]=t; i=p;}}
+    function hPop(){const top=heap[0]; const last=heap.pop(); if (heap.length>0){heap[0]=last; let i=0; const L=heap.length; while (true){const l=2*i+1,r=2*i+2; let s=i; if (l<L&&heap[l][0]<heap[s][0]) s=l; if (r<L&&heap[r][0]<heap[s][0]) s=r; if (s===i) break; const t=heap[i];heap[i]=heap[s];heap[s]=t; i=s;}} return top;}
+    for (let c=0;c<M;c++) hPush([DELAY,c]);
+    while (remaining>0){
+      const top=hPop(); const ci=top[1]; const crew=crews[ci];
+      let bestI=-1, bestSq=Infinity;
+      for (let i=0;i<N;i++){if (done[i]) continue; const dx=outages[i].lat-crew.lat, dy=outages[i].lon-crew.lon; const sq=dx*dx+dy*dy; if (sq<bestSq){bestSq=sq; bestI=i;}}
+      if (bestI===-1) break;
+      done[bestI]=1; remaining--;
+      const o=outages[bestI];
+      const miles=haversineMi(crew.lat,crew.lon,o.lat,o.lon);
+      let eta=crew.time+miles/TRAVEL_MPH+REPAIR;
+      eta=clamp(eta);
+      crew.jobs.push({o,eta}); crew.time=eta; crew.lat=o.lat; crew.lon=o.lon;
+      hPush([eta,ci]);
+    }
+    let total=0; for (const c of crews) if (c.time>total) total=c.time;
+    return {crews,total};
+  }
+
+  let currentSubs=[], currentOutages=[];
+  function renderGrid(){
+    const k=+kS.value, N=+oS.value;
+    const seed=42;
+    const rndK=mulberry32(seed*3+11);
+    const demand=buildDemand(rndK);
+    currentSubs=kmeans(demand,k,rndK);
+    const sg=document.getElementById('hcSubs'); sg.innerHTML='';
+    currentSubs.forEach(s=>{
+      const cx=px(s.lon), cy=py(s.lat);
+      const star=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+      const R=4.5, r2=1.9, pts=[];
+      for (let p=0;p<10;p++){const ang=-Math.PI/2+p*Math.PI/5; const rr=p%2===0?R:r2; pts.push((cx+Math.cos(ang)*rr).toFixed(1)+','+(cy+Math.sin(ang)*rr).toFixed(1));}
+      star.setAttribute('points',pts.join(' '));
+      star.setAttribute('fill','#f59e0b'); star.setAttribute('stroke','#111'); star.setAttribute('stroke-width','0.6');
+      sg.appendChild(star);
+    });
+    const rndO=mulberry32(seed*7919+13);
+    currentOutages=generateOutages(N,rndO);
+    const og=document.getElementById('hcOutages'); og.innerHTML='';
+    currentOutages.forEach(o=>{
+      const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+      c.setAttribute('cx',px(o.lon).toFixed(1)); c.setAttribute('cy',py(o.lat).toFixed(1));
+      c.setAttribute('r','1.8'); c.setAttribute('fill','#7f1d1d'); c.setAttribute('fill-opacity','0.75'); c.setAttribute('stroke','#000'); c.setAttribute('stroke-width','0.3');
+      og.appendChild(c);
+    });
+    document.getElementById('hcStatN').textContent=N.toLocaleString();
+    document.getElementById('hcStatA').textContent='0';
+    document.getElementById('hcStatT').textContent='—';
+    document.getElementById('hcDepots').innerHTML='';
+    document.getElementById('hcRepairs').innerHTML='';
+  }
+
+  function renderPlan(){
+    if (!currentOutages.length) return;
+    const M=+cS.value;
+    const rnd=mulberry32(99);
+    const plan=planRestoration(currentOutages,M,rnd);
+    const dg=document.getElementById('hcDepots'); dg.innerHTML='';
+    plan.crews.forEach(c=>{
+      const r=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      const cx=px(c.depot.lon), cy=py(c.depot.lat);
+      r.setAttribute('x',(cx-5).toFixed(1)); r.setAttribute('y',(cy-5).toFixed(1));
+      r.setAttribute('width','10'); r.setAttribute('height','10');
+      r.setAttribute('fill',c.color); r.setAttribute('stroke','#111'); r.setAttribute('stroke-width','1.2');
+      dg.appendChild(r);
+    });
+    const rg=document.getElementById('hcRepairs'); rg.innerHTML='';
+    plan.crews.forEach(c=>{
+      c.jobs.forEach((j,ord)=>{
+        if (ord<10){
+          const cx=px(j.o.lon), cy=py(j.o.lat);
+          const cir=document.createElementNS('http://www.w3.org/2000/svg','circle');
+          cir.setAttribute('cx',cx.toFixed(1)); cir.setAttribute('cy',cy.toFixed(1)); cir.setAttribute('r','5');
+          cir.setAttribute('fill',c.color); cir.setAttribute('stroke','#111'); cir.setAttribute('stroke-width','0.5');
+          rg.appendChild(cir);
+          const tx=document.createElementNS('http://www.w3.org/2000/svg','text');
+          tx.setAttribute('x',cx.toFixed(1)); tx.setAttribute('y',(cy+1.5).toFixed(1));
+          tx.setAttribute('text-anchor','middle'); tx.setAttribute('font-size','6.5'); tx.setAttribute('font-weight','bold'); tx.setAttribute('fill','white');
+          tx.textContent=(ord+1);
+          rg.appendChild(tx);
+        } else {
+          const cx=px(j.o.lon), cy=py(j.o.lat);
+          const cir=document.createElementNS('http://www.w3.org/2000/svg','circle');
+          cir.setAttribute('cx',cx.toFixed(1)); cir.setAttribute('cy',cy.toFixed(1)); cir.setAttribute('r','2.2');
+          cir.setAttribute('fill',c.color); cir.setAttribute('stroke','#111'); cir.setAttribute('stroke-width','0.3');
+          rg.appendChild(cir);
+        }
+      });
+    });
+    // Affected = sum of unique outage pops, capped
+    const totalAff = currentOutages.reduce((s,o)=>s+o.pop,0);
+    document.getElementById('hcStatA').textContent=Math.round(Math.min(totalAff, 939773)).toLocaleString();
+    const h=plan.total;
+    let timeStr;
+    if (h<24) timeStr=h.toFixed(1)+' h';
+    else { const d=Math.floor(h/24), hh=Math.round(h-d*24); timeStr=d+' d '+hh+' h'; }
+    document.getElementById('hcStatT').textContent=timeStr;
+  }
+
+  const kS=document.getElementById('hcKSlider'), oS=document.getElementById('hcOSlider'), cS=document.getElementById('hcCSlider');
+  const kV=document.getElementById('hcKVal'), oV=document.getElementById('hcOVal'), cV=document.getElementById('hcCVal');
+  kS.addEventListener('input',()=>{kV.textContent=kS.value; renderGrid();});
+  oS.addEventListener('input',()=>{oV.textContent=oS.value; renderGrid();});
+  cS.addEventListener('input',()=>{cV.textContent=cS.value;});
+  document.getElementById('hcPlanBtn').addEventListener('click', renderPlan);
+
+  renderGrid();
+})();
+</script>
+</body>
+</html>
