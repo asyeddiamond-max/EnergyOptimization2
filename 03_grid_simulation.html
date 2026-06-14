@@ -288,6 +288,80 @@ const outageCanvas=L.canvas({padding:0.2});
 // thousands of SVG DOM elements at high substation/storm/crew counts.
 const gridCanvas=L.canvas({padding:0.4});
 const repairCanvas=L.canvas({padding:0.2});
+
+// Custom point-cloud Leaflet layer — draws an entire array of points in a
+// single canvas pass instead of one L.circleMarker per point. At 25K points
+// the per-object overhead of circleMarker dominates frame time, even on a
+// shared canvas renderer.
+const PointCloudLayer = L.Layer.extend({
+  initialize: function(points, opts){
+    this._points = points || [];
+    this._opts = Object.assign({ radius:2.5, fillColor:"#7f1d1d", stroke:"#000", lineWidth:0.5, fillOpacity:0.9 }, opts || {});
+  },
+  setPoints: function(points){
+    this._points = points || [];
+    if (this._map) this._draw();
+  },
+  onAdd: function(map){
+    this._map = map;
+    const pane = map.getPanes().overlayPane;
+    this._canvas = L.DomUtil.create('canvas', 'leaflet-pointcloud-layer');
+    this._canvas.style.position = 'absolute';
+    this._canvas.style.pointerEvents = 'none';
+    pane.appendChild(this._canvas);
+    map.on('moveend zoomend viewreset resize', this._reset, this);
+    this._reset();
+  },
+  onRemove: function(map){
+    if (this._canvas) L.DomUtil.remove(this._canvas);
+    map.off('moveend zoomend viewreset resize', this._reset, this);
+    this._canvas = null;
+  },
+  _reset: function(){
+    if (!this._map || !this._canvas) return;
+    const size = this._map.getSize();
+    this._canvas.width = size.x;
+    this._canvas.height = size.y;
+    L.DomUtil.setPosition(this._canvas, this._map.containerPointToLayerPoint([0,0]));
+    this._draw();
+  },
+  _draw: function(){
+    if (!this._map || !this._canvas) return;
+    const ctx = this._canvas.getContext('2d');
+    ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+    const o = this._opts;
+    const pts = this._points;
+    const map = this._map;
+    if (o.uniformColor){
+      ctx.fillStyle = o.fillColor;
+      ctx.strokeStyle = o.stroke;
+      ctx.lineWidth = o.lineWidth;
+      ctx.globalAlpha = o.fillOpacity;
+      for (let i=0;i<pts.length;i++){
+        const p = pts[i];
+        const xy = map.latLngToContainerPoint([p.lat, p.lon]);
+        ctx.beginPath();
+        ctx.arc(xy.x, xy.y, o.radius, 0, 6.283);
+        ctx.fill();
+        if (o.lineWidth>0) ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    } else {
+      // Per-point color (used for repair dots colored by crew)
+      ctx.strokeStyle = o.stroke;
+      ctx.lineWidth = o.lineWidth;
+      for (let i=0;i<pts.length;i++){
+        const p = pts[i];
+        const xy = map.latLngToContainerPoint([p.lat, p.lon]);
+        ctx.beginPath();
+        ctx.arc(xy.x, xy.y, p.r || o.radius, 0, 6.283);
+        ctx.fillStyle = p.color || o.fillColor;
+        ctx.fill();
+        if (o.lineWidth>0) ctx.stroke();
+      }
+    }
+  }
+});
 const outageLayer=L.layerGroup().addTo(map);
 const repairLayer=L.layerGroup().addTo(map);
 const depotLayer=L.layerGroup().addTo(map);
@@ -558,21 +632,19 @@ function simulateStorm(){
   storm={outages,totalCust};
   plan=null;
 
-  // Render
+  // Render — single canvas pass for all outages instead of N circleMarker
+  // objects. At N=25K this brings storm-render time from seconds to milliseconds.
   outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
-  outages.forEach(o=>{
-    // Critical-facility outages (tier 1) get a slightly bigger, brighter marker
-    // so they stand out from the dark-red cloud of ordinary failures.
-    L.circleMarker([o.lat,o.lon],{
-      renderer:outageCanvas,
-      radius: o.critical ? 4 : 2.5,
-      color: o.critical ? "#facc15" : "#000",
-      weight: o.critical ? 1.2 : 0.5,
-      fillColor: o.critical ? "#dc2626" : "#7f1d1d",
-      fillOpacity: 0.92,
-      interactive:false
-    }).addTo(outageLayer);
-  });
+  if (window._outageCloud){ map.removeLayer(window._outageCloud); window._outageCloud=null; }
+  if (window._criticalCloud){ map.removeLayer(window._criticalCloud); window._criticalCloud=null; }
+  if (window._depotCloud){ map.removeLayer(window._depotCloud); window._depotCloud=null; }
+  if (window._repairCloud){ map.removeLayer(window._repairCloud); window._repairCloud=null; }
+  const normalPts = [], critPts = [];
+  for (const o of outages){ (o.critical ? critPts : normalPts).push({lat:o.lat, lon:o.lon}); }
+  window._outageCloud = new PointCloudLayer(normalPts, {uniformColor:true, radius:2.5, fillColor:"#7f1d1d", stroke:"#000", lineWidth:0.5, fillOpacity:0.92}).addTo(map);
+  if (critPts.length){
+    window._criticalCloud = new PointCloudLayer(critPts, {uniformColor:true, radius:4, fillColor:"#dc2626", stroke:"#facc15", lineWidth:1.2, fillOpacity:0.92}).addTo(map);
+  }
 
   affectedEl.textContent=Math.round(totalCust).toLocaleString();
   affectedPctEl.textContent=(100*totalCust/TOTAL_POP).toFixed(1)+"% of county population";
@@ -700,7 +772,7 @@ function nnGridFindVisible(grid, cLat, cLon, done, oLat, oLon, discTime, cTime){
 //      road indirectness, no straight-line driving in storm conditions).
 // Plus the existing 14h workday clamp, tier-1 critical priority, and 12h
 // pre-dispatch damage assessment delay.
-function planRestoration(){
+async function planRestoration(){
   if (!storm){status.textContent="Simulate a storm first.";return;}
   const seed=+seedI.value|0;
   const rnd=mulberry32(seed*31+99);
@@ -890,18 +962,34 @@ function planRestoration(){
     crew.jobs.push({outageIdx:bestI,o,etaFinish:eta});
     crew.time=eta; crew.curLat=o.lat; crew.curLon=o.lon;
     hPush(heap,[eta,ci]);
+
+    // Yield every 3000 assignments so the browser can repaint and the page
+    // stays responsive during long restorations (25K outages with M=5K can
+    // be several seconds of compute).
+    if ((N - remaining) % 3000 === 0){
+      const pct = Math.round(100 * (N - remaining) / N);
+      status.textContent = `Planning restoration… ${pct}% (${(N-remaining).toLocaleString()}/${N.toLocaleString()} jobs scheduled)`;
+      await new Promise(r => setTimeout(r, 0));
+    }
   }
 
   let totalTime=0;
   for (const c of crews) if (c.time>totalTime) totalTime=c.time;
   plan={crews,totalTime};
 
-  // Render — visual style preserved at every scale, with graceful degradation
-  // to Canvas-rendered shapes once DOM markers would dominate the frame budget.
-  //  - Depots: SVG divIcons up to 500 crews; Canvas squares above.
-  //  - Numbered repair circles: SVG divIcons until 1,500 total are placed;
-  //    after that, Canvas dots (still colored per crew, just unnumbered).
+  // Yield before rendering so the status text from the scheduler shows up.
+  status.textContent = `Rendering ${crews.length.toLocaleString()} depots and ${N.toLocaleString()} repair markers…`;
+  await new Promise(r => setTimeout(r, 0));
+
+  // Render — visual style preserved at every scale, with graceful degradation:
+  //  - Depots: SVG divIcons up to 500 crews; PointCloudLayer above.
+  //  - Numbered repair circles: SVG divIcons up to NUMBERED_BUDGET (drops to
+  //    500 when crew count is huge so we don't spend a second creating
+  //    thousands of DOM elements). Everything past that renders as one
+  //    PointCloudLayer canvas pass.
   depotLayer.clearLayers(); repairLayer.clearLayers();
+  if (window._depotCloud){ map.removeLayer(window._depotCloud); window._depotCloud=null; }
+  if (window._repairCloud){ map.removeLayer(window._repairCloud); window._repairCloud=null; }
 
   const DEPOT_SVG_LIMIT = 500;
   if (crews.length <= DEPOT_SVG_LIMIT) {
@@ -911,16 +999,15 @@ function planRestoration(){
         .bindTooltip(`Crew ${c.color} depot`);
     });
   } else {
-    // Canvas square via a circleMarker (Leaflet has no canvas square primitive)
-    crews.forEach(c=>{
-      L.circleMarker([c.depot.lat,c.depot.lon],{
-        renderer:repairCanvas, radius:5, color:"#111", weight:1.2, fillColor:c.color, fillOpacity:1, interactive:false
-      }).addTo(depotLayer);
-    });
+    // One canvas pass for thousands of depots.
+    const depotPts = crews.map(c => ({lat:c.depot.lat, lon:c.depot.lon, color:c.color, r:5}));
+    window._depotCloud = new PointCloudLayer(depotPts, {stroke:"#111", lineWidth:1.2, fillOpacity:1});
+    window._depotCloud.addTo(map);
   }
 
-  const NUMBERED_BUDGET = 1500;
+  const NUMBERED_BUDGET = crews.length > 500 ? 500 : 1500;
   let numbered = 0;
+  const cloudPts = [];
   for (const c of crews){
     for (let order=0; order<c.jobs.length; order++){
       const j = c.jobs[order];
@@ -929,11 +1016,13 @@ function planRestoration(){
         L.marker([j.o.lat,j.o.lon],{icon:L.divIcon({className:'',html,iconSize:[14,14],iconAnchor:[7,7]}),interactive:false}).addTo(repairLayer);
         numbered++;
       } else {
-        L.circleMarker([j.o.lat,j.o.lon],{
-          renderer:repairCanvas,radius:3,color:"#111",weight:0.5,fillColor:c.color,fillOpacity:0.95,interactive:false
-        }).addTo(repairLayer);
+        cloudPts.push({lat:j.o.lat, lon:j.o.lon, color:c.color, r:3});
       }
     }
+  }
+  if (cloudPts.length){
+    window._repairCloud = new PointCloudLayer(cloudPts, {stroke:"#111", lineWidth:0.5, fillOpacity:0.95});
+    window._repairCloud.addTo(map);
   }
 
   // Display: hours under a day, days + hours past 24 h (realistic scenarios run for days).
@@ -952,6 +1041,10 @@ function planRestoration(){
 function resetStorm(){
   storm=null; plan=null;
   outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
+  if (window._outageCloud){ map.removeLayer(window._outageCloud); window._outageCloud=null; }
+  if (window._criticalCloud){ map.removeLayer(window._criticalCloud); window._criticalCloud=null; }
+  if (window._depotCloud){ map.removeLayer(window._depotCloud); window._depotCloud=null; }
+  if (window._repairCloud){ map.removeLayer(window._repairCloud); window._repairCloud=null; }
   affectedEl.textContent='0'; affectedPctEl.textContent='0% of county population';
   outageCountEl.textContent='0'; restoreTimeEl.textContent='—'; restoreDetailEl.textContent='— customers restored';
   status.textContent='Storm cleared.';
