@@ -33,3 +33,6 @@ hartford_towns_raw.json
 # User's scratch / experimental simulation copies
 hartford_county_simulation*.html
 !03_grid_simulation.html
+
+# Word/Office lock files
+~$*
