@@ -1,0 +1,20 @@
+[package]
+name = "wasm_scheduler"
+version = "0.1.0"
+edition = "2021"
+
+# cdylib target so cargo produces a .wasm file when building for
+# wasm32-unknown-unknown. No wasm-bindgen, no proc-macro dependencies —
+# this builds with just rustc + the wasm32 target, no host C linker needed.
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[dependencies]
+# Intentionally empty. The crate uses only core Rust + #![no_std] so no
+# external dependencies need to be compiled for the host platform.

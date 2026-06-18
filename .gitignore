@@ -39,3 +39,7 @@ hartford_county_simulation*.html
 
 # Local-only development journals (kept on disk for Google Docs conversion)
 DEVELOPMENT_JOURNAL*.md
+
+# Rust build output (regenerate with cargo build)
+wasm_scheduler/target/
+wasm_scheduler/Cargo.lock
