@@ -36,3 +36,6 @@ hartford_county_simulation*.html
 
 # Word/Office lock files
 ~$*
+
+# Local-only development journals (kept on disk for Google Docs conversion)
+DEVELOPMENT_JOURNAL*.md
