@@ -1548,7 +1548,31 @@ function buildServerPayload(){
     realistic: document.getElementById('realisticMode').checked,
   };
 }
+// Fake-progress timer used while waiting on a server response. The server
+// runs the whole scheduler atomically — there's no real progress signal
+// to report — so we asymptote toward 90% to communicate "still working,"
+// then snap to 100% when the response lands. Tuned so a Render cold start
+// (~30-60s) still feels like motion.
+function startServerProgress(label){
+  setPlanProgress(0);
+  const t0 = performance.now();
+  return setInterval(() => {
+    const dt = (performance.now() - t0) / 1000;
+    const pct = 90 * (1 - Math.exp(-dt / 8));
+    setPlanProgress(pct);
+    if (label){
+      _planProgressLabel.textContent = `${label} ${Math.round(pct)}%`;
+    }
+  }, 100);
+}
+function stopServerProgress(timer){
+  clearInterval(timer);
+  setPlanProgress(100);
+  setTimeout(() => setPlanProgress(0, false), 400);
+}
+
 async function runServerPlan(){
+  const timer = startServerProgress('server');
   try {
     const payload = buildServerPayload();
     showServerStatus(`Calling ${getServerUrl()}/api/schedule ...`);
@@ -1571,9 +1595,12 @@ async function runServerPlan(){
     );
   } catch (e) {
     showServerStatus(`Error: ${e.message}\nIs the server running? Try:  uvicorn 07_server:app --port 8000`, true);
+  } finally {
+    stopServerProgress(timer);
   }
 }
 document.getElementById('monteCarloBtn').onclick = async function(){
+  const timer = startServerProgress('monte carlo');
   try {
     const payload = buildServerPayload();
     payload.base_seed = payload.seed; delete payload.seed;
@@ -1597,6 +1624,8 @@ document.getElementById('monteCarloBtn').onclick = async function(){
     );
   } catch (e) {
     showServerStatus(`Error: ${e.message}\nIs the server running?`, true);
+  } finally {
+    stopServerProgress(timer);
   }
 };
 
