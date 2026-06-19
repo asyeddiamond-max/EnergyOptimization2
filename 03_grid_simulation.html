@@ -189,6 +189,8 @@
 
     <button class="action btn-restore" id="planRestore">Plan restoration</button>
     <div class="progress" id="planProgress"><span class="label" id="planProgressLabel">0%</span><div class="bar" id="planProgressBar"></div></div>
+    <button id="benchmarkBtn" style="width:100%; margin-top:4px; padding:8px; border:1px solid #94a3b8; background:#f8fafc; color:#475569; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer;">Benchmark JS vs WASM</button>
+    <div id="benchmarkResult" style="font-size:10px; color:#475569; margin-top:4px; padding:6px; background:#f1f5f9; border-radius:4px; font-family:ui-monospace,monospace; display:none; white-space:pre-line;"></div>
 
     <div class="stat-box stat-restore">
       <div class="lbl">Total restoration time</div>
@@ -1502,6 +1504,252 @@ document.getElementById('presetSelect').addEventListener('change', (e) => {
 });
 loadPresetList();
 document.getElementById('planRestore').onclick=planRestoration;
+
+// --- WASM scheduler (Alternative #3) -------------------------------------
+//
+// Loads wasm/scheduler.wasm and exposes runWasmScheduler() which runs the
+// Rust-compiled scheduler on the current storm. The benchmark button calls
+// both this and the JS scheduler, reports timings side by side.
+let _wasmModule = null;
+async function loadWasmScheduler(){
+  if (_wasmModule) return _wasmModule;
+  const r = await fetch('./wasm/scheduler.wasm');
+  const bytes = await r.arrayBuffer();
+  const { instance } = await WebAssembly.instantiate(bytes, {});
+  _wasmModule = instance;
+  return _wasmModule;
+}
+
+// Build crew arrivals matching the JS scheduler's mutual-aid wave logic.
+function computeArrivals(M, realistic){
+  const ASSESSMENT_DELAY = realistic ? 12 : 0;
+  if (realistic && M >= 6){
+    const nInit = Math.ceil(M*0.5), nW1 = Math.ceil(M*0.3), nW2 = M - nInit - nW1;
+    const arr = [];
+    for (let i=0;i<nInit;i++) arr.push(ASSESSMENT_DELAY);
+    for (let i=0;i<nW1;i++)   arr.push(ASSESSMENT_DELAY + 24);
+    for (let i=0;i<nW2;i++)   arr.push(ASSESSMENT_DELAY + 48);
+    return arr;
+  }
+  return new Array(M).fill(ASSESSMENT_DELAY);
+}
+
+// Compute depot positions matching the JS scheduler's logic. For small M we'd
+// normally run k-means, but for the benchmark just cycle through outage points
+// — that's what the JS scheduler does at M > 200 anyway.
+function computeDepots(outages, M){
+  const N = outages.length;
+  const d = [];
+  for (let i=0;i<M;i++){const s = outages[i % N]; d.push({lat:s.lat, lon:s.lon});}
+  return d;
+}
+
+async function runWasmScheduler(outages, M, seed, realistic){
+  const wasm = await loadWasmScheduler();
+  const N = outages.length;
+  if (N === 0 || M === 0) return 0;
+
+  const arrivals = computeArrivals(M, realistic);
+  const depots = computeDepots(outages, M);
+
+  // Buffer layout matches the Rust side:
+  //   outage_lat (f64 * N), outage_lon (f64 * N), critical (u32 * N),
+  //   arrivals (f64 * M), depot_lat (f64 * M), depot_lon (f64 * M)
+  const bufSize = N*8 + N*8 + N*4 + M*8 + M*8 + M*8;
+  wasm.exports.wasm_reset();
+  const ptr = wasm.exports.wasm_alloc(bufSize);
+
+  const mem = wasm.exports.memory.buffer;
+  const f64v = new Float64Array(mem, ptr, N);                          // outage_lat
+  const f64v2 = new Float64Array(mem, ptr + N*8, N);                   // outage_lon
+  const u32v = new Uint32Array(mem, ptr + N*16, N);                    // critical
+  const arrv = new Float64Array(mem, ptr + N*20, M);                   // arrivals
+  const dlatv = new Float64Array(mem, ptr + N*20 + M*8, M);            // depot_lat
+  const dlonv = new Float64Array(mem, ptr + N*20 + M*16, M);           // depot_lon
+
+  for (let i=0;i<N;i++){
+    f64v[i] = outages[i].lat;
+    f64v2[i] = outages[i].lon;
+    u32v[i] = outages[i].critical ? 1 : 0;
+  }
+  for (let i=0;i<M;i++){
+    arrv[i] = arrivals[i];
+    dlatv[i] = depots[i].lat;
+    dlonv[i] = depots[i].lon;
+  }
+
+  const totalTime = wasm.exports.run_scheduler(ptr, N, M, seed >>> 0, realistic ? 1 : 0);
+  return totalTime;
+}
+
+// Pure-JS reference scheduler that matches the WASM's algorithm exactly.
+// Used for the benchmark so we measure pure compute time, not the rendering
+// overhead of planRestoration().
+function runJsSchedulerReference(outages, M, seed, realistic){
+  const N = outages.length;
+  if (N === 0 || M === 0) return 0;
+  const TRAVEL_MPH = realistic ? 25 : 30;
+  const ASSESSMENT_DELAY = realistic ? 12 : 0;
+  const WORKDAY_HOURS = realistic ? 14 : 24;
+  const ROAD_MULT = realistic ? 1.5 : 1.0;
+  function clamp(t){
+    if (!realistic) return t;
+    const d = Math.floor(t/24), inD = t - d*24;
+    return inD > WORKDAY_HOURS ? (d+1)*24 : t;
+  }
+  const rndRep = mulberry32(seed*1117 + 23);
+  let bmHave=false, bmZ=0;
+  function nextNormal(){
+    if (bmHave){ bmHave=false; return bmZ; }
+    const u1 = Math.max(1e-10, rndRep());
+    const u2 = rndRep();
+    const mag = Math.sqrt(-2*Math.log(u1));
+    bmHave=true; bmZ = mag*Math.sin(2*Math.PI*u2);
+    return mag*Math.cos(2*Math.PI*u2);
+  }
+  function sampleRep(){
+    if (!realistic) return 1.5;
+    return Math.max(0.25, Math.min(12, Math.exp(Math.log(2) + 0.857*nextNormal())));
+  }
+  const oLat = new Float64Array(N), oLon = new Float64Array(N);
+  const discTime = new Float64Array(N);
+  for (let i=0;i<N;i++){oLat[i]=outages[i].lat; oLon[i]=outages[i].lon;}
+  if (realistic){
+    const rd = mulberry32(seed*991 + 7);
+    for (let i=0;i<N;i++){
+      const u = rd();
+      if (u<0.30) discTime[i] = ASSESSMENT_DELAY + u*(1.0/0.30);
+      else {const v=(u-0.30)/0.70; const tA=-Math.log(Math.max(1e-9,1-0.99*v))/0.1; discTime[i]=ASSESSMENT_DELAY+1+Math.min(36,tA);}
+    }
+  }
+  const arrivals = computeArrivals(M, realistic);
+  const depots = computeDepots(outages, M);
+  const crews = depots.map((d,i)=>({time:arrivals[i], lat:d.lat, lon:d.lon}));
+  const done = new Uint8Array(N);
+  let criticalCount = 0;
+  if (realistic){
+    for (let i=0;i<N;i++){ if (outages[i].critical) criticalCount++; else done[i]=1; }
+  }
+  let remaining = realistic ? criticalCount : N;
+  let inCriticalPhase = realistic && criticalCount > 0;
+  const nnGrid = buildNNGrid(oLat,oLon,N);
+  const heap=[];
+  function hPush(h,it){h.push(it);let i=h.length-1;while (i>0){const p=(i-1)>>1;if (h[p][0]<=h[i][0]) break;const t=h[i];h[i]=h[p];h[p]=t;i=p;}}
+  function hPop(h){const top=h[0];const last=h.pop();if (h.length>0){h[0]=last;let i=0;const L=h.length;while (true){const l=2*i+1,r=2*i+2;let s=i;if (l<L&&h[l][0]<h[s][0]) s=l;if (r<L&&h[r][0]<h[s][0]) s=r;if (s===i) break;const t=h[i];h[i]=h[s];h[s]=t;i=s;}}return top;}
+  for (let c=0;c<crews.length;c++) hPush(heap,[arrivals[c],c]);
+  let firstUndoneDisc = 0;
+  const discOrder = realistic ? new Array(N) : null;
+  const discSortedTimes = realistic ? new Float64Array(N) : null;
+  if (realistic){
+    for (let i=0;i<N;i++) discOrder[i]=i;
+    discOrder.sort((a,b)=>discTime[a]-discTime[b]);
+    for (let i=0;i<N;i++) discSortedTimes[i]=discTime[discOrder[i]];
+  }
+  function nextDiscoveryAfter(t){
+    if (!realistic) return Infinity;
+    while (firstUndoneDisc < N && done[discOrder[firstUndoneDisc]]) firstUndoneDisc++;
+    if (firstUndoneDisc >= N) return Infinity;
+    let lo = firstUndoneDisc, hi = N;
+    while (lo < hi){const mid=(lo+hi)>>1; if (discSortedTimes[mid]>t) hi=mid; else lo=mid+1;}
+    for (let i=lo;i<N;i++){ if (!done[discOrder[i]]) return discSortedTimes[i]; }
+    return Infinity;
+  }
+  while (remaining > 0){
+    const [cTime, ci] = hPop(heap);
+    const crew = crews[ci];
+    const bestI = realistic
+      ? nnGridFindVisible(nnGrid, crew.lat, crew.lon, done, oLat, oLon, discTime, cTime)
+      : nnGridFind(nnGrid, crew.lat, crew.lon, done, oLat, oLon);
+    if (bestI === -1){
+      if (inCriticalPhase){
+        for (let i=0;i<N;i++) if (!outages[i].critical) done[i]=0;
+        remaining = N - criticalCount;
+        inCriticalPhase = false;
+        firstUndoneDisc = 0;
+        hPush(heap,[cTime,ci]);
+        continue;
+      }
+      if (realistic){
+        const nextT = nextDiscoveryAfter(cTime);
+        if (!isFinite(nextT)) break;
+        hPush(heap,[nextT,ci]);
+        continue;
+      }
+      break;
+    }
+    done[bestI] = 1; remaining--;
+    if (remaining===0 && inCriticalPhase){
+      for (let i=0;i<N;i++) if (!outages[i].critical) done[i]=0;
+      remaining = N - criticalCount;
+      inCriticalPhase = false;
+      firstUndoneDisc = 0;
+    }
+    const o = outages[bestI];
+    const miles = dist({lat:crew.lat, lon:crew.lon}, o) * ROAD_MULT;
+    const repairH = sampleRep();
+    let eta = cTime + miles/TRAVEL_MPH + repairH;
+    eta = clamp(eta);
+    crew.time = eta; crew.lat = o.lat; crew.lon = o.lon;
+    hPush(heap,[eta,ci]);
+  }
+  let t=0;
+  for (const c of crews) if (c.time > t) t = c.time;
+  return t;
+}
+
+async function runBenchmark(){
+  if (!storm || !storm.outages.length){
+    document.getElementById('benchmarkResult').style.display = 'block';
+    document.getElementById('benchmarkResult').textContent = 'Simulate a storm first.';
+    return;
+  }
+  const resEl = document.getElementById('benchmarkResult');
+  resEl.style.display = 'block';
+  resEl.textContent = 'Running benchmark…';
+  await new Promise(r => setTimeout(r, 0));
+
+  const seed = +seedI.value | 0;
+  const M = +cS.value;
+  const realistic = document.getElementById('realisticMode').checked;
+  const N = storm.outages.length;
+
+  let jsT, jsTime;
+  let wasmT, wasmTime;
+  try {
+    // JS pass
+    const jsStart = performance.now();
+    jsT = runJsSchedulerReference(storm.outages, M, seed, realistic);
+    jsTime = performance.now() - jsStart;
+  } catch(e){
+    resEl.textContent = 'JS scheduler error: ' + e.message;
+    return;
+  }
+  await new Promise(r => setTimeout(r, 0));
+  try {
+    // WASM pass
+    const wasmStart = performance.now();
+    wasmT = await runWasmScheduler(storm.outages, M, seed, realistic);
+    wasmTime = performance.now() - wasmStart;
+  } catch(e){
+    resEl.textContent = 'WASM scheduler error: ' + e.message;
+    return;
+  }
+
+  function fmt(h){
+    if (h<24) return h.toFixed(1) + 'h';
+    const d = Math.floor(h/24);
+    return d + 'd ' + Math.round(h-d*24) + 'h';
+  }
+  const ratio = jsTime / wasmTime;
+  resEl.textContent = [
+    `Scenario: ${N.toLocaleString()} outages × ${M.toLocaleString()} crews · ${realistic?'realistic':'optimistic'}`,
+    `JS:   ${jsTime.toFixed(1)} ms → ${fmt(jsT)}`,
+    `WASM: ${wasmTime.toFixed(1)} ms → ${fmt(wasmT)}`,
+    `Speedup: ${ratio.toFixed(2)}× ${ratio > 1 ? '(WASM faster)' : '(JS faster)'}`,
+  ].join('\n');
+}
+
+document.getElementById('benchmarkBtn').onclick = runBenchmark;
 document.getElementById('resetAll').onclick=resetStorm;
 
 // --- Export: GeoJSON + Shapefile ---
