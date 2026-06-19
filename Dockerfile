@@ -15,10 +15,13 @@ WORKDIR /app
 RUN pip install --no-cache-dir \
         "fastapi>=0.110" \
         "uvicorn[standard]>=0.27" \
-        "pydantic>=2.5"
+        "pydantic>=2.5" \
+        "numpy>=1.26" \
+        "scipy>=1.11" \
+        "numba>=0.59"
 
-# Copy the server and the shared scheduler module.
-COPY 07_server.py 05_generate_artifacts.py ./
+# Copy the server, the reference scheduler, and the fast/JIT'd schedulers.
+COPY 07_server.py 05_generate_artifacts.py scheduler_fast.py scheduler_numba.py ./
 
 EXPOSE 8000
 

@@ -1,0 +1,24 @@
+# Render.com infrastructure-as-code config.
+#
+# How to use:
+#   1. Sign up at https://render.com (free, GitHub login works)
+#   2. Click "New +" -> "Blueprint"
+#   3. Pick this repo (EnergyOptimization2)
+#   4. Render reads this file and provisions the service automatically
+#   5. First build takes ~5-10 min (Docker image, Numba pre-compile on first call)
+#   6. Render gives you a URL like https://hartford-grid-server.onrender.com
+#   7. Paste that URL into the "Server URL" field of the interactive
+#
+# Free tier note: the service sleeps after 15 min of inactivity, and the
+# first request after wake takes ~30 sec while the container spins up.
+# That's fine for a demo. Upgrade to Starter ($7/mo) if you want always-on.
+
+services:
+  - type: web
+    name: hartford-grid-server
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    # Render injects $PORT; the Dockerfile already honors it.
