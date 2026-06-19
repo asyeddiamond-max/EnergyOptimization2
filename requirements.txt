@@ -6,3 +6,13 @@
 
 # 04_geojson_to_shapefile.py needs geopandas for the offline conversion path.
 geopandas>=0.14
+
+# 07_server.py — FastAPI backend for the optional server-side compute path
+# (Alternative #4). Only needed if you actually want to run the API; the
+# browser interactive works without it.
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.5
+numpy>=1.26
+scipy>=1.11
+numba>=0.59
