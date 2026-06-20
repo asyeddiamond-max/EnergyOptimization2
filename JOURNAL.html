@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hartford County Grid Simulation — Development Journal</title>
+<style>
+  :root{
+    --paper:#fdfaf3;
+    --ink:#3b2f24;
+    --rule:#c9b894;
+    --margin:#f0e5cb;
+    --accent:#8b3a2e;
+    --build:#1d4ed8;     /* feature additions */
+    --fix:#15803d;       /* fixes / debugging wins */
+    --question:#7c2d12;  /* user questions */
+    --decision:#a16207;  /* design decisions */
+    --pivot:#7e22ce;     /* research / direction pivots */
+    --perf:#0d9488;      /* performance milestones */
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:repeating-linear-gradient(180deg, var(--paper) 0 27px, #f6efdc 27px 28px);
+    color:var(--ink);
+    font-family:"Georgia", "Iowan Old Style", "Palatino Linotype", serif;
+    line-height:1.55;
+    padding:48px 20px 96px;
+  }
+  .page{
+    max-width:1080px;margin:0 auto;
+    background:var(--paper);
+    border:1px solid var(--rule);
+    box-shadow:0 1px 0 #e6d8b0 inset, 0 20px 40px -28px rgba(60,40,20,.45);
+    padding:48px 60px 64px;
+    position:relative;
+  }
+  .page::before{
+    content:"";position:absolute;left:42px;top:0;bottom:0;width:1px;background:#dcc78f;
+  }
+  h1{
+    font-family:"Iowan Old Style","Georgia",serif;
+    font-size:34px;letter-spacing:.5px;margin:0 0 6px;color:var(--accent);
+  }
+  .subtitle{
+    font-style:italic;color:#6b563b;font-size:15px;margin-bottom:24px;
+  }
+  .legend{
+    display:flex;flex-wrap:wrap;gap:10px 18px;
+    border-top:1px dashed var(--rule);border-bottom:1px dashed var(--rule);
+    padding:12px 0;margin-bottom:32px;font-size:13px;
+  }
+  .legend span{display:flex;align-items:center;gap:6px}
+  .swatch{display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid rgba(0,0,0,.15)}
+  table.entries{width:100%;border-collapse:collapse}
+  table.entries th, table.entries td{
+    text-align:left;vertical-align:top;
+    padding:14px 14px;border-bottom:1px solid var(--rule);
+  }
+  table.entries th{
+    background:#f3e8c8;color:#5b4528;font-weight:bold;font-size:13px;
+    letter-spacing:1px;text-transform:uppercase;
+  }
+  td.when{
+    font-style:italic;color:#705638;width:11%;font-size:13px;white-space:nowrap;
+  }
+  td.kind{width:14%;font-size:13px}
+  td.detail{font-size:15px}
+  .tag{
+    display:inline-block;padding:2px 8px;border-radius:11px;
+    font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+    border:1px solid currentColor;background:rgba(255,255,255,.45);
+  }
+  .tag.build{color:var(--build)}
+  .tag.fix{color:var(--fix)}
+  .tag.question{color:var(--question)}
+  .tag.decision{color:var(--decision)}
+  .tag.pivot{color:var(--pivot)}
+  .tag.perf{color:var(--perf)}
+  .quote{
+    border-left:3px solid var(--accent);background:#fff7e2;
+    padding:8px 12px;margin:8px 0;font-style:italic;color:#3b2f24;
+  }
+  code{
+    background:#f0e5cb;padding:1px 5px;border-radius:3px;
+    font-family:"Consolas","Menlo",monospace;font-size:.92em;
+  }
+  hr.section{
+    border:none;border-top:2px solid var(--rule);margin:42px 0 30px;
+    position:relative;
+  }
+  hr.section::after{
+    content:"❦";position:absolute;left:50%;top:-13px;transform:translateX(-50%);
+    background:var(--paper);padding:0 14px;color:var(--accent);font-size:18px;
+  }
+  h2{
+    color:var(--accent);font-size:22px;margin:24px 0 6px;letter-spacing:.5px;
+  }
+  .marginalia{
+    font-style:italic;color:#705638;font-size:13px;margin-bottom:18px;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Development Journal</h1>
+  <div class="subtitle">Hartford County Power Grid Resilience Simulation · Author: A. Syed Diamond · Spring–Summer 2026</div>
+
+  <div class="legend">
+    <span><span class="swatch" style="background:#1d4ed8"></span> Feature build</span>
+    <span><span class="swatch" style="background:#15803d"></span> Fix / debugging win</span>
+    <span><span class="swatch" style="background:#0d9488"></span> Performance milestone</span>
+    <span><span class="swatch" style="background:#7c2d12"></span> User question</span>
+    <span><span class="swatch" style="background:#a16207"></span> Design decision</span>
+    <span><span class="swatch" style="background:#7e22ce"></span> Direction pivot</span>
+  </div>
+
+  <h2>Chapter I — Foundations</h2>
+  <div class="marginalia">Establishing the simulation, the synthetic grid, and the first interactive controls.</div>
+
+  <table class="entries">
+    <thead><tr><th class="when">When</th><th class="kind">Kind</th><th>Entry</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="when">Initial</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail">Synthetic Hartford County grid: 29 town boundaries, population-weighted demand points, k-means substation placement, randomised feeders + laterals, mulberry32 PRNG for reproducibility. Browser-first interactive on Leaflet.</td>
+      </tr>
+      <tr>
+        <td class="when">Initial</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail">Greedy rolling-horizon scheduler with realistic mode: 12 h assessment delay, 14 h workdays, log-normal repair durations, mutual-aid waves at 0/24/48 h, 25 mph travel × 1.5 road-multiplier, log-normal repair times capped at 12 h.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr class="section">
+  <h2>Chapter II — The Five Alternatives</h2>
+  <div class="marginalia">Catalogued five orthogonal directions to make the simulation faster &amp; more capable. Tackled in order, with honest benchmarking.</div>
+
+  <table class="entries">
+    <thead><tr><th class="when">When</th><th class="kind">Kind</th><th>Entry</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="when">Alt #1</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail"><b>Closed-form equation</b> for instant restoration-time estimate. Powers the "≈ 4 d 3 h" live readout that updates as the slider moves. Useful for slider-sweeping; the exact answer still comes from <code>Plan restoration</code>.</td>
+      </tr>
+      <tr>
+        <td class="when">Alt #2</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail"><b>Pre-computed scenario library</b>. 12 named scenarios saved as JSON in <code>scenarios/</code>, loadable from a dropdown. ~12.5 MB total. Lets viewers explore without waiting for a fresh simulation.</td>
+      </tr>
+      <tr>
+        <td class="when">Alt #3</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail"><b>WebAssembly scheduler</b> in Rust (<code>#![no_std]</code>, custom inline Taylor-series math, bump allocator, parallel-array heap, spatial grid hash). Compiled artifact at <code>wasm/scheduler.wasm</code>.</td>
+      </tr>
+      <tr>
+        <td class="when">Alt #3</td>
+        <td class="kind"><span class="tag fix">Honest result</span></td>
+        <td class="detail">Benchmark: WASM consistently <b>2–3× slower than V8 JS</b> at 500–2 000 outages. Root cause: hand-rolled Taylor-series math is no match for V8's native intrinsics. <span class="quote">Conclusion — the JS scheduler already wins. WASM stays as a reference build, not the production path.</span></td>
+      </tr>
+      <tr>
+        <td class="when">Alt #4</td>
+        <td class="kind"><span class="tag question">Question</span></td>
+        <td class="detail">"move onto #4"</td>
+      </tr>
+      <tr>
+        <td class="when">Alt #4</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail"><b>FastAPI backend</b> (<code>07_server.py</code>) with <code>/api/schedule</code> and <code>/api/monte_carlo</code>. Wide-open CORS so GitHub Pages can call it. Dockerfile for deployment.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr class="section">
+  <h2>Chapter III — The Scaling Saga</h2>
+  <div class="marginalia">Where a 25 000-outage × 5 000-crew "max settings" stress test ran for eight minutes — and then half a second.</div>
+
+  <table class="entries">
+    <thead><tr><th class="when">When</th><th class="kind">Kind</th><th>Entry</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="when">Server v0</td>
+        <td class="kind"><span class="tag question">Question</span></td>
+        <td class="detail">"its taking forever to load … 25k outages × 5 000 crews"</td>
+      </tr>
+      <tr>
+        <td class="when">Step 1</td>
+        <td class="kind"><span class="tag perf">+5×</span></td>
+        <td class="detail"><b>NumPy vectorisation</b>: inner loop uses <code>np.argmin</code> over a masked distance array; <code>np.searchsorted</code> on a sorted discovery list replaces the O(N) "next-discovery" scan. 2 k × 100 went from 0.34 s → ~0.05 s.</td>
+      </tr>
+      <tr>
+        <td class="when">Step 2</td>
+        <td class="kind"><span class="tag decision">Choice</span></td>
+        <td class="detail">User: "do B" (Option B = NumPy port). KD-tree was tried (#1) and proved <i>slower</i> in realistic mode (discovered-fraction is low early on, K grows). Capped K to 256, useful only at non-realistic dense regimes.</td>
+      </tr>
+      <tr>
+        <td class="when">Step 3</td>
+        <td class="kind"><span class="tag perf">+14×</span></td>
+        <td class="detail"><b>Numba JIT</b> of the entire dispatch loop: inline binary heap, inline haversine, inline Mulberry32, <code>@njit(cache=True, fastmath=True)</code>. 2 k × 100 → <b>24 ms</b>. Process pool tried for Monte Carlo but Windows spawn overhead beat it; reserved for huge jobs only.</td>
+      </tr>
+      <tr>
+        <td class="when">Step 4</td>
+        <td class="kind"><span class="tag pivot">Pivot</span></td>
+        <td class="detail">User: "make the model survive even unrealistic scenarios … going to scale to Connecticut." Skipped MILP/calibration; focused on raw scalability.</td>
+      </tr>
+      <tr>
+        <td class="when">Step 5</td>
+        <td class="kind"><span class="tag perf">+246×</span></td>
+        <td class="detail"><b>Spatial grid hash</b> (G = √(N/5) cells, Chebyshev ring expansion) <i>plus</i> an incrementally-maintained <code>n_available</code> counter. The counter is the real hero: when no work is discovered yet, crews fast-forward to the next discovery via binary search instead of doing a full grid scan over an empty layer.</td>
+      </tr>
+      <tr>
+        <td class="when">Step 5</td>
+        <td class="kind"><span class="tag perf">Benchmark</span></td>
+        <td class="detail">
+          <table style="border-collapse:collapse;font-size:13px;width:100%;margin-top:4px">
+            <tr style="background:#f3e8c8"><th style="padding:4px 8px;text-align:left;border:1px solid var(--rule)">Scenario</th><th style="padding:4px 8px;text-align:left;border:1px solid var(--rule)">Before</th><th style="padding:4px 8px;text-align:left;border:1px solid var(--rule)">After</th></tr>
+            <tr><td style="padding:4px 8px;border:1px solid var(--rule)">2 k × 100</td><td style="padding:4px 8px;border:1px solid var(--rule)">~minutes</td><td style="padding:4px 8px;border:1px solid var(--rule)"><b>&lt; 10 ms</b></td></tr>
+            <tr><td style="padding:4px 8px;border:1px solid var(--rule)">25 k × 500</td><td style="padding:4px 8px;border:1px solid var(--rule)">~minutes</td><td style="padding:4px 8px;border:1px solid var(--rule)"><b>70 ms</b></td></tr>
+            <tr><td style="padding:4px 8px;border:1px solid var(--rule)">25 k × 5 000 (worst case)</td><td style="padding:4px 8px;border:1px solid var(--rule)">118 s</td><td style="padding:4px 8px;border:1px solid var(--rule)"><b>480 ms</b></td></tr>
+            <tr><td style="padding:4px 8px;border:1px solid var(--rule)">50 k × 1 000</td><td style="padding:4px 8px;border:1px solid var(--rule)">untested / hours</td><td style="padding:4px 8px;border:1px solid var(--rule)"><b>220 ms</b></td></tr>
+            <tr><td style="padding:4px 8px;border:1px solid var(--rule)"><b>100 k × 2 000 (CT projection)</b></td><td style="padding:4px 8px;border:1px solid var(--rule)">infeasible</td><td style="padding:4px 8px;border:1px solid var(--rule)"><b>660 ms</b></td></tr>
+          </table>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr class="section">
+  <h2>Chapter IV — Deployment &amp; Polishing</h2>
+  <div class="marginalia">From localhost to a public Render URL, with a four-failure deploy saga along the way.</div>
+
+  <table class="entries">
+    <thead><tr><th class="when">When</th><th class="kind">Kind</th><th>Entry</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="when">Deploy</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail">Render Blueprint (<code>render.yaml</code>) auto-provisions the backend on push. Dockerfile pins fastapi / uvicorn / numpy / scipy / numba.</td>
+      </tr>
+      <tr>
+        <td class="when">Deploy</td>
+        <td class="kind"><span class="tag fix">Fix</span></td>
+        <td class="detail">First failure: <code>matplotlib + numpy required</code>. Cause: <code>05_generate_artifacts.py</code> imports matplotlib unconditionally, and <code>07_server.py</code> imported it via <code>importlib</code>. Added matplotlib to image.</td>
+      </tr>
+      <tr>
+        <td class="when">Deploy</td>
+        <td class="kind"><span class="tag fix">Fix</span></td>
+        <td class="detail">Second failure: <code>FileNotFoundError: data/hartford_boundary.json</code> — same file tries to load boundary data at module level. Wrapped in <code>try/except Exception</code>. Still failed.</td>
+      </tr>
+      <tr>
+        <td class="when">Deploy</td>
+        <td class="kind"><span class="tag fix">Fix (real)</span></td>
+        <td class="detail">Third failure: same error. Reason: <code>05_generate_artifacts.py</code> raises <code>SystemExit</code>, which inherits from <code>BaseException</code>, not <code>Exception</code> — Python deliberately makes <code>except Exception</code> skip it. Stopped importing <code>05_generate_artifacts</code> entirely; fast paths cover everything. <span class="quote">Classic gotcha — and a good reminder that Python's exception hierarchy is deliberate.</span></td>
+      </tr>
+      <tr>
+        <td class="when">Frontend</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail">Auto-warm + auto-detect: page load fires a no-cors GET to wake the Render container; <code>/version</code> probe at 5 s / 30 s / 60 s; health dot in the panel goes gray → amber → green. Plan restoration silently falls back to in-browser when server is offline.</td>
+      </tr>
+      <tr>
+        <td class="when">Frontend</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail">Server progress bar — exponential asymptote toward 90 % while waiting on a single atomic server call, snaps to 100 % on response. Designed so Render cold starts (~30–60 s) still feel like motion.</td>
+      </tr>
+      <tr>
+        <td class="when">Frontend</td>
+        <td class="kind"><span class="tag question">Question</span></td>
+        <td class="detail">"why did you stop with those images that we used to have for when the plan restoration works"</td>
+      </tr>
+      <tr>
+        <td class="when">Frontend</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail">Flat per-job dispatch log added inside Numba scheduler; server returns full <code>jobs[]</code> per crew. Browser <code>renderPlan()</code> extracted so both local and server paths produce the same colored crew depots + numbered repair circles + canvas point cloud.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr class="section">
+  <h2>Chapter V — Conversations &amp; Direction</h2>
+  <div class="marginalia">The questions that steered the work.</div>
+
+  <table class="entries">
+    <thead><tr><th class="when">When</th><th class="kind">Kind</th><th>Entry</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="when">Mid-saga</td>
+        <td class="kind"><span class="tag question">Question</span></td>
+        <td class="detail">"MLP/calibration is what I want to do if it helps leads me towards more publishable research contributions"</td>
+      </tr>
+      <tr>
+        <td class="when">Mid-saga</td>
+        <td class="kind"><span class="tag pivot">Reframe</span></td>
+        <td class="detail">Pitched the trade: MILP optimal scheduler (1 day; needs no external data) vs. Eversource calibration (1 day code but bottlenecked on data access via PURA dockets). Recommended doing MILP first so the calibration plugs into a ready framework.</td>
+      </tr>
+      <tr>
+        <td class="when">Mid-saga</td>
+        <td class="kind"><span class="tag question">Question</span></td>
+        <td class="detail">"the real storm data is a lot later. We need to make this more scalable and more precise for Hartford county first … going to need to handle even heavier scenarios when scaled up to connecticut"</td>
+      </tr>
+      <tr>
+        <td class="when">Mid-saga</td>
+        <td class="kind"><span class="tag pivot">Pivot</span></td>
+        <td class="detail">Skipped MILP for now. Refocused on raw scalability so the model can survive CT-wide projection. Result: the Chapter III speedups above.</td>
+      </tr>
+      <tr>
+        <td class="when">Now</td>
+        <td class="kind"><span class="tag decision">Decision</span></td>
+        <td class="detail">Next research milestones queued, not yet built:
+          <ul>
+            <li><b>MILP optimal scheduler</b> for small N to bound greedy's optimality gap.</li>
+            <li><b>Eversource / PURA storm calibration</b> once data acquired.</li>
+            <li><b>WebGPU</b> as engineering polish — deferred; Numba already handles CT scale.</li>
+          </ul>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr class="section">
+  <h2>Coda</h2>
+  <div class="marginalia">Where the project stands at the moment of writing.</div>
+  <p>The interactive simulation is live at GitHub Pages; the server backend at <code>hartford-grid-server.onrender.com</code> auto-warms on page load and serves Numba-compiled scheduler calls in tens of milliseconds. The map paints colored crew depots, numbered repair circles, and a canvas point cloud — the visualisation parity the project started with, now at Connecticut scale. The road ahead is MILP comparison and PURA-grounded calibration; the engineering is done.</p>
+
+</div>
+</body>
+</html>
