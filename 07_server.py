@@ -34,30 +34,19 @@ from __future__ import annotations
 
 import statistics
 from typing import Any
-import importlib.util
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 
-# Optionally load the pure-Python reference scheduler from
-# 05_generate_artifacts.py. We don't need it at runtime when Numba/NumPy
-# are available, and the file imports matplotlib which is heavy on a
-# 512MB Render free-tier instance — so the import is wrapped in try and
-# `art` is None if it fails. The fast paths don't depend on it.
+# We deliberately do NOT import 05_generate_artifacts.py at server
+# startup. That file is the offline plotting/artifact generator — it
+# raises SystemExit if matplotlib is missing (not catchable with
+# `except Exception`) and tries to load data files that aren't in the
+# Docker image. The server's fast paths (Numba/NumPy) are 50-100x
+# faster anyway, so this fallback was never used in production.
 art = None
-try:
-    _spec = importlib.util.spec_from_file_location(
-        "art", Path(__file__).parent / "05_generate_artifacts.py"
-    )
-    art = importlib.util.module_from_spec(_spec)
-    _spec.loader.exec_module(art)
-except Exception as _e:
-    # Matplotlib missing, or any other import failure — fine, fast paths
-    # handle everything in production.
-    print(f"[startup] 05_generate_artifacts unavailable ({_e}); using fast paths only")
 
 # NumPy-vectorized scheduler. ~50-100x faster on big scenarios; the server
 # uses it by default and falls back to the reference implementation only if

@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir \
 # matplotlib install keeps us well under Render's free-tier 512MB RAM.
 
 # Copy the server, the reference scheduler, and the fast/JIT'd schedulers.
-COPY 07_server.py 05_generate_artifacts.py scheduler_fast.py scheduler_numba.py ./
+COPY 07_server.py scheduler_fast.py scheduler_numba.py ./
 
 EXPOSE 8000
 
