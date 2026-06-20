@@ -550,6 +550,37 @@ def build_journal():
          "bearing in the live system today. It's about deciding which directions to push "
          "next given that the foundations worked.")
 
+    h3(doc, "Problems Faced in Chapter I")
+    margin_note(doc, "Every interesting bit of engineering in the foundations existed because something didn't work the obvious way first.")
+    add_entry_table(doc, [
+        ("\"4-hour fantasy\"", "Realism gap",
+         "Cause: naïve scheduler ignored real-world delays; predicted 4 h vs reality 2–7 d. "
+         "Resolution: the seven realism factors of I.5, layered with literature-backed "
+         "parameter choices, brought the simulation into order-of-magnitude agreement with "
+         "published event timelines."),
+        ("Proprietary grid data", "Data unavailable",
+         "Cause: Eversource's real feeder topology isn't public — partly competitive, "
+         "partly physical-security. Resolution: synthetic distribution grid from population-"
+         "weighted demand + k-means substations + radial feeders. Reproducible from a "
+         "single seed."),
+        ("\"Page isn't responding\"", "Compute blocks UI",
+         "Cause: the scheduler dispatch loop never yielded to the browser event loop at "
+         "N=1500+. Resolution: chunk the loop and await new Promise(r => setTimeout(r, 0)) "
+         "every ~500 dispatches."),
+        ("DOM markers slow at scale", "Render cost",
+         "Cause: each L.marker creates an HTML element; 10 000 markers = seconds. "
+         "Resolution: custom PointCloudLayer canvas renderer; numbered HTML markers up to a "
+         "budget; canvas dots beyond."),
+        ("O(N) nearest-outage scan", "Algorithmic",
+         "Cause: inner search scans all outages every dispatch. Resolution: JS-side spatial "
+         "grid hash with ring expansion. Same idea reappears in scheduler_numba.py later."),
+        ("PRNG bit-mismatch risk", "Reproducibility",
+         "Cause: for an offline Python artifact generator to match the browser, Mulberry32 "
+         "had to be identical at every bit including integer-overflow semantics. Resolution: "
+         "explicit & 0xFFFFFFFF masks in both languages plus a head-to-head 10 000-sample "
+         "comparison test before anything was committed."),
+    ])
+
     h3(doc, "Takeaways from Chapter I")
     bullets(doc, [
         "Realism is multiplicative. No single one of the seven factors gets the restoration time from \"4 hours\" to \"4 days.\" They're each individually small and only stack to the right number together. That's a feature, not a bug — each one is independently defensible against the literature.",
@@ -1183,6 +1214,120 @@ def build_journal():
          "for academic rigor and PURA-grounded calibration for real-world claims. The "
          "engineering substrate is done; what remains is the research story it can now "
          "support.")
+
+    section_break(doc)
+
+    # ============ Appendix A — Problems Faced ============
+    h2(doc, "Appendix A — Problems Faced (Cross-Project Catalogue)")
+    margin_note(doc, "Every significant problem the project hit, in order, with root cause "
+                "and resolution. Useful as a debugging-pattern reference for the next person "
+                "doing this kind of work.")
+    add_entry_table(doc, [
+        ("I", "Fix — \"4-hour fantasy\"",
+         "Cause: naïve scheduler ignored real-world delays; predicted 4 h vs reality 2–7 d. "
+         "Resolution: seven multiplicative realism factors (assessment, repair, discovery "
+         "ramp, mutual-aid waves, road proxy, workday clamp, critical priority)."),
+        ("I", "Fix — \"Page isn't responding\"",
+         "Cause: dispatch loop never yielded to the browser event loop at N=1500+. "
+         "Resolution: async-yield chunking with await new Promise(r => setTimeout(r, 0)) "
+         "every ~500 dispatches."),
+        ("I", "Fix — DOM marker render cost",
+         "Cause: each L.marker creates an HTML element; 10 000 markers take seconds. "
+         "Resolution: custom PointCloudLayer canvas renderer for thousands of dots in a "
+         "single pass."),
+        ("I", "Fix — O(N) nearest-outage scan",
+         "Cause: inner search scans all outages every dispatch. Resolution: JS-side "
+         "spatial grid hash with ring expansion."),
+        ("I", "Fix — Cross-language PRNG mismatch",
+         "Cause: Mulberry32 had to match bit-for-bit in JS and Python including overflow "
+         "semantics. Resolution: explicit & 0xFFFFFFFF masks, head-to-head 10 000-sample "
+         "comparison test before any artifacts were committed."),
+        ("III", "Fix — Closed-form ignored actual storm",
+         "Cause: read N from slider rather than realised storm. Resolution: read N from "
+         "storm.outages.length when storm exists."),
+        ("IV", "Fix — Dropdown invisible after deploy",
+         "Cause: GitHub Pages deploy lag (2–10 min). Resolution: explained the deploy "
+         "cycle + Ctrl+Shift+R hard refresh."),
+        ("V", "Fix — MSVC linker missing",
+         "Cause: Windows toolchain blocked Rust crates needing a host C linker. "
+         "Resolution: #![no_std], crate-type cdylib, zero external deps, plain rustc."),
+        ("V", "Fix — libm / wasm-bindgen blocked",
+         "Cause: same root. Resolution: hand-rolled Taylor-series math (sin, cos, asin, "
+         "sqrt, log, exp) inline; bump allocator; parallel-array heap. 17 KB compiled "
+         "scheduler.wasm."),
+        ("V", "Fix — WASM 2–3× slower than JS",
+         "Cause: hand-rolled Taylor-series math vs V8's native Math.* intrinsics. "
+         "Resolution: WASM kept as reference build; V8 JS remained the production "
+         "scheduler."),
+        ("VI", "Fix — \"Failed to fetch\" error",
+         "Cause: FastAPI server is a separate process; toggling the UI doesn't start it. "
+         "Resolution: pip install fastapi \"uvicorn[standard]\" pydantic + "
+         "python -m uvicorn 07_server:app --port 8000."),
+        ("VII", "Fix — Max-settings runs for minutes",
+         "Cause: 25 k × 5 k = 625 M comparisons per Monte Carlo run × 30 seeds = 18 G ops "
+         "in interpreted Python. Resolution (multi-step): NumPy vectorisation (+5×) → "
+         "Numba JIT (+14×) → grid hash + n_available (+246×). Documented in Chapters "
+         "VII & VIII."),
+        ("VII", "Fix — KD-tree slower than expected",
+         "Cause: in realistic mode only ~30% of outages are discovered early; K balloons "
+         "as filtered results shrink. Resolution: K_CAP = 256 with fallback to vectorised "
+         "scan. Useful only in non-realistic dense regimes."),
+        ("VII", "Fix — Monte Carlo stddev = 0",
+         "Cause: RNG seeds inside the scheduler were hardcoded constants, so all 30 "
+         "\"different\" runs were identical. Resolution: per-seed RNG streams "
+         "(seed * 1117 + 23 for repair, seed * 991 + 7 for discovery)."),
+        ("VII", "Fix — Process pool slower than serial",
+         "Cause: Windows process-spawn overhead (~1 s/worker) + per-worker Numba cache "
+         "load on cold subprocess. Resolution: heuristic threshold — only use pool when "
+         "N × crews > 10M."),
+        ("VIII", "Fix — Grid hash slower than flat scan",
+         "Cause: \"skip non-boundary cells\" optimisation revisited interior cells when "
+         "the search box clamped to the grid edge. Resolution: rewrote ring iteration to "
+         "enumerate Chebyshev-distance == ring boundary cells directly."),
+        ("VIII", "Fix — Discovery thrashing at high crew counts",
+         "Cause: 5 000 crews all awake at t=12 h while only a tiny fraction of outages "
+         "were discovered; each crew walked the full grid finding nothing. Resolution: "
+         "incrementally maintained n_available counter — fast-forward immediately when "
+         "zero via np.searchsorted. Single biggest commit win of the project (118 s → "
+         "0.48 s)."),
+        ("IX", "Fix — Render deploy #1: matplotlib missing",
+         "Cause: 05_generate_artifacts.py imports matplotlib unconditionally; server "
+         "imported it via importlib. Resolution (interim): added matplotlib to Docker image."),
+        ("IX", "Fix — Render deploy #2: FileNotFoundError",
+         "Cause: same file loads data/hartford_boundary.json at module level; not shipped "
+         "in image. Resolution (interim): wrapped import in try/except Exception."),
+        ("IX", "Fix — Render deploy #3: SAME error after try/except",
+         "Cause: file raises SystemExit, which inherits from BaseException, not Exception. "
+         "except Exception deliberately doesn't catch sys.exit() — standard library design. "
+         "Resolution (real): stop importing 05_generate_artifacts entirely; Numba/NumPy "
+         "schedulers cover the same functionality faster."),
+        ("X", "Fix — User pasted Service ID, not URL",
+         "Cause: Render dashboard label looked URL-like (srv-d8qs8b6gvqtc73e70mog). "
+         "Resolution: clearer panel labelling + default the field to the deployed URL."),
+        ("X", "Fix — Render cold-start splash confused user",
+         "Cause: free-tier containers sleep after 15 min idle; next request triggers a "
+         "30–60 s wake-up shown as a splash. Resolution: warm-up ping fires on page load; "
+         "health dot turns green when ready; fake exponential progress bar so the wait "
+         "feels active."),
+        ("X", "Fix — No way to verify deployed commit",
+         "Cause: no version endpoint. Resolution: added GET /version returning "
+         "{\"commit\": \"...\", \"backend\": \"...\"}; frontend displays the SHA so it can "
+         "be matched against GitHub HEAD."),
+        ("XI", "Fix — Map markers vanished on server path",
+         "Cause: server's ScheduleResponse returned only crew counts & total times, not "
+         "the per-job sequence the browser needs to draw numbered repair circles. "
+         "Resolution: flat dispatch log inside Numba scheduler, full jobs[] array in "
+         "response, renderPlan() extracted so both local and server paths share one renderer."),
+    ])
+
+    h3(doc, "Patterns across the catalogue")
+    bullets(doc, [
+        "\"Optional dependencies\" need to actually be optional in code, not just in spirit. Three deploy failures in a row stemmed from one file's unconditional import of matplotlib + load of a data file. The clean fix was removing the import entirely.",
+        "Real measurements beat plausible estimates. Three of the biggest \"this will help a lot\" optimisations (WASM, KD-tree, process pool) all ended up neutral or worse. The only way we knew was benchmarking after each.",
+        "The hardest bugs are about semantics, not syntax. The four-deploy SystemExit saga was caused by Python's exception hierarchy doing exactly what it's designed to do.",
+        "Many performance problems are really \"we're doing work that doesn't need to be done\" problems. The 246× win in Chapter VIII came from skipping the grid scan when there was nothing to find, not from making the scan faster.",
+        "Visualisation parity is part of correctness. The vanishing markers regression wasn't caught by tests — it was caught by a user looking at the map. Speed without the right output isn't a win.",
+    ])
 
     doc.save("Hartford_Grid_Dev_Journal.docx")
     print("Wrote Hartford_Grid_Dev_Journal.docx")

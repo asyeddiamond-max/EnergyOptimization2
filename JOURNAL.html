@@ -561,6 +561,45 @@
     the foundations worked.
   </p>
 
+  <h3>Problems Faced in Chapter I</h3>
+  <div class="marginalia">Every interesting bit of engineering in the foundations existed because something didn&#x2019;t work the obvious way first.</div>
+
+  <table class="entries">
+    <thead><tr><th class="when">Problem</th><th class="kind">Root cause</th><th>Resolution</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="when">"4-hour fantasy"</td>
+        <td class="kind"><span class="tag fix">Realism gap</span></td>
+        <td class="detail">A naïve scheduler predicted ~4 h restoration for a 500-outage storm. Real Eversource restorations are 2&#x2013;7 days. Cause: missing real-world delay factors entirely. Resolution: the seven realism factors documented in I.5, layered on top with literature-backed parameter choices, brought the simulation into order-of-magnitude agreement with published event timelines.</td>
+      </tr>
+      <tr>
+        <td class="when">Real grid data is proprietary</td>
+        <td class="kind"><span class="tag fix">Data unavailable</span></td>
+        <td class="detail">Eversource&#x2019;s real feeder topology isn&#x2019;t public &#x2014; partly competitive, partly physical-security. Resolution: a synthetic distribution grid generated from population-weighted demand points + k-means substations + radial feeders. Reproducible from a single integer seed so reviewers can rebuild it.</td>
+      </tr>
+      <tr>
+        <td class="when">"Page isn&#x2019;t responding" at ~1500 outages</td>
+        <td class="kind"><span class="tag fix">Compute blocks UI</span></td>
+        <td class="detail">The scheduler dispatch loop never yielded to the browser&#x2019;s event loop, so Chrome showed the unresponsive-page dialog. Resolution: chunk the loop and <code>await new Promise(r => setTimeout(r, 0))</code> every ~500 dispatches. Progress bar updates during compute. UI stays interactive.</td>
+      </tr>
+      <tr>
+        <td class="when">DOM markers slow at scale</td>
+        <td class="kind"><span class="tag fix">Render cost</span></td>
+        <td class="detail">Each Leaflet <code>L.marker</code> creates an HTML element; 2 000 markers = hundreds of ms; 10 000 = seconds. Resolution: a custom <code>PointCloudLayer</code> that draws thousands of points in one canvas pass. Numbered HTML markers up to a budget; canvas dots beyond.</td>
+      </tr>
+      <tr>
+        <td class="when">O(N) nearest-outage search dominates</td>
+        <td class="kind"><span class="tag fix">Algorithmic</span></td>
+        <td class="detail">For each crew dispatch, the inner search scans all undone outages. At N = 2 000, that&#x2019;s 4 M comparisons per scheduler run. Resolution: a spatial grid hash on the JS side with concentric ring expansion. The same idea got re-implemented in Numba much later for the Connecticut-scale speedup.</td>
+      </tr>
+      <tr>
+        <td class="when">Cross-language PRNG must agree bit-for-bit</td>
+        <td class="kind"><span class="tag fix">Reproducibility</span></td>
+        <td class="detail">For an offline Python artifact generator to produce identical results to the browser, the Mulberry32 implementation had to match in JS and Python at every bit, including integer overflow semantics and float-to-int rounding. Resolution: explicit <code>& 0xFFFFFFFF</code> masks in both languages and a head-to-head test that compared 10 000 sequential outputs before any data was committed.</td>
+      </tr>
+    </tbody>
+  </table>
+
   <h3>Takeaways from Chapter I</h3>
   <ul class="takeaways">
     <li><b>Realism is multiplicative.</b> No single one of the seven factors gets the restoration time from "4 hours" to "4 days." They&#x2019;re each individually small and only stack to the right number together. That&#x2019;s a feature, not a bug &#x2014; each one is independently defensible against the literature.</li>
@@ -1315,6 +1354,145 @@
     should be verified on Google Scholar or IEEE Xplore before being cited in a
     manuscript.
   </p>
+
+  <hr class="section">
+  <h2 id="appx">Appendix A — Problems Faced (Cross-Project Catalogue)</h2>
+  <div class="marginalia">Every significant problem the project hit, in order, with root cause and resolution. Useful as a debugging-pattern reference for the next person doing this kind of work.</div>
+
+  <table class="entries">
+    <thead><tr><th class="when">Chapter</th><th class="kind">Problem</th><th>Root cause &amp; resolution</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="when">I</td>
+        <td class="kind"><span class="tag fix">"4-hour fantasy"</span></td>
+        <td class="detail"><b>Cause:</b> naïve scheduler ignored real-world delays; predicted 4 h vs reality 2&#x2013;7 d. <b>Resolution:</b> seven multiplicative realism factors (assessment, repair distribution, discovery ramp, mutual-aid waves, road proxy, workday clamp, critical priority).</td>
+      </tr>
+      <tr>
+        <td class="when">I</td>
+        <td class="kind"><span class="tag fix">"Page isn&#x2019;t responding"</span></td>
+        <td class="detail"><b>Cause:</b> dispatch loop never yielded to the browser event loop at N=1500+. <b>Resolution:</b> async-yield chunking with <code>await new Promise(r => setTimeout(r, 0))</code> every ~500 dispatches.</td>
+      </tr>
+      <tr>
+        <td class="when">I</td>
+        <td class="kind"><span class="tag fix">DOM marker render cost</span></td>
+        <td class="detail"><b>Cause:</b> each <code>L.marker</code> creates an HTML element; 10 000 markers take seconds. <b>Resolution:</b> custom <code>PointCloudLayer</code> canvas renderer for thousands of dots in a single pass.</td>
+      </tr>
+      <tr>
+        <td class="when">I</td>
+        <td class="kind"><span class="tag fix">O(N) nearest-outage scan</span></td>
+        <td class="detail"><b>Cause:</b> inner search scans all outages every dispatch. <b>Resolution:</b> JS-side spatial grid hash with ring expansion (the same idea later resurfacing in <code>scheduler_numba.py</code>).</td>
+      </tr>
+      <tr>
+        <td class="when">I</td>
+        <td class="kind"><span class="tag fix">Cross-language PRNG mismatch</span></td>
+        <td class="detail"><b>Cause:</b> Mulberry32 had to match bit-for-bit in JS and Python including overflow semantics. <b>Resolution:</b> explicit <code>& 0xFFFFFFFF</code> masks, head-to-head 10 000-sample comparison test before any artifacts were committed.</td>
+      </tr>
+      <tr>
+        <td class="when">III</td>
+        <td class="kind"><span class="tag fix">Closed-form ignored actual storm</span></td>
+        <td class="detail"><b>Cause:</b> read N from slider rather than realised storm; user caught it from symptoms alone. <b>Resolution:</b> read N from <code>storm.outages.length</code> when storm exists.</td>
+      </tr>
+      <tr>
+        <td class="when">IV</td>
+        <td class="kind"><span class="tag fix">Dropdown invisible after deploy</span></td>
+        <td class="detail"><b>Cause:</b> GitHub Pages deploy lag (2&#x2013;10 min). <b>Resolution:</b> explained the deploy cycle + Ctrl+Shift+R hard refresh.</td>
+      </tr>
+      <tr>
+        <td class="when">V</td>
+        <td class="kind"><span class="tag fix">MSVC linker missing</span></td>
+        <td class="detail"><b>Cause:</b> Windows toolchain blocked Rust crates needing a host C linker. <b>Resolution:</b> <code>#![no_std]</code>, crate-type <code>cdylib</code>, zero external deps, plain <code>rustc</code>.</td>
+      </tr>
+      <tr>
+        <td class="when">V</td>
+        <td class="kind"><span class="tag fix">libm / wasm-bindgen blocked</span></td>
+        <td class="detail"><b>Cause:</b> same root. <b>Resolution:</b> hand-rolled Taylor-series math (sin, cos, asin, sqrt, log, exp) inline; bump allocator; parallel-array heap. 17 KB compiled <code>scheduler.wasm</code>.</td>
+      </tr>
+      <tr>
+        <td class="when">V</td>
+        <td class="kind"><span class="tag fix">WASM 2&#x2013;3&#xD7; slower than JS</span></td>
+        <td class="detail"><b>Cause:</b> hand-rolled Taylor-series math vs V8&#x2019;s native <code>Math.*</code> intrinsics. <b>Resolution:</b> WASM kept as a reference build; V8 JS remained the production scheduler.</td>
+      </tr>
+      <tr>
+        <td class="when">VI</td>
+        <td class="kind"><span class="tag fix">"Failed to fetch" error</span></td>
+        <td class="detail"><b>Cause:</b> FastAPI server is a separate process; toggling the UI doesn&#x2019;t start it. <b>Resolution:</b> <code>pip install fastapi "uvicorn[standard]" pydantic</code> + <code>python -m uvicorn 07_server:app --port 8000</code>.</td>
+      </tr>
+      <tr>
+        <td class="when">VII</td>
+        <td class="kind"><span class="tag fix">Max-settings runs for minutes</span></td>
+        <td class="detail"><b>Cause:</b> 25 k &#xD7; 5 k = 625 M comparisons per Monte Carlo run &#xD7; 30 seeds = 18 G ops in interpreted Python. <b>Resolution (multi-step):</b> NumPy vectorisation (+5&#xD7;) &#x2192; Numba JIT (+14&#xD7;) &#x2192; grid hash + n_available (+246&#xD7;).</td>
+      </tr>
+      <tr>
+        <td class="when">VII</td>
+        <td class="kind"><span class="tag fix">KD-tree slower than expected</span></td>
+        <td class="detail"><b>Cause:</b> in realistic mode only ~30% of outages are discovered early; K balloons as filtered results shrink. <b>Resolution:</b> K_CAP = 256 with fallback to vectorised scan. Useful only in non-realistic dense regimes.</td>
+      </tr>
+      <tr>
+        <td class="when">VII</td>
+        <td class="kind"><span class="tag fix">Monte Carlo stddev = 0</span></td>
+        <td class="detail"><b>Cause:</b> RNG seeds inside the scheduler were hardcoded constants, so all 30 "different" runs were identical. <b>Resolution:</b> per-seed RNG streams (<code>seed * 1117 + 23</code> for repair, <code>seed * 991 + 7</code> for discovery).</td>
+      </tr>
+      <tr>
+        <td class="when">VII</td>
+        <td class="kind"><span class="tag fix">Process pool slower than serial</span></td>
+        <td class="detail"><b>Cause:</b> Windows process-spawn overhead (~1 s/worker) + per-worker Numba cache load on cold subprocess. <b>Resolution:</b> heuristic threshold &#x2014; only use pool when <code>N &#xD7; crews &gt; 10M</code>.</td>
+      </tr>
+      <tr>
+        <td class="when">VIII</td>
+        <td class="kind"><span class="tag fix">Grid hash slower than flat scan</span></td>
+        <td class="detail"><b>Cause:</b> "skip non-boundary cells" optimisation revisited interior cells when the search box clamped to the grid edge. <b>Resolution:</b> rewrote ring iteration to enumerate Chebyshev-distance == ring boundary cells directly.</td>
+      </tr>
+      <tr>
+        <td class="when">VIII</td>
+        <td class="kind"><span class="tag fix">Discovery thrashing at high crew counts</span></td>
+        <td class="detail"><b>Cause:</b> 5 000 crews all awake at t=12 h while only a tiny fraction of outages were discovered; each crew walked the full grid finding nothing. <b>Resolution:</b> incrementally maintained <code>n_available</code> counter &#x2014; fast-forward immediately when zero via <code>np.searchsorted</code>. Single biggest commit win of the project (118 s &#x2192; 0.48 s).</td>
+      </tr>
+      <tr>
+        <td class="when">IX</td>
+        <td class="kind"><span class="tag fix">Render deploy #1: matplotlib missing</span></td>
+        <td class="detail"><b>Cause:</b> <code>05_generate_artifacts.py</code> imports matplotlib unconditionally; server imported it via <code>importlib</code>. <b>Resolution (interim):</b> added matplotlib to Docker image.</td>
+      </tr>
+      <tr>
+        <td class="when">IX</td>
+        <td class="kind"><span class="tag fix">Render deploy #2: FileNotFoundError</span></td>
+        <td class="detail"><b>Cause:</b> same file loads <code>data/hartford_boundary.json</code> at module level; not shipped in image. <b>Resolution (interim):</b> wrapped import in <code>try/except Exception</code>.</td>
+      </tr>
+      <tr>
+        <td class="when">IX</td>
+        <td class="kind"><span class="tag fix">Render deploy #3: SAME error after try/except</span></td>
+        <td class="detail"><b>Cause:</b> file raises <code>SystemExit</code>, which inherits from <code>BaseException</code>, not <code>Exception</code>. <code>except Exception</code> deliberately doesn&#x2019;t catch <code>sys.exit()</code> &#x2014; standard library design. <b>Resolution (real):</b> stop importing <code>05_generate_artifacts</code> entirely; Numba/NumPy schedulers cover the same functionality faster.</td>
+      </tr>
+      <tr>
+        <td class="when">X</td>
+        <td class="kind"><span class="tag fix">User pasted Render Service ID, not URL</span></td>
+        <td class="detail"><b>Cause:</b> Render dashboard label looked URL-like (<code>srv-d8qs8b6gvqtc73e70mog</code>). <b>Resolution:</b> clearer panel labelling + default the field to the deployed URL.</td>
+      </tr>
+      <tr>
+        <td class="when">X</td>
+        <td class="kind"><span class="tag fix">Render cold-start splash confused user</span></td>
+        <td class="detail"><b>Cause:</b> free-tier containers sleep after 15 min idle; next request triggers a 30&#x2013;60 s wake-up shown as a splash. <b>Resolution:</b> warm-up ping fires on page load before the user notices; health dot turns green when ready; fake exponential progress bar so the wait feels active.</td>
+      </tr>
+      <tr>
+        <td class="when">X</td>
+        <td class="kind"><span class="tag fix">No way to verify deployed commit</span></td>
+        <td class="detail"><b>Cause:</b> no version endpoint. <b>Resolution:</b> added <code>GET /version</code> returning <code>{"commit": "...", "backend": "..."}</code>; frontend displays the SHA so it can be matched against GitHub HEAD.</td>
+      </tr>
+      <tr>
+        <td class="when">XI</td>
+        <td class="kind"><span class="tag fix">Map markers vanished on server path</span></td>
+        <td class="detail"><b>Cause:</b> server&#x2019;s ScheduleResponse returned only crew counts &amp; total times, not the per-job sequence the browser needs to draw numbered repair circles. <b>Resolution:</b> flat dispatch log inside the Numba scheduler, full <code>jobs[]</code> array in the response, <code>renderPlan()</code> extracted so both local and server paths share one renderer.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Patterns across the catalogue</h3>
+  <ul class="takeaways">
+    <li><b>"Optional dependencies" need to actually be optional in code, not just in spirit.</b> Three deploy failures in a row stemmed from one file&#x2019;s unconditional import of matplotlib + load of a data file. The clean fix was removing the import entirely.</li>
+    <li><b>Real measurements beat plausible estimates.</b> Three of the biggest "this will help a lot" optimisations (WASM, KD-tree, process pool) all ended up neutral or worse. The only way we knew was benchmarking after each.</li>
+    <li><b>The hardest bugs are about semantics, not syntax.</b> The four-deploy <code>SystemExit</code> saga was caused by Python&#x2019;s exception hierarchy doing exactly what it&#x2019;s designed to do.</li>
+    <li><b>Many performance problems are really "we&#x2019;re doing work that doesn&#x2019;t need to be done" problems.</b> The 246&#xD7; win in Chapter VIII came from <em>skipping</em> the grid scan when there was nothing to find, not from making the scan faster.</li>
+    <li><b>Visualisation parity is part of correctness.</b> The vanishing markers regression wasn&#x2019;t caught by tests &#x2014; it was caught by a user looking at the map. Speed without the right output isn&#x2019;t a win.</li>
+  </ul>
 
   <hr class="section">
   <h2 id="ch14">Coda</h2>
