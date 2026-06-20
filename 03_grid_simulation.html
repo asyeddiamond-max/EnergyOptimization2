@@ -1304,13 +1304,14 @@ async function planRestoration(){
   // Yield before rendering so the status text from the scheduler shows up.
   status.textContent = `Rendering ${crews.length.toLocaleString()} depots and ${N.toLocaleString()} repair markers…`;
   await new Promise(r => setTimeout(r, 0));
+  renderPlan(crews, totalTime, N, realistic);
+  setPlanProgress(100);
+  setTimeout(()=>setPlanProgress(0,false), 800);
+}
 
-  // Render — visual style preserved at every scale, with graceful degradation:
-  //  - Depots: SVG divIcons up to 500 crews; PointCloudLayer above.
-  //  - Numbered repair circles: SVG divIcons up to NUMBERED_BUDGET (drops to
-  //    500 when crew count is huge so we don't spend a second creating
-  //    thousands of DOM elements). Everything past that renders as one
-  //    PointCloudLayer canvas pass.
+// Extracted so the server-backed path (runServerPlan) can call it after
+// translating the API response into the same crews shape.
+function renderPlan(crews, totalTime, N, realistic){
   depotLayer.clearLayers(); repairLayer.clearLayers();
   if (window._depotCloud){ map.removeLayer(window._depotCloud); window._depotCloud=null; }
   if (window._repairCloud){ map.removeLayer(window._repairCloud); window._repairCloud=null; }
@@ -1323,7 +1324,6 @@ async function planRestoration(){
         .bindTooltip(`Crew ${c.color} depot`);
     });
   } else {
-    // One canvas pass for thousands of depots.
     const depotPts = crews.map(c => ({lat:c.depot.lat, lon:c.depot.lon, color:c.color, r:5}));
     window._depotCloud = new PointCloudLayer(depotPts, {stroke:"#111", lineWidth:1.2, fillOpacity:1});
     window._depotCloud.addTo(map);
@@ -1349,7 +1349,6 @@ async function planRestoration(){
     window._repairCloud.addTo(map);
   }
 
-  // Display: hours under a day, days + hours past 24 h (realistic scenarios run for days).
   function fmtDuration(hrs){
     if (hrs < 24) return hrs.toFixed(1) + " h";
     const d = Math.floor(hrs/24);
@@ -1360,8 +1359,6 @@ async function planRestoration(){
   const modeNote = realistic ? ' · realistic mode' : ' · optimistic baseline';
   restoreDetailEl.textContent=`${N.toLocaleString()} jobs across ${crews.length.toLocaleString()} crews${modeNote}`;
   status.textContent=`Restoration: ${crews.length.toLocaleString()} crews finish all ${N.toLocaleString()} repairs in ${fmtDuration(totalTime)}${realistic?' (includes 12 h assessment + overnight downtime)':''}.`;
-  setPlanProgress(100);
-  setTimeout(()=>setPlanProgress(0,false), 800);
 }
 
 function resetStorm(){
@@ -1650,10 +1647,20 @@ async function runServerPlan(){
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
     const elapsed = (performance.now() - t0).toFixed(0);
-    document.getElementById('restoreTime').textContent =
-      `${data.total_time_h.toFixed(1)} h`;
-    document.getElementById('restoreDetail').textContent =
-      `${payload.outages.length.toLocaleString()} outages restored (server: ${elapsed} ms)`;
+    // Translate the server response into the local crews shape so the
+    // existing renderPlan() can draw depots + numbered repair markers.
+    const N = payload.outages.length;
+    const crews = data.crews.map((c, i) => ({
+      depot: {lat: c.depot_lat, lon: c.depot_lon},
+      color: PALETTE[i % PALETTE.length],
+      time: c.finish_time_h,
+      jobs: (c.jobs || []).map(j => ({
+        o: {lat: j.lat, lon: j.lon},
+        etaFinish: j.eta,
+      })),
+    }));
+    plan = {crews, totalTime: data.total_time_h};
+    renderPlan(crews, data.total_time_h, N, payload.realistic);
     showServerStatus(
       `OK in ${elapsed} ms — ${data.crews.length} crews, total ${data.total_time_h.toFixed(2)} h\n` +
       `backend: ${data.backend}`

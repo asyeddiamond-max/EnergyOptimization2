@@ -111,11 +111,18 @@ class ScheduleRequest(BaseModel):
     realistic: bool = True
 
 
+class JobResult(BaseModel):
+    lat: float
+    lon: float
+    eta: float
+
+
 class CrewResult(BaseModel):
     depot_lat: float
     depot_lon: float
     finish_time_h: float
     n_jobs: int
+    jobs: list[JobResult] = []
 
 
 class ScheduleResponse(BaseModel):
@@ -175,6 +182,8 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
             depot_lon=c["depot"][1],
             finish_time_h=c["time"],
             n_jobs=len(c["jobs"]),
+            jobs=[JobResult(lat=j["lat"], lon=j["lon"], eta=j["eta"])
+                  for j in c["jobs"]],
         )
         for c in crews_out
     ]

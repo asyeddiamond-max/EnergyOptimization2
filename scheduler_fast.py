@@ -199,7 +199,12 @@ def plan_restoration_fast(outages, m_crews, realistic=True, seed=42):
         crew["time"] = eta
         crew["lat"] = float(lat[best])
         crew["lon"] = float(lon[best])
-        crew["jobs"].append(((float(lat[best]), float(lon[best])), eta))
+        crew["jobs"].append({
+            "outage_idx": int(best),
+            "lat": float(lat[best]),
+            "lon": float(lon[best]),
+            "eta": float(eta),
+        })
         heapq.heappush(heap, (eta, ci))
         if remaining % max(1, N // 80) == 0:
             timeline.append((eta, remaining))

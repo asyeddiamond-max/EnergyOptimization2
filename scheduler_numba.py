@@ -110,6 +110,13 @@ def _run_scheduler(lat, lon, m_crews, realistic, seed):
     done = np.zeros(N, dtype=np.bool_)
     remaining = N
 
+    # Flat dispatch log so the wrapper can rebuild per-crew job lists for
+    # the browser visualization. Each successful dispatch appends one entry.
+    log_crew = np.empty(N, dtype=np.int32)
+    log_outage = np.empty(N, dtype=np.int32)
+    log_eta = np.empty(N, dtype=np.float64)
+    n_log = 0
+
     while remaining > 0:
         # heap-pop
         t_now = heap_k[0]
@@ -225,6 +232,10 @@ def _run_scheduler(lat, lon, m_crews, realistic, seed):
         crew_lat[ci] = lat[best]
         crew_lon[ci] = lon[best]
         crew_jobs[ci] += 1
+        log_crew[n_log] = ci
+        log_outage[n_log] = best
+        log_eta[n_log] = eta
+        n_log += 1
 
         # heap-push
         heap_k[n_heap] = eta
@@ -244,7 +255,7 @@ def _run_scheduler(lat, lon, m_crews, realistic, seed):
     for c in range(m_crews):
         if crew_time[c] > total:
             total = crew_time[c]
-    return total, crew_time, crew_jobs
+    return total, crew_time, crew_jobs, log_crew[:n_log], log_outage[:n_log], log_eta[:n_log]
 
 
 @njit(cache=True, fastmath=True)
@@ -366,6 +377,12 @@ def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G):
     # scanning the whole grid for nothing.
     next_disc_idx = 0  # pointer into disc_sorted of next not-yet-available
     n_available = 0
+
+    # Flat dispatch log for visualization (see _run_scheduler).
+    log_crew = np.empty(N, dtype=np.int32)
+    log_outage = np.empty(N, dtype=np.int32)
+    log_eta = np.empty(N, dtype=np.float64)
+    n_log = 0
 
     while remaining > 0:
         # heap-pop
@@ -561,6 +578,10 @@ def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G):
         crew_lat[ci] = lat[best]
         crew_lon[ci] = lon[best]
         crew_jobs[ci] += 1
+        log_crew[n_log] = ci
+        log_outage[n_log] = best
+        log_eta[n_log] = eta
+        n_log += 1
 
         heap_k[n_heap] = eta; heap_v[n_heap] = ci; n_heap += 1
         i = n_heap - 1
@@ -577,7 +598,7 @@ def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G):
     for c in range(m_crews):
         if crew_time[c] > total:
             total = crew_time[c]
-    return total, crew_time, crew_jobs
+    return total, crew_time, crew_jobs, log_crew[:n_log], log_outage[:n_log], log_eta[:n_log]
 
 
 def plan_restoration_numba(outages, m_crews, realistic=True, seed=42):
@@ -591,19 +612,29 @@ def plan_restoration_numba(outages, m_crews, realistic=True, seed=42):
     # ~1000 outages the dense scan is faster (build overhead dominates).
     if N >= 1000:
         G = max(8, int(math.sqrt(N / 5.0)))
-        total, crew_time, crew_jobs = _run_scheduler_grid(
-            lat, lon, m_crews, realistic, seed, G
-        )
+        total, crew_time, crew_jobs, log_crew, log_outage, log_eta = \
+            _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G)
     else:
-        total, crew_time, crew_jobs = _run_scheduler(
-            lat, lon, m_crews, realistic, seed
-        )
-    crews = []
-    for c in range(m_crews):
-        d = outages[c % N]
-        crews.append({
-            "depot": d, "time": float(crew_time[c]),
-            "lat": float(d[0]), "lon": float(d[1]),
-            "jobs": [None] * int(crew_jobs[c]),  # length matches; details elided
+        total, crew_time, crew_jobs, log_crew, log_outage, log_eta = \
+            _run_scheduler(lat, lon, m_crews, realistic, seed)
+
+    # Rebuild per-crew job sequences from the flat dispatch log. The log is
+    # already in dispatch order, so iterating it preserves repair sequence
+    # within each crew. Each job carries the outage's lat/lon and finish eta
+    # so the browser can draw the numbered markers without a second round.
+    crews = [
+        {"depot": outages[c % N], "time": float(crew_time[c]),
+         "lat": float(outages[c % N][0]), "lon": float(outages[c % N][1]),
+         "jobs": []}
+        for c in range(m_crews)
+    ]
+    for k in range(log_crew.shape[0]):
+        ci = int(log_crew[k])
+        oi = int(log_outage[k])
+        crews[ci]["jobs"].append({
+            "outage_idx": oi,
+            "lat": float(lat[oi]),
+            "lon": float(lon[oi]),
+            "eta": float(log_eta[k]),
         })
     return crews, float(total), [(0.0, N), (float(total), 0)]
