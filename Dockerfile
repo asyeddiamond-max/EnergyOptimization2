@@ -18,11 +18,11 @@ RUN pip install --no-cache-dir \
         "pydantic>=2.5" \
         "numpy>=1.26" \
         "scipy>=1.11" \
-        "numba>=0.59" \
-        "matplotlib>=3.7"
-# matplotlib is pulled in transitively because 05_generate_artifacts.py
-# imports it at module top for its plotting helpers. The server never
-# actually plots anything, but the import has to succeed.
+        "numba>=0.59"
+# matplotlib is intentionally NOT installed: it's only used by
+# 05_generate_artifacts.py for offline plotting, and the server now
+# wraps that import in try/except so the file is optional. Saving the
+# matplotlib install keeps us well under Render's free-tier 512MB RAM.
 
 # Copy the server, the reference scheduler, and the fast/JIT'd schedulers.
 COPY 07_server.py 05_generate_artifacts.py scheduler_fast.py scheduler_numba.py ./

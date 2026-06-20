@@ -42,13 +42,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 
-# Reuse the scheduler from 05_generate_artifacts.py so we don't have two
-# copies of the algorithm drifting apart.
-_spec = importlib.util.spec_from_file_location(
-    "art", Path(__file__).parent / "05_generate_artifacts.py"
-)
-art = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(art)
+# Optionally load the pure-Python reference scheduler from
+# 05_generate_artifacts.py. We don't need it at runtime when Numba/NumPy
+# are available, and the file imports matplotlib which is heavy on a
+# 512MB Render free-tier instance — so the import is wrapped in try and
+# `art` is None if it fails. The fast paths don't depend on it.
+art = None
+try:
+    _spec = importlib.util.spec_from_file_location(
+        "art", Path(__file__).parent / "05_generate_artifacts.py"
+    )
+    art = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(art)
+except Exception as _e:
+    # Matplotlib missing, or any other import failure — fine, fast paths
+    # handle everything in production.
+    print(f"[startup] 05_generate_artifacts unavailable ({_e}); using fast paths only")
 
 # NumPy-vectorized scheduler. ~50-100x faster on big scenarios; the server
 # uses it by default and falls back to the reference implementation only if
@@ -164,11 +173,13 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
         crews_out, total_time, _timeline = plan_restoration_fast(
             outage_tuples, crews, realistic=realistic, seed=seed
         )
-    else:
+    elif art is not None:
         rnd = art.mulberry32((seed * 31 + 99) & 0xFFFFFFFF)
         crews_out, total_time, _timeline = art.plan_restoration(
             outage_tuples, crews, rnd, realistic=realistic
         )
+    else:
+        raise RuntimeError("No scheduler backend available")
     crew_results = [
         CrewResult(
             depot_lat=c["depot"][0],
