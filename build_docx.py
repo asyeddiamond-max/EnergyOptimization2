@@ -203,47 +203,359 @@ def build_journal():
 
     section_break(doc)
 
-    # ============ Chapter I ============
+    # ============ Chapter I (expanded) ============
     h2(doc, "Chapter I — Foundations & the Initial Simulation")
-    margin_note(doc, "Establishing the synthetic grid, the realistic restoration model, "
-                "and the interactive controls before any optimisation began.")
+    margin_note(doc,
+                "Long before the five performance alternatives, there was the question itself, "
+                "the geography, the grid, the storm, the seven realism factors, the scheduler, "
+                "the map, and the first \"the page isn't responding\" freeze. The work of this "
+                "chapter laid every assumption everything else stands on.")
+
+    h3(doc, "I.1 — The First Question")
     body(doc,
-         "The project started as a single HTML page that asked a deceptively simple question: "
+         "The project started as a single HTML page asking a deceptively simple question: "
          "how long does it take Hartford County to get the lights back on after a storm, and "
-         "what changes when we add more crews? The initial milestone wasn't speed — it was "
-         "getting the physics right. Synthetic distribution grid built from population-"
-         "weighted demand points, k-means substations, branched feeders and laterals, a "
-         "mulberry32 PRNG so two people on different machines see exactly the same storm "
-         "given the same seed.")
+         "how does that number change when we add more crews? Everything that followed came "
+         "out of that one sentence. The initial milestone wasn't speed — it was earning the "
+         "right to make a claim about restoration timing at all. That meant a synthetic grid "
+         "faithful enough to behave like a distribution network, a storm model that produced "
+         "outage patterns instead of random dots, and a scheduler with the kind of realism "
+         "that distinguishes a plausible answer from a fantasy.")
     body(doc,
-         "The scheduler was a greedy rolling-horizon dispatch with seven realism factors "
-         "stacked on top: damage-assessment delay, a 14-hour workday clamp, log-normal "
-         "repair durations centred at 2 h, a discovery ramp so outages get reported "
-         "gradually instead of all at once, mutual-aid waves arriving at 0/24/48 h, a road-"
-         "network proxy that multiplies haversine distance by 1.5, and a critical-facility "
-         "priority phase. The result: a 500-outage storm restored in a plausible 12–18 hours "
-         "rather than the 4-hour fantasy a simpler model would predict.")
+         "The intended use was three-fold: a teaching demo to make grid-resilience intuitions "
+         "concrete, an interactive sandbox for exploring what-if scenarios at the county "
+         "scale, and the substrate on which a future research arc — MILP comparison, "
+         "calibration against real Eversource storm data, eventual statewide projection — "
+         "could plausibly land.")
+
+    h3(doc, "I.2 — Acquiring the County")
+    body(doc,
+         "Hartford County isn't a vague rectangle. It's a precise polygon with 29 towns "
+         "inside it, each with its own boundary, its own population, and its own road "
+         "density. None of those were going to come from the simulator's imagination — we "
+         "had to fetch them.")
+    body(doc,
+         "Two small Python utilities handled that. 01_fetch_county_boundary.py pulled the "
+         "county outline as GeoJSON from open boundary data; 02_fetch_town_boundaries.py "
+         "pulled the 29 town polygons individually so each could be drawn, named, and "
+         "weighted. Both scripts use only the Python standard library — intentional, so "
+         "anyone cloning the repo can rebuild from scratch without installing anything. The "
+         "fetched boundaries live under data/ as committed JSON so the interactive page can "
+         "read them without a server.")
+    body(doc,
+         "Census-style population figures per town were baked into a static table inside "
+         "the artifact generator. Towns with bigger populations became weight centres for "
+         "demand placement; small towns got correspondingly fewer customers. Not perfect — "
+         "an upgrade path is to pull real parcel-level data — but accurate enough that the "
+         "visualisation rang true to people who know the county.")
     add_entry_table(doc, [
-        ("Day 0", "Build",
-         "Synthetic grid: 29 Hartford County town boundaries, population-weighted demand "
-         "points, k-means substation placement (100 substations by default), feeders branching "
-         "from each substation, laterals branching from feeders. Reproducible via mulberry32 seed."),
-        ("Day 0", "Build",
-         "Storm model: pick K failure points along feeders + laterals, weighted by exposure. "
-         "Customers without power = sum of demand downstream of each failure. Reset, reseed, "
-         "re-storm — all reproducible."),
-        ("Day 0", "Build",
-         "Greedy rolling-horizon scheduler with seven realism factors. Output: per-crew job "
-         "sequence, per-crew finish time, system-wide restoration time, customer-minutes curve."),
-        ("Day 0", "Build",
-         "Leaflet map UI: substations as stars, feeders as colored lines per substation, "
-         "laterals as gray, outage X marks. Plan-restoration output adds crew depots (squares) "
-         "and numbered repair circles (1, 2, 3 …) colored by crew."),
-        ("Day 0", "Perf",
-         "First \"page isn't responding\" event around 1500-outage scenarios — DOM markers "
-         "dominate. Mitigations: async-yield chunking inside the scheduler loop, spatial-grid-"
-         "hash nearest-neighbor on the JS side, ring caps, and a custom Leaflet "
-         "PointCloudLayer canvas renderer for thousands of dots in a single pass."),
+        ("Foundation", "Build",
+         "01_fetch_county_boundary.py — downloads the Hartford County outline as GeoJSON. "
+         "Pure stdlib. Output written to data/hartford_boundary.json."),
+        ("Foundation", "Build",
+         "02_fetch_town_boundaries.py — pulls all 29 town polygons inside the county. "
+         "Pure stdlib. Output: data/hartford_towns.json."),
+        ("Foundation", "Build",
+         "Town-population table baked into the artifact generator and into "
+         "03_grid_simulation.html, so the interactive doesn't need a server-side call to "
+         "weight demand."),
+    ])
+
+    h3(doc, "I.3 — Building a Synthetic Distribution Grid")
+    body(doc,
+         "Real distribution networks aren't public. Eversource and Avangrid keep the actual "
+         "feeder topology proprietary — not just for competitive reasons but for physical-"
+         "security ones. What's public is the shape of distribution systems: substations "
+         "placed near load, backbone feeders radiating outward, laterals branching off "
+         "feeders to reach individual streets. Our job was to build a synthetic network with "
+         "the right shape and density so storm patterns on it would look like storm patterns "
+         "on the real thing.")
+    body(doc,
+         "The recipe, in order: (1) generate ~10 000 candidate demand points, sampled inside "
+         "the county polygon and weighted by town population so cities like Hartford and "
+         "Bristol got their fair share. (2) Run k-means on those demand points to place 100 "
+         "substations — the count is a user-adjustable slider, but 100 was the realistic "
+         "default for the county's ~900 000 customers. (3) For each substation, generate K "
+         "feeders (default K = 10): radial backbones that meander outward from the substation "
+         "in random-but-plausible directions, capped at a realistic distance. (4) Hang "
+         "laterals off each feeder at intervals, themselves branching to cover nearby demand.")
+    body(doc,
+         "Two design choices mattered: every random number came from a deterministic "
+         "mulberry32 PRNG seeded by an integer the user can change in the UI, and the same "
+         "PRNG was implemented identically in JavaScript and Python so the offline artifact "
+         "generator produced bit-identical grids to the browser. That meant a screenshot of "
+         "a storm-restoration plan could be regenerated months later, exactly, from the seed "
+         "alone.")
+    body(doc,
+         "The Leaflet rendering layered them: substations as colored stars, each "
+         "substation's feeders drawn in that substation's color (so you could see which "
+         "lateral belonged to which backbone at a glance), laterals as faint gray lines "
+         "underneath, and the county outline overlaid in red so the geography was "
+         "unmistakable.")
+    add_entry_table(doc, [
+        ("Foundation", "Build",
+         "Population-weighted demand-point sampler. Generates ~10 000 candidate customer "
+         "locations inside the county polygon, weighted by each town's 2020 census population."),
+        ("Foundation", "Build",
+         "k-means substation placement with configurable K (default 100). Output: substation "
+         "lat/lon list serving as the roots of the synthetic distribution network."),
+        ("Foundation", "Build",
+         "Feeder generator: for each substation, branch K radial backbones (default 10) "
+         "outward in random plausible directions; laterals hung off feeders at intervals."),
+        ("Foundation", "Decision",
+         "All randomness funnels through a single mulberry32 PRNG, implemented identically "
+         "in JavaScript and Python. Seeding the integer at the top of the UI reproduces the "
+         "exact same grid + storm + restoration, on any machine, indefinitely."),
+        ("Foundation", "Build",
+         "Leaflet layering: county outline (red) → town outlines (light gray) → substations "
+         "(colored stars) → feeders (colored lines per substation) → laterals (gray) → "
+         "storm outages (X marks) → restoration markers (depots + numbered circles)."),
+    ])
+
+    h3(doc, "I.4 — The Storm Model")
+    body(doc,
+         "A storm in this simulation is not \"X% of customers lose power randomly.\" It's a "
+         "set of physical failure points placed along feeders and laterals, where each "
+         "failure cuts power to everything downstream of it. That model produces realistic "
+         "patterns: clustered outages, geographically coherent blackout regions, and the "
+         "distinctive shape of distribution-system failures rather than the smeared "
+         "distribution of a naive random model.")
+    body(doc,
+         "The storm slider chooses N, the number of failure points. The simulator weighted "
+         "each candidate segment of the grid by exposure (longer segments more likely, "
+         "exterior laterals over reinforced trunks) and sampled N failures without "
+         "replacement. Each failure carried forward to a customer count by walking "
+         "downstream from the failure point and summing served demand.")
+    body(doc,
+         "Reset was non-destructive in the right way: hitting Reset storm cleared the "
+         "failures and the restoration plan, but left the underlying grid intact. So you "
+         "could explore many storms on the same network without regenerating substations or "
+         "feeders, and the seed determined exactly which failures appeared the next time you "
+         "simulated.")
+    add_entry_table(doc, [
+        ("Foundation", "Build",
+         "Storm sampler: pick N failure points on feeders + laterals weighted by exposure. "
+         "N slider goes from 0 to ~25 000."),
+        ("Foundation", "Build",
+         "Customer-impact calculation: for each failure, walk downstream summing the demand "
+         "served. UI counter shows total customers without power and percent of county "
+         "population affected."),
+        ("Foundation", "Build",
+         "Reset-storm button clears failures + plan without rebuilding the grid. Keeps the "
+         "seed so the next storm is reproducible from the same starting state."),
+    ])
+
+    h3(doc, "I.5 — The Realism Crisis & the Seven Factors")
+    body(doc,
+         "A naïve scheduler — \"for each crew, find the nearest outage, repair it in one "
+         "hour, move on\" — gives wildly optimistic restoration times. With 100 crews and "
+         "500 outages, that model predicts a 4-hour restoration. Eversource's post-storm "
+         "filings put real restorations in the 2–7 day range. If the simulation was going "
+         "to be taken seriously for any later research purpose, the gap between 4 hours and "
+         "4 days had to come from somewhere defensible.")
+    body(doc,
+         "That somewhere ended up being a set of seven multiplicative effects layered on "
+         "top of the baseline scheduler. Each one models a real-world delay that storm "
+         "reports document. Stacked, they produce the 12–18 hour restoration for a 500-"
+         "outage storm that does match what the literature describes — not by hand-tuning "
+         "to a number, but by adding effects with documented sources and watching the total "
+         "emerge.")
+    add_entry_table(doc, [
+        ("#1", "Build (Assessment)",
+         "First 12 hours after the storm: no repair dispatch. Crews are doing damage "
+         "assessment — driving routes, identifying failures, prioritising. Documented in "
+         "Eversource's Isaias 2020 post-mortem and PURA filings."),
+        ("#2", "Build (Repair)",
+         "Per-repair duration is log-normal, median 2 h, 90th percentile 6 h, capped at "
+         "12 h. Box–Muller transform from mulberry32 uniforms. Each repair's duration is "
+         "independently sampled but reproducible from the seed."),
+        ("#3", "Build (Discovery)",
+         "Outages aren't all known to the utility at t=0. A discovery curve has 30% of "
+         "outages reported in the first hour after assessment ends, the remaining 70% "
+         "reported with an exponential-decay tail capped at 36 h. Crews can't repair an "
+         "outage they don't know about yet."),
+        ("#4", "Build (Mutual aid)",
+         "For storms requiring ≥ 6 crews, only ~50% are local. ~30% arrive 24 h later as the "
+         "first mutual-aid wave (neighboring utilities), the remaining ~20% arrive 48 h "
+         "later (long-distance aid). Models how out-of-state crews ramp into a major event."),
+        ("#5", "Build (Roads)",
+         "Travel distance ≠ haversine. Real driving is longer because roads bend, deadhead, "
+         "and route around obstacles. Multiplier of 1.5× on the great-circle distance at "
+         "25 mph average. Approximation but defensible."),
+        ("#6", "Build (Workday)",
+         "A repair completing after the 14-hour workday boundary rolls over to the next "
+         "morning. Models the reality that night ops are reduced (safety, visibility). The "
+         "clamp is what stretches a \"12 hour theoretical\" restoration into the 2–3 day "
+         "reality."),
+        ("#7", "Build (Critical)",
+         "Outages flagged critical (hospitals, fire stations) get a priority phase. The "
+         "scheduler dispatches all critical jobs first before resuming normal greedy "
+         "nearest-neighbour. Documented utility practice."),
+    ])
+    body(doc,
+         "The \"realistic mode\" checkbox in the UI toggles all seven on or off. Off, the "
+         "scheduler runs the naïve model — useful as a baseline that demonstrates how much "
+         "each effect matters. On, the simulator produces the multi-day restorations that "
+         "match published Eversource event timelines in order of magnitude.")
+
+    h3(doc, "I.6 — The Greedy Rolling-Horizon Scheduler")
+    body(doc,
+         "With the realism factors specified, the scheduler itself could be relatively "
+         "simple. The choice was a greedy rolling-horizon dispatch:")
+    bullets(doc, [
+        "Maintain a min-heap of (time, crew_id) sorted by the crew's next-available time.",
+        "Pop the earliest-available crew. Call its time t.",
+        "Among outages that are (a) not yet repaired and (b) already discovered by time t, find the nearest one to the crew's current location.",
+        "Assign that outage to this crew. Compute the eta: travel time at 25 mph × road multiplier + stochastic repair duration. Apply the workday clamp.",
+        "Push the crew back onto the heap with its new (eta, crew_id). Loop.",
+    ])
+    body(doc,
+         "Rolling-horizon means the next dispatch isn't planned in advance — each crew picks "
+         "its next job based on the world state at the moment it becomes free. That's "
+         "deliberately greedy: it's not optimal in any global sense, but it's defensible "
+         "(utilities really do dispatch this way) and it's scalable.")
+    body(doc,
+         "The output the scheduler returns: per-crew finish time (when that crew completes "
+         "its last job), per-crew job sequence (which outage in what order), and the "
+         "system-wide total restoration time (the max of the per-crew times). Plus a "
+         "timeline of (hour, remaining outages) sampled at regular intervals for the curve "
+         "display.")
+    body(doc,
+         "A useful by-product: the \"Find optimal crew count\" button. Given a target "
+         "restoration window (within 15% of the theoretical floor when crews = outages), "
+         "the UI binary-searches over crew counts, running the scheduler at each candidate, "
+         "and returns the smallest M that meets the target. This is the question utilities "
+         "actually ask after a storm: \"we got everything back in 3 days; if we'd had 50 "
+         "more crews, how much faster?\"")
+    add_entry_table(doc, [
+        ("Foundation", "Build",
+         "Min-heap-based rolling-horizon dispatch in JavaScript. Each crew's next-available "
+         "time is the heap key; finding the nearest outage at dispatch time is the inner "
+         "search."),
+        ("Foundation", "Build",
+         "Box–Muller normal sampler driven by the mulberry32 stream for log-normal repair "
+         "durations. Independent RNG streams for repair time vs discovery time so seed "
+         "sweeps don't shuffle realisations."),
+        ("Foundation", "Build",
+         "Find-optimal-crew-count binary search. Iterates over M = 1, 2, 4, 8, … doubling "
+         "until restoration time is within 15% of the floor, then refines."),
+    ])
+
+    h3(doc, "I.7 — The First Visualization")
+    body(doc,
+         "Visualisation came in stages. The first version of the page rendered the grid "
+         "alone — substations, feeders, laterals — with no storm. That established the "
+         "geography. Adding storm simulation produced the outage X marks. Adding restoration "
+         "produced the moment the project really started to feel like something real: "
+         "colored crew depots scattered across the county, and at every outage, a numbered "
+         "circle in the crew's color showing the repair order. Crew 7 in green did jobs 1, "
+         "2, 3, … in sequence; you could trace the route across the map by eye.")
+    body(doc,
+         "For modest scenarios the visualisation was effortless — Leaflet's built-in marker "
+         "layer handled a few hundred markers fine. The problems started above ~1500 "
+         "outages, which is where Section I.8 picks up.")
+
+    h3(doc, "I.8 — The First Performance Reckoning (pre-Alternatives)")
+    body(doc,
+         "Long before the five-alternative roadmap was even drafted, the page hit its first "
+         "wall. With ~1500 outages and 100 crews, hitting Plan restoration caused the "
+         "browser to freeze for several seconds. The dialog the user saw: \"this page is "
+         "not responding.\" The diagnosis split into two distinct problems, which then got "
+         "two distinct fixes.")
+    body(doc,
+         "Problem A: the scheduler blocks the main thread. The dispatch loop is fast for a "
+         "few hundred outages but at 2000+ it's long enough that the browser's event loop "
+         "never yields. Solution: chunk the loop and yield to the event loop every K "
+         "dispatches with await new Promise(r => setTimeout(r, 0)). Now the page stays "
+         "interactive during computation and the progress bar actually updates.")
+    body(doc,
+         "Problem B: rendering thousands of DOM markers is slow. Each Leaflet L.marker "
+         "creates an HTML element. At 2000 markers the rendering takes hundreds of "
+         "milliseconds; at 10 000 it's seconds. Solution: a custom PointCloudLayer that "
+         "draws thousands of dots in a single canvas pass. Numbered repair circles still "
+         "get individual HTML markers up to a budget (~1500); past the budget, they shift "
+         "to the canvas point cloud as plain colored dots without numbers.")
+    body(doc,
+         "Problem C: nearest-outage search at the scheduler hot spot is O(N). For each "
+         "dispatch, the scheduler scans all outages to find the nearest undone one. At "
+         "N = 2000, that's 4 million comparisons per scheduler run. Solution introduced "
+         "even before Alternative #1: a spatial grid hash on the JS side, with concentric "
+         "ring expansion to find the nearest neighbour without a full scan. Capped search "
+         "radius so it never explodes. (Echoes of this design would later be re-implemented "
+         "in Numba inside scheduler_numba.py.)")
+    add_entry_table(doc, [
+        ("Pre-Alt", "Perf",
+         "Async-yield chunking inside the scheduler loop: await every ~500 dispatches so "
+         "the browser event loop runs. Progress bar finally updates during compute."),
+        ("Pre-Alt", "Perf",
+         "Custom Leaflet PointCloudLayer renderer: thousands of points drawn in a single "
+         "canvas pass instead of as individual HTML markers. Numbered HTML markers up to a "
+         "budget; cloud points beyond."),
+        ("Pre-Alt", "Perf",
+         "Spatial grid hash + ring-expansion nearest-neighbour on the JS side of the "
+         "scheduler. Dropped per-dispatch search from O(N) to roughly O(local density). "
+         "This was the same algorithmic idea later resurfacing in scheduler_numba.py's "
+         "grid hash."),
+        ("Pre-Alt", "Fix",
+         "\"This page is not responding\" no longer fires at typical scales. The compute "
+         "and render are both within the user's patience budget for storms in the hundreds-"
+         "to-low-thousands of outages."),
+    ])
+
+    h3(doc, "I.9 — Supporting Tooling")
+    body(doc,
+         "A few smaller pieces of infrastructure went up in the foundations phase that "
+         "didn't feature in any later chapter but were quietly load-bearing:")
+    add_entry_table(doc, [
+        ("Foundation", "Build",
+         "04_geojson_to_shapefile.py — offline conversion of GeoJSON grid + storm + plan to "
+         "ESRI shapefile so the artifacts open in QGIS, ArcGIS, or geopandas. Uses "
+         "geopandas; only needed when exporting."),
+        ("Foundation", "Build",
+         "05_generate_artifacts.py — offline Python port of the JS scheduler that generates "
+         "static PNG artifacts (county overview, grid topology, storm overlay, restoration "
+         "plan) plus rasterised summary plots via matplotlib. Used to seed the scenario "
+         "library and produce poster-quality figures."),
+        ("Foundation", "Build",
+         "Browser-side export: download the current grid + storm + plan as GeoJSON. Lets "
+         "users open results in any GIS for further analysis."),
+        ("Foundation", "Build",
+         "UI metrics panel: customers without power, percent of county population affected, "
+         "outage locations, repair crews, recommended crews. Updated live as inputs change."),
+    ])
+
+    h3(doc, "I.10 — The State at the End of Foundations")
+    body(doc,
+         "By the end of the foundations phase, before a single one of the five alternatives "
+         "was started, the simulation could already do all of this:")
+    bullets(doc, [
+        "Generate a synthetic Hartford County distribution grid from a seed integer.",
+        "Simulate a storm of any size from 0 to ~25 000 outages.",
+        "Run the realistic-mode scheduler with all seven factors enabled.",
+        "Visualise the result with depots + numbered repair circles + canvas point cloud.",
+        "Recommend an optimal crew count via binary search.",
+        "Export grid + storm + plan as GeoJSON or shapefile.",
+        "Reproduce any past result exactly given just the seed.",
+        "Stay responsive at typical scales thanks to chunked compute, the spatial grid hash, and the canvas renderer.",
+    ])
+    body(doc,
+         "What it couldn't do yet: respond instantly to slider changes (closed-form would "
+         "fix that), let users explore canned scenarios without running anything (pre-"
+         "computed library), or scale to 25 000 outages with thousands of crews in "
+         "realistic mode without locking up. Each of those was a deliberate next direction "
+         "— and that's where the five-alternative roadmap of Chapter II came from.")
+    body(doc,
+         "The chapter that follows isn't about fixing what the foundations got wrong — "
+         "everything in this chapter still stands as written, and most of it is still load-"
+         "bearing in the live system today. It's about deciding which directions to push "
+         "next given that the foundations worked.")
+
+    h3(doc, "Takeaways from Chapter I")
+    bullets(doc, [
+        "Realism is multiplicative. No single one of the seven factors gets the restoration time from \"4 hours\" to \"4 days.\" They're each individually small and only stack to the right number together. That's a feature, not a bug — each one is independently defensible against the literature.",
+        "Synthetic-but-deterministic beats real-but-inaccessible. Real feeder data isn't available. A synthetic grid built from population weights, seeded so it's exactly reproducible, behaves enough like a real one that the storm patterns look right — and any reviewer can rebuild it from scratch.",
+        "The first performance freeze taught patterns that paid forward. The async-yield chunking, the spatial grid hash, and the canvas point-cloud renderer were all designed before the five-alternative roadmap. The same grid-hash idea reappears later in scheduler_numba.py, where it's the foundation of the 246× speedup. Building right the first time means later work compounds instead of replacing.",
+        "The right unit of reproducibility is a single integer. All randomness goes through one PRNG, seeded by one integer in the UI. That means a paper figure can be regenerated months later from the seed alone — no archives, no caches, no stale URLs.",
     ])
 
     section_break(doc)
