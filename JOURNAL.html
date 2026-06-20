@@ -10,29 +10,28 @@
     --rule:#c9b894;
     --margin:#f0e5cb;
     --accent:#8b3a2e;
-    --build:#1d4ed8;     /* feature additions */
-    --fix:#15803d;       /* fixes / debugging wins */
-    --question:#7c2d12;  /* user questions */
-    --decision:#a16207;  /* design decisions */
-    --pivot:#7e22ce;     /* research / direction pivots */
-    --perf:#0d9488;      /* performance milestones */
+    --build:#1d4ed8;
+    --fix:#15803d;
+    --question:#7c2d12;
+    --decision:#a16207;
+    --pivot:#7e22ce;
+    --perf:#0d9488;
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0}
   body{
     background:repeating-linear-gradient(180deg, var(--paper) 0 27px, #f6efdc 27px 28px);
     color:var(--ink);
-    font-family:"Georgia", "Iowan Old Style", "Palatino Linotype", serif;
+    font-family:"Georgia","Iowan Old Style","Palatino Linotype",serif;
     line-height:1.55;
     padding:48px 20px 96px;
   }
   .page{
-    max-width:1080px;margin:0 auto;
+    max-width:1100px;margin:0 auto;
     background:var(--paper);
     border:1px solid var(--rule);
     box-shadow:0 1px 0 #e6d8b0 inset, 0 20px 40px -28px rgba(60,40,20,.45);
-    padding:48px 60px 64px;
-    position:relative;
+    padding:48px 60px 64px;position:relative;
   }
   .page::before{
     content:"";position:absolute;left:42px;top:0;bottom:0;width:1px;background:#dcc78f;
@@ -41,9 +40,7 @@
     font-family:"Iowan Old Style","Georgia",serif;
     font-size:34px;letter-spacing:.5px;margin:0 0 6px;color:var(--accent);
   }
-  .subtitle{
-    font-style:italic;color:#6b563b;font-size:15px;margin-bottom:24px;
-  }
+  .subtitle{font-style:italic;color:#6b563b;font-size:15px;margin-bottom:24px;}
   .legend{
     display:flex;flex-wrap:wrap;gap:10px 18px;
     border-top:1px dashed var(--rule);border-bottom:1px dashed var(--rule);
@@ -51,20 +48,18 @@
   }
   .legend span{display:flex;align-items:center;gap:6px}
   .swatch{display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid rgba(0,0,0,.15)}
-  table.entries{width:100%;border-collapse:collapse}
+  table.entries{width:100%;border-collapse:collapse;margin:8px 0 20px}
   table.entries th, table.entries td{
     text-align:left;vertical-align:top;
-    padding:14px 14px;border-bottom:1px solid var(--rule);
+    padding:12px 12px;border-bottom:1px solid var(--rule);
   }
   table.entries th{
-    background:#f3e8c8;color:#5b4528;font-weight:bold;font-size:13px;
+    background:#f3e8c8;color:#5b4528;font-weight:bold;font-size:12px;
     letter-spacing:1px;text-transform:uppercase;
   }
-  td.when{
-    font-style:italic;color:#705638;width:11%;font-size:13px;white-space:nowrap;
-  }
-  td.kind{width:14%;font-size:13px}
-  td.detail{font-size:15px}
+  td.when{font-style:italic;color:#705638;width:11%;font-size:13px;white-space:nowrap;}
+  td.kind{width:13%;font-size:13px}
+  td.detail{font-size:14.5px}
   .tag{
     display:inline-block;padding:2px 8px;border-radius:11px;
     font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
@@ -78,26 +73,35 @@
   .tag.perf{color:var(--perf)}
   .quote{
     border-left:3px solid var(--accent);background:#fff7e2;
-    padding:8px 12px;margin:8px 0;font-style:italic;color:#3b2f24;
+    padding:8px 12px;margin:8px 0;font-style:italic;color:#3b2f24;font-size:14px;
   }
+  .quote .who{font-style:normal;font-weight:bold;color:var(--question);margin-right:6px;font-size:11px;letter-spacing:.5px;text-transform:uppercase}
   code{
     background:#f0e5cb;padding:1px 5px;border-radius:3px;
     font-family:"Consolas","Menlo",monospace;font-size:.92em;
   }
   hr.section{
-    border:none;border-top:2px solid var(--rule);margin:42px 0 30px;
-    position:relative;
+    border:none;border-top:2px solid var(--rule);margin:42px 0 28px;position:relative;
   }
   hr.section::after{
     content:"❦";position:absolute;left:50%;top:-13px;transform:translateX(-50%);
     background:var(--paper);padding:0 14px;color:var(--accent);font-size:18px;
   }
-  h2{
-    color:var(--accent);font-size:22px;margin:24px 0 6px;letter-spacing:.5px;
+  h2{color:var(--accent);font-size:22px;margin:24px 0 6px;letter-spacing:.5px;}
+  h3{color:#5b4528;font-size:16px;margin:16px 0 4px;}
+  .marginalia{font-style:italic;color:#705638;font-size:13px;margin-bottom:18px;}
+  p.narrative{font-size:14.5px;line-height:1.65;margin:8px 0 12px;color:#3b2f24}
+  p.narrative em{color:#5b4528}
+  ul.takeaways{margin:6px 0 14px 0;padding-left:22px}
+  ul.takeaways li{margin-bottom:4px;font-size:14px}
+  .toc{
+    background:#f3e8c8;border:1px solid var(--rule);padding:16px 22px;
+    margin:24px 0 36px;border-radius:4px;font-size:14px;
   }
-  .marginalia{
-    font-style:italic;color:#705638;font-size:13px;margin-bottom:18px;
-  }
+  .toc ol{margin:6px 0 0 18px;padding:0}
+  .toc li{margin:3px 0}
+  .toc a{color:var(--accent);text-decoration:none}
+  .toc a:hover{text-decoration:underline}
 </style>
 </head>
 <body>
@@ -115,214 +119,844 @@
     <span><span class="swatch" style="background:#7e22ce"></span> Direction pivot</span>
   </div>
 
-  <h2>Chapter I — Foundations</h2>
-  <div class="marginalia">Establishing the simulation, the synthetic grid, and the first interactive controls.</div>
+  <div class="toc">
+    <b>Contents</b>
+    <ol>
+      <li><a href="#ch1">Foundations &amp; the Initial Simulation</a></li>
+      <li><a href="#ch2">The Five-Alternative Roadmap</a></li>
+      <li><a href="#ch3">Alternative #1 — The Closed-Form Equation</a></li>
+      <li><a href="#ch4">Alternative #2 — The Pre-Computed Scenario Library</a></li>
+      <li><a href="#ch5">Alternative #3 — The WebAssembly Adventure That Wasn't</a></li>
+      <li><a href="#ch6">Alternative #4 — Server-Side Compute</a></li>
+      <li><a href="#ch7">The "Max Settings" Crisis</a></li>
+      <li><a href="#ch8">The Connecticut-Scale Refactor</a></li>
+      <li><a href="#ch9">The Render Deployment Saga</a></li>
+      <li><a href="#ch10">Polish — Auto-Detect, Progress, /version</a></li>
+      <li><a href="#ch11">The Vanishing Markers</a></li>
+      <li><a href="#ch12">Direction Conversations &amp; Research Strategy</a></li>
+      <li><a href="#ch13">Documentation Push</a></li>
+      <li><a href="#ch14">Coda</a></li>
+    </ol>
+  </div>
+
+  <h2 id="ch1">Chapter I — Foundations &amp; the Initial Simulation</h2>
+  <div class="marginalia">Establishing the synthetic grid, the realistic restoration model, and the interactive controls before any optimisation began.</div>
+
+  <p class="narrative">
+    The project started as a single HTML page that asked a deceptively simple question:
+    <em>how long does it take Hartford County to get the lights back on after a storm, and what
+    changes when we add more crews?</em> The initial milestone wasn't speed — it was getting the
+    physics right. Synthetic distribution grid built from population-weighted demand points,
+    k-means substations, branched feeders and laterals, a mulberry32 PRNG so two people on
+    different machines see exactly the same storm given the same seed.
+  </p>
+  <p class="narrative">
+    The scheduler was a greedy rolling-horizon dispatch with seven realism factors stacked on
+    top: damage-assessment delay, a 14-hour workday clamp, log-normal repair durations centred
+    at 2 h, a discovery ramp so outages get reported gradually instead of all at once, mutual-aid
+    waves arriving at 0/24/48 h, a road-network proxy that multiplies haversine distance by 1.5,
+    and a critical-facility priority phase. The result: a 500-outage storm restored in a
+    plausible 12–18 hours rather than the 4-hour fantasy a simpler model would predict.
+  </p>
 
   <table class="entries">
     <thead><tr><th class="when">When</th><th class="kind">Kind</th><th>Entry</th></tr></thead>
     <tbody>
       <tr>
-        <td class="when">Initial</td>
+        <td class="when">Day 0</td>
         <td class="kind"><span class="tag build">Build</span></td>
-        <td class="detail">Synthetic Hartford County grid: 29 town boundaries, population-weighted demand points, k-means substation placement, randomised feeders + laterals, mulberry32 PRNG for reproducibility. Browser-first interactive on Leaflet.</td>
+        <td class="detail">Synthetic grid: 29 Hartford County town boundaries, population-weighted demand points, k-means substation placement (100 substations by default), feeders branching from each substation, laterals branching from feeders. Reproducible via mulberry32 seed.</td>
       </tr>
       <tr>
-        <td class="when">Initial</td>
+        <td class="when">Day 0</td>
         <td class="kind"><span class="tag build">Build</span></td>
-        <td class="detail">Greedy rolling-horizon scheduler with realistic mode: 12 h assessment delay, 14 h workdays, log-normal repair durations, mutual-aid waves at 0/24/48 h, 25 mph travel × 1.5 road-multiplier, log-normal repair times capped at 12 h.</td>
+        <td class="detail">Storm model: pick K failure points along feeders + laterals, weighted by exposure. Customers without power = sum of demand downstream of each failure. Reset, reseed, re-storm — all reproducible.</td>
+      </tr>
+      <tr>
+        <td class="when">Day 0</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail">Greedy rolling-horizon scheduler with seven realism factors. Output: per-crew job sequence, per-crew finish time, system-wide restoration time, customer-minutes curve.</td>
+      </tr>
+      <tr>
+        <td class="when">Day 0</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail">Leaflet map UI: substations as stars, feeders as colored lines per substation, laterals as gray, outage X marks. Plan-restoration output adds crew depots (squares) and numbered repair circles (1, 2, 3 …) colored by crew.</td>
+      </tr>
+      <tr>
+        <td class="when">Day 0</td>
+        <td class="kind"><span class="tag perf">Perf baseline</span></td>
+        <td class="detail">First "page isn't responding" event around 1500-outage scenarios — DOM markers dominate. Mitigations introduced before any of the five alternatives: async-yield chunking inside the scheduler loop, spatial-grid-hash nearest-neighbor on the JS side, ring caps so the search radius doesn't explode, and a custom Leaflet <code>PointCloudLayer</code> canvas renderer for thousands of dots in a single pass.</td>
       </tr>
     </tbody>
   </table>
 
   <hr class="section">
-  <h2>Chapter II — The Five Alternatives</h2>
-  <div class="marginalia">Catalogued five orthogonal directions to make the simulation faster &amp; more capable. Tackled in order, with honest benchmarking.</div>
+  <h2 id="ch2">Chapter II — The Five-Alternative Roadmap</h2>
+  <div class="marginalia">Five orthogonal directions to make the simulation faster &amp; more capable. We laid them out, ordered them by tractability, and committed to honest benchmarking after each.</div>
+
+  <p class="narrative">
+    By the time the basic simulation worked, the obvious next question was: how do we make it
+    fast enough to be genuinely interactive at much larger scales, and what other research
+    capabilities should we unlock? Rather than pick one optimisation and hope, the plan was to
+    enumerate the orthogonal directions and tackle them in order:
+  </p>
+  <ol style="font-size:14.5px;line-height:1.6">
+    <li><b>Closed-form equation</b> — instant slider feedback without re-running the scheduler.</li>
+    <li><b>Pre-computed scenario library</b> — let viewers explore canned scenarios with no compute at all.</li>
+    <li><b>WebAssembly</b> — port the scheduler to Rust, compile to WASM, hope to beat V8.</li>
+    <li><b>Server-side computation</b> — Python backend for things the browser fundamentally can't do (Monte Carlo, future MILP).</li>
+    <li><b>WebGPU</b> — parallel argmin on the GPU for huge-N stress tests.</li>
+  </ol>
+
+  <p class="narrative">
+    The discipline that emerged early: <em>always benchmark before declaring victory.</em>
+    Two of the five (WASM and KD-tree later on) ended up <em>slower</em> than the baseline in
+    realistic conditions, and the only way to know was to put a number on it. This rhythm
+    shaped the whole project.
+  </p>
+
+  <hr class="section">
+  <h2 id="ch3">Chapter III — Alternative #1: The Closed-Form Equation</h2>
+  <div class="marginalia">The cheapest direction first. Got the slider feeling instant.</div>
+
+  <p class="narrative">
+    The motivation came from watching the slider sit motionless while users tried to find a
+    sensible number of crews. Re-running the full scheduler on every slider change is wasteful
+    when all you really need is a rough estimate. The closed-form fits an analytical
+    approximation: total restoration ≈ assessment_delay + (N × mean_repair × road_factor) /
+    (M × parallel_efficiency), with workday clamping. It's wrong by ~15% but right in
+    direction.
+  </p>
 
   <table class="entries">
     <thead><tr><th class="when">When</th><th class="kind">Kind</th><th>Entry</th></tr></thead>
     <tbody>
       <tr>
-        <td class="when">Alt #1</td>
+        <td class="when">#1 build</td>
         <td class="kind"><span class="tag build">Build</span></td>
-        <td class="detail"><b>Closed-form equation</b> for instant restoration-time estimate. Powers the "≈ 4 d 3 h" live readout that updates as the slider moves. Useful for slider-sweeping; the exact answer still comes from <code>Plan restoration</code>.</td>
+        <td class="detail">Added the live "≈ 4 d 3 h" readout above the Plan-restoration button. Updates in microseconds as the slider moves.</td>
       </tr>
       <tr>
-        <td class="when">Alt #2</td>
-        <td class="kind"><span class="tag build">Build</span></td>
-        <td class="detail"><b>Pre-computed scenario library</b>. 12 named scenarios saved as JSON in <code>scenarios/</code>, loadable from a dropdown. ~12.5 MB total. Lets viewers explore without waiting for a fresh simulation.</td>
-      </tr>
-      <tr>
-        <td class="when">Alt #3</td>
-        <td class="kind"><span class="tag build">Build</span></td>
-        <td class="detail"><b>WebAssembly scheduler</b> in Rust (<code>#![no_std]</code>, custom inline Taylor-series math, bump allocator, parallel-array heap, spatial grid hash). Compiled artifact at <code>wasm/scheduler.wasm</code>.</td>
-      </tr>
-      <tr>
-        <td class="when">Alt #3</td>
-        <td class="kind"><span class="tag fix">Honest result</span></td>
-        <td class="detail">Benchmark: WASM consistently <b>2–3× slower than V8 JS</b> at 500–2 000 outages. Root cause: hand-rolled Taylor-series math is no match for V8's native intrinsics. <span class="quote">Conclusion — the JS scheduler already wins. WASM stays as a reference build, not the production path.</span></td>
-      </tr>
-      <tr>
-        <td class="when">Alt #4</td>
+        <td class="when">#1 review</td>
         <td class="kind"><span class="tag question">Question</span></td>
-        <td class="detail">"move onto #4"</td>
+        <td class="detail">
+          <div class="quote"><span class="who">User</span> Also in regards to the estimate restoration time, can you make it dependent on the storm outages or is it just independent of everything and won't change unless you change the slider for number of repair crews?</div>
+          The user noticed something subtle: the estimate seemed to ignore the actual storm. The original implementation took N from the slider's nominal value, not from <code>storm.outages.length</code>.
+        </td>
       </tr>
       <tr>
-        <td class="when">Alt #4</td>
+        <td class="when">#1 verify</td>
+        <td class="kind"><span class="tag question">Question</span></td>
+        <td class="detail">
+          <div class="quote"><span class="who">User</span> The thing is, there is already an estimated time even when there is no storm simulated so I am almost sure that it is not dependent.</div>
+          Caught the bug from the symptom alone. Confirmed: estimate read from slider, not from realised storm. Fix: read live N from <code>storm.outages.length</code> when a storm exists; otherwise fall back to the slider's pre-storm intent.
+        </td>
+      </tr>
+      <tr>
+        <td class="when">#1 fix</td>
+        <td class="kind"><span class="tag fix">Fix</span></td>
+        <td class="detail">Closed-form now reads N from the actual simulated storm. Estimate changes the moment you re-simulate.</td>
+      </tr>
+    </tbody>
+  </table>
+  <h3>Takeaways</h3>
+  <ul class="takeaways">
+    <li>The cheapest optimisation often pays for itself fastest. The closed-form is ~15 lines and changed the feel of the UI dramatically.</li>
+    <li>Approximate UX feedback &gt; exact lag.</li>
+    <li>Users notice "this number didn't move when it should have" before they notice "this number is slightly wrong."</li>
+  </ul>
+
+  <hr class="section">
+  <h2 id="ch4">Chapter IV — Alternative #2: The Pre-Computed Scenario Library</h2>
+  <div class="marginalia">Twelve canned storms. No compute required to explore them.</div>
+
+  <p class="narrative">
+    For viewers who land on the page and don't want to wait, a dropdown of pre-computed
+    scenarios. We picked 12 representative storms (different intensities, different
+    distributions across the county) and wrote a Python pre-computer that runs the full
+    scheduler, serialises the result as JSON, and dumps to <code>scenarios/</code>. Each
+    file is ~1 MB; total ~12.5 MB.
+  </p>
+
+  <table class="entries">
+    <thead><tr><th class="when">When</th><th class="kind">Kind</th><th>Entry</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="when">#2 build</td>
         <td class="kind"><span class="tag build">Build</span></td>
-        <td class="detail"><b>FastAPI backend</b> (<code>07_server.py</code>) with <code>/api/schedule</code> and <code>/api/monte_carlo</code>. Wide-open CORS so GitHub Pages can call it. Dockerfile for deployment.</td>
+        <td class="detail">Wrote <code>06_precompute_scenarios.py</code> that reuses functions from <code>05_generate_artifacts.py</code> (the offline Python port of the JS scheduler) to compute 12 scenarios. Wrote <code>scenarios/index.json</code> as the manifest.</td>
+      </tr>
+      <tr>
+        <td class="when">#2 build</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail">Frontend dropdown loader: on selection, fetch the scenario JSON, populate outages, populate crews + jobs, render. Skips the scheduler entirely.</td>
+      </tr>
+      <tr>
+        <td class="when">#2 review</td>
+        <td class="kind"><span class="tag question">Question</span></td>
+        <td class="detail">
+          <div class="quote"><span class="who">User</span> I dont see the drop downs youre talking about.</div>
+          The HTML was committed, but GitHub Pages hadn't finished deploying. Resolved by explaining the 2–10 minute Pages cycle + Ctrl+Shift+R to bust the cache.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <h3>Takeaways</h3>
+  <ul class="takeaways">
+    <li>Caching results for common scenarios is sometimes the right answer — beats any algorithmic optimisation by definition.</li>
+    <li>GitHub Pages deploy latency is real. Worth surfacing in the README so future-you (or future-collaborators) don't panic.</li>
+  </ul>
+
+  <hr class="section">
+  <h2 id="ch5">Chapter V — Alternative #3: The WebAssembly Adventure That Wasn't</h2>
+  <div class="marginalia">A two-day Rust detour that taught us V8's JIT is excellent.</div>
+
+  <p class="narrative">
+    On paper, WebAssembly looked obvious: write the scheduler in Rust, compile to wasm, get
+    native-ish speed in the browser, ship a single binary that runs anywhere. The reality was
+    a series of compromises forced by the Windows toolchain, followed by a hard benchmark
+    truth.
+  </p>
+
+  <h3>The toolchain gauntlet</h3>
+  <p class="narrative">
+    First attempt: <code>wasm-pack</code> with full dependencies — failed because MSVC linker
+    was missing. Adding <code>libm</code> — failed for the same reason. Adding
+    <code>wasm-bindgen</code> — failed. The fix was to go ascetic: <code>#![no_std]</code>,
+    crate-type <code>cdylib</code>, <i>zero</i> external dependencies, plain
+    <code>rustc</code> with the <code>wasm32-unknown-unknown</code> target — no host C linker
+    required at all.
+  </p>
+  <p class="narrative">
+    The cost of going no_std: we couldn't use <code>libm</code>'s math functions. So we wrote
+    them inline. Sin, cos, asin, sqrt, log, exp — all hand-rolled Taylor series. Bump
+    allocator with a 256 MB workspace. Spatial grid hash via counting sort. Min-heap with
+    parallel arrays (f64 keys, u32 values). It worked. The compiled <code>scheduler.wasm</code>
+    is 17 KB.
+  </p>
+
+  <h3>The benchmark</h3>
+  <p class="narrative">
+    Side-by-side benchmark button in the UI: same scenario, run JS scheduler, run WASM
+    scheduler, compare. The user screenshotted the result. WASM was <em>consistently 2-3×
+    slower</em> than the JS at 500-2000 outages.
+  </p>
+
+  <table class="entries">
+    <thead><tr><th class="when">When</th><th class="kind">Kind</th><th>Entry</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="when">#3 build</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail">Rust scheduler in <code>wasm_scheduler/src/lib.rs</code> with <code>#![no_std]</code>, inline math, bump allocator. Exports <code>wasm_alloc</code>, <code>wasm_reset</code>, <code>run_scheduler</code>. Memory layout documented.</td>
+      </tr>
+      <tr>
+        <td class="when">#3 build</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail">JS wrapper <code>loadWasmScheduler()</code> + <code>runWasmScheduler()</code> + <code>runJsSchedulerReference()</code> + <code>runBenchmark()</code>. Benchmark button in the UI.</td>
+      </tr>
+      <tr>
+        <td class="when">#3 review</td>
+        <td class="kind"><span class="tag question">Question</span></td>
+        <td class="detail">
+          <div class="quote"><span class="who">User</span> [benchmark screenshots showing WASM is slower] is this good enough or do you want more</div>
+        </td>
+      </tr>
+      <tr>
+        <td class="when">#3 verdict</td>
+        <td class="kind"><span class="tag decision">Decision</span></td>
+        <td class="detail">WASM is the wrong tool here. Root cause: hand-rolled Taylor-series math is no match for V8's native <code>Math.sin</code>/<code>cos</code>/<code>log</code>, which compile to single SIMD instructions on modern CPUs. With <code>libm</code> we might have closed the gap. Without it, we lose. Decided to <em>not</em> wire WASM into production; kept the artefact as a reference build.</td>
+      </tr>
+      <tr>
+        <td class="when">#3 pivot</td>
+        <td class="kind"><span class="tag pivot">Pivot</span></td>
+        <td class="detail">
+          <div class="quote"><span class="who">User</span> move onto #4</div>
+          Whoever invented the saying "kill your darlings" was a software engineer in disguise. WASM stayed in the repo as documentation that the engineering exercise happened; the production simulation continued to use V8.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <h3>Takeaways</h3>
+  <ul class="takeaways">
+    <li>V8's JIT is extraordinarily good at numeric loops. Beating it requires either real low-level optimisation (SIMD intrinsics, libm) or a fundamentally different algorithm — not just a different language.</li>
+    <li>Benchmark <em>before</em> integrating. The whole WASM effort cost two days but the decision not to ship it was made in five minutes once we had numbers.</li>
+    <li>A failed experiment is not wasted work. The grid-hash design that made it into the no_std build later informed the Python scheduler's design.</li>
+  </ul>
+
+  <hr class="section">
+  <h2 id="ch6">Chapter VI — Alternative #4: Server-Side Compute Arrives</h2>
+  <div class="marginalia">The pitch shifted from "make it faster" to "unlock things the browser fundamentally can't do."</div>
+
+  <p class="narrative">
+    The framing for #4 was different from the start. The JS scheduler was already plenty fast
+    for ordinary scenarios. The reason for a server backend was capability, not speed:
+    Monte Carlo ensembles (running the scheduler 30+ times to get a distribution), eventual
+    MILP solvers (commercial OR libraries don't ship as WASM), and eventual real-data
+    calibration that needs a Python ecosystem.
+  </p>
+
+  <table class="entries">
+    <thead><tr><th class="when">When</th><th class="kind">Kind</th><th>Entry</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="when">#4 build</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail">FastAPI app at <code>07_server.py</code>. Endpoints: <code>GET /health</code>, <code>POST /api/schedule</code>, <code>POST /api/monte_carlo</code>. Pydantic models for request/response. Wide-open CORS so GitHub Pages can hit it from any origin.</td>
+      </tr>
+      <tr>
+        <td class="when">#4 build</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail">Dockerfile for deployment. Initially pinned just <code>fastapi</code>, <code>uvicorn</code>, <code>pydantic</code> — we'd grow the dependency list as the schedulers matured.</td>
+      </tr>
+      <tr>
+        <td class="when">#4 build</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail">Frontend "Server backend" panel added: server URL input, "Use server for Plan restoration" toggle, Monte Carlo button. Default URL: <code>http://localhost:8000</code>.</td>
+      </tr>
+      <tr>
+        <td class="when">First test</td>
+        <td class="kind"><span class="tag question">Question</span></td>
+        <td class="detail">
+          <div class="quote"><span class="who">User</span> this is the message I am getting. its asking if the server is running so that means its not working. Do you think its possible to fix?</div>
+          The error: <code>Error: Failed to fetch</code> with the toggle on. Root cause: the FastAPI server is a separate process — checking a toggle in the browser doesn't magically start a Python server. Resolved by installing the dependencies (<code>pip install fastapi "uvicorn[standard]" pydantic</code>) and starting it locally (<code>python -m uvicorn 07_server:app --port 8000</code>).
+        </td>
+      </tr>
+      <tr>
+        <td class="when">First success</td>
+        <td class="kind"><span class="tag fix">Fix</span></td>
+        <td class="detail">Server up, <code>/health</code> returning <code>{"status":"ok"}</code>. Plan restoration through the server: returns a valid response. The actual workload that broke things came next.</td>
       </tr>
     </tbody>
   </table>
 
   <hr class="section">
-  <h2>Chapter III — The Scaling Saga</h2>
-  <div class="marginalia">Where a 25 000-outage × 5 000-crew "max settings" stress test ran for eight minutes — and then half a second.</div>
+  <h2 id="ch7">Chapter VII — The "Max Settings" Crisis</h2>
+  <div class="marginalia">A 24 950-outage × 5 000-crew stress test that broke everything. Setting the stage for every later performance fix.</div>
 
+  <p class="narrative">
+    With the server working at small scales, the user maxed out every slider in the UI:
+    24 950 outages, 5 000 repair crews, realistic mode, Monte Carlo 30 seeds. And waited.
+    And waited.
+  </p>
+  <div class="quote"><span class="who">User</span> so I did all the max settings, but its taking forever to load</div>
+  <p class="narrative">
+    What was happening: the server's scheduler was the pure-Python implementation in
+    <code>05_generate_artifacts.py</code>. Pure Python doing 24 950 dispatches, each
+    scanning 24 950 outages to find the nearest undone one, is ~625 million operations per
+    Monte Carlo run × 30 runs = ~18 billion Python-level operations. At the rate of millions
+    of operations per second for interpreted Python, that's hours.
+  </p>
+
+  <h3>The diagnostic</h3>
   <table class="entries">
     <thead><tr><th class="when">When</th><th class="kind">Kind</th><th>Entry</th></tr></thead>
     <tbody>
       <tr>
-        <td class="when">Server v0</td>
+        <td class="when">Diagnose</td>
         <td class="kind"><span class="tag question">Question</span></td>
-        <td class="detail">"its taking forever to load … 25k outages × 5 000 crews"</td>
+        <td class="detail">
+          The inner loop "find the nearest undone outage to this crew" is O(N) per dispatch, run N times, so O(N²) total. With N=25 000 that's 625 million Python comparisons per scheduler call. Pure Python: minutes. Even basic NumPy: still seconds. The bigger problem: 30 seeds × this cost = the user's eight-minute wait.
+        </td>
       </tr>
+      <tr>
+        <td class="when">Trade-off</td>
+        <td class="kind"><span class="tag decision">Choice</span></td>
+        <td class="detail">
+          Offered two paths:
+          <b>A.</b> Lower the Monte Carlo workload (drop default seeds to 10, encourage smaller storms — easier to ship, but feels like a retreat).
+          <b>B.</b> Actually speed up the Python scheduler with NumPy (port the inner loop to vectorised operations, ~10–50× speedup expected, ~1 hour of work).
+          <div class="quote"><span class="who">User</span> nah do B now</div>
+          Committed to the harder, longer path.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>The NumPy port</h3>
+  <p class="narrative">
+    Built <code>scheduler_fast.py</code>: replaces the Python inner loop with vectorised
+    NumPy. <code>np.argmin</code> over a masked distance array — one CPython call into
+    compiled NumPy code instead of 25 000 individual Python comparisons. The discovery
+    fast-forward (when a crew has no available work and needs to skip to the next discovery
+    time) used <code>np.searchsorted</code> on a pre-sorted discovery list — O(log N)
+    instead of O(N).
+  </p>
+
+  <h3>The KD-tree experiment that didn't quite work</h3>
+  <p class="narrative">
+    User asked for #1 first from the next-step menu:
+  </p>
+  <div class="quote"><span class="who">User</span> yes please, do #1 first</div>
+  <p class="narrative">
+    Added <code>scipy.spatial.cKDTree</code> for the nearest-neighbour search.
+    Expected ~10–20× speedup on huge N. Benchmark result: <em>slower than the NumPy
+    vectorised scan</em> in realistic mode. Reason: when ~70% of outages are still
+    "undiscovered" early in the storm, the KD-tree's K-nearest results get filtered
+    down to almost nothing, K balloons, and we end up paying KD-tree query cost with
+    no benefit. Capped K at 256 with a fallback to vectorised scan — useful in
+    non-realistic dense regimes only.
+  </p>
+
+  <table class="entries">
+    <thead><tr><th class="when">When</th><th class="kind">Kind</th><th>Entry</th></tr></thead>
+    <tbody>
       <tr>
         <td class="when">Step 1</td>
         <td class="kind"><span class="tag perf">+5×</span></td>
-        <td class="detail"><b>NumPy vectorisation</b>: inner loop uses <code>np.argmin</code> over a masked distance array; <code>np.searchsorted</code> on a sorted discovery list replaces the O(N) "next-discovery" scan. 2 k × 100 went from 0.34 s → ~0.05 s.</td>
+        <td class="detail">NumPy vectorisation in <code>scheduler_fast.py</code>. 2 k × 100: 0.34 s → ~0.07 s. Monte Carlo 30 seeds: still seconds, but feasible.</td>
+      </tr>
+      <tr>
+        <td class="when">Step 1.5</td>
+        <td class="kind"><span class="tag fix">Fix</span></td>
+        <td class="detail">Discovered the Monte Carlo always reported <code>stddev=0.00</code>. Cause: the RNG seeds inside the scheduler were hardcoded constants, so all 30 "different" runs produced identical results. Fixed: per-seed RNG streams (<code>seed*1117+23</code> for repair durations, <code>seed*991+7</code> for discoveries). Real variation visible — stddev 2.8 h on a representative scenario.</td>
       </tr>
       <tr>
         <td class="when">Step 2</td>
-        <td class="kind"><span class="tag decision">Choice</span></td>
-        <td class="detail">User: "do B" (Option B = NumPy port). KD-tree was tried (#1) and proved <i>slower</i> in realistic mode (discovered-fraction is low early on, K grows). Capped K to 256, useful only at non-realistic dense regimes.</td>
+        <td class="kind"><span class="tag fix">Honest result</span></td>
+        <td class="detail">KD-tree experiment: ~2.5× win on small-but-dense scenarios, <em>regression</em> on realistic-mode large scenarios because of the discovered-fraction problem. K_CAP=256 fallback merges the best of both. Not the 10–20× I promised. Honest acknowledgement: "KD-tree (#1) helped, but less than I promised."</td>
+      </tr>
+      <tr>
+        <td class="when">Step 3</td>
+        <td class="kind"><span class="tag question">Question</span></td>
+        <td class="detail">
+          <div class="quote"><span class="who">User</span> Yes do #2 and #3</div>
+          (Numba JIT and the process pool for Monte Carlo.)
+        </td>
       </tr>
       <tr>
         <td class="when">Step 3</td>
         <td class="kind"><span class="tag perf">+14×</span></td>
-        <td class="detail"><b>Numba JIT</b> of the entire dispatch loop: inline binary heap, inline haversine, inline Mulberry32, <code>@njit(cache=True, fastmath=True)</code>. 2 k × 100 → <b>24 ms</b>. Process pool tried for Monte Carlo but Windows spawn overhead beat it; reserved for huge jobs only.</td>
+        <td class="detail"><code>scheduler_numba.py</code>: the entire dispatch loop JIT-compiled to native code with <code>@njit(cache=True, fastmath=True)</code>. Inline binary heap with parallel arrays (no <code>heapq</code> in nopython mode), inline haversine, inline Mulberry32, inline log-normal sample. First call compiles in ~8 s (cached to disk afterward). Subsequent calls: tens of milliseconds.</td>
       </tr>
       <tr>
-        <td class="when">Step 4</td>
-        <td class="kind"><span class="tag pivot">Pivot</span></td>
-        <td class="detail">User: "make the model survive even unrealistic scenarios … going to scale to Connecticut." Skipped MILP/calibration; focused on raw scalability.</td>
+        <td class="when">Step 3</td>
+        <td class="kind"><span class="tag fix">Surprise</span></td>
+        <td class="detail">Process pool for Monte Carlo was <em>slower</em>, not faster: 30 seeds × the Windows process-spawn overhead (~1 s per worker) plus Numba cache-load on each cold subprocess = worse than serial. Heuristic threshold: only use the pool when per-run cost is expected to dominate spawn overhead (<code>N × crews &gt; 10M</code>). For everything below that, serial Numba wins.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Numbers at the end of Chapter VII</h3>
+  <ul class="takeaways">
+    <li>2 k outages × 100 crews: 0.34 s → <b>0.024 s</b> (14×)</li>
+    <li>Monte Carlo 30 seeds (2 k × 100): minutes → <b>0.21 s</b></li>
+    <li>25 k × 500 (realistic): minutes → <b>3.67 s</b></li>
+    <li>25 k × 5 000 (worst case): still ~118 s — not solved yet</li>
+  </ul>
+
+  <hr class="section">
+  <h2 id="ch8">Chapter VIII — The Connecticut-Scale Refactor</h2>
+  <div class="marginalia">Where one user reframe shifted the goal from "Hartford works" to "the whole state works."</div>
+
+  <p class="narrative">
+    With Numba in place, the typical-scale scenarios were essentially solved. The remaining
+    ugly case: the user's maximum-slider stress test (25 000 outages × 5 000 crews) still
+    took two minutes. I floated MILP and Eversource calibration as the natural next research
+    directions. The user pushed back with a sharper goal:
+  </p>
+  <div class="quote"><span class="who">User</span> the real storm data is a lot later. We need to make this more scalable and more precise for Hartford county first. We can calibrate it against it later and I will let you know when. I want this model first to be able to survive against even these unrealistic scenarios for Hartford County as they are going to need to handle even heavier scenarios when scaled up to Connecticut.</div>
+  <p class="narrative">
+    That re-framing changed what "good enough" meant. Connecticut is roughly 10× Hartford
+    County by population. A statewide simulation would need to handle ~100 000-outage
+    scenarios — well above any single Eversource event but the right ceiling to design to.
+    The two minutes we were spending was unacceptable.
+  </p>
+
+  <h3>The spatial grid hash</h3>
+  <p class="narrative">
+    The algorithm of choice: divide the bounding box into a G×G grid (G = √(N/5) — five
+    outages per cell on average). To find the nearest undone outage for a crew, look up
+    the crew's cell, walk it, walk concentric rings of cells outward until something
+    valid is found. Termination: when the next ring's minimum-possible distance exceeds
+    the current best, stop.
+  </p>
+
+  <h3>The bug that doubled the runtime</h3>
+  <p class="narrative">
+    First implementation: <em>slower</em> than the flat scan. Diagnosis: the
+    "skip non-boundary cells" optimisation was broken when the search box clamped to
+    the edge of the grid. Cells in the interior of the original ring kept getting
+    revisited every iteration. Rewrote the ring iteration to enumerate the actual
+    Chebyshev-distance == ring cells directly: top + bottom strips, then left + right
+    columns excluding corners. No duplicates.
+  </p>
+
+  <h3>The real hero — n_available</h3>
+  <p class="narrative">
+    Even with the ring iteration fixed, 25 k × 5 000 still timed out. The culprit was
+    realistic mode's discovery model: at t=12 h only a tiny fraction of outages have
+    been "discovered" by the utility yet, but all 5 000 crews are awake and trying to
+    dispatch. Each one walks the grid outward and finds <em>nothing</em>, all the way
+    to the edge of the bounding box, before fast-forwarding.
+  </p>
+  <p class="narrative">
+    Fix: an incrementally maintained counter <code>n_available</code> — the number of
+    outages currently discovered-and-undone. When it's zero, fast-forward immediately
+    via <code>np.searchsorted</code> on the sorted discovery list. No grid scan
+    required. The counter is incremented as the time pointer advances past discovery
+    thresholds and decremented when an outage is marked done.
+  </p>
+
+  <table class="entries">
+    <thead><tr><th class="when">When</th><th class="kind">Kind</th><th>Entry</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="when">Grid v1</td>
+        <td class="kind"><span class="tag fix">Bug</span></td>
+        <td class="detail">First grid implementation was 2–4× <em>slower</em> than the flat scan because of the boundary-skip optimisation breaking at grid edges. Rewrote with explicit ring-boundary enumeration.</td>
       </tr>
       <tr>
-        <td class="when">Step 5</td>
+        <td class="when">Grid v2</td>
+        <td class="kind"><span class="tag perf">Partial</span></td>
+        <td class="detail">Grid hash alone helped 10k × 500 (8 s → 1 s) but barely touched 25 k × 5 000 (still 50+ s) because of discovery thrashing.</td>
+      </tr>
+      <tr>
+        <td class="when">n_avail</td>
         <td class="kind"><span class="tag perf">+246×</span></td>
-        <td class="detail"><b>Spatial grid hash</b> (G = √(N/5) cells, Chebyshev ring expansion) <i>plus</i> an incrementally-maintained <code>n_available</code> counter. The counter is the real hero: when no work is discovered yet, crews fast-forward to the next discovery via binary search instead of doing a full grid scan over an empty layer.</td>
+        <td class="detail">Added the <code>n_available</code> counter. <em>25 k × 5 000: 118 s → 0.48 s.</em> The single biggest single-commit win of the project.</td>
       </tr>
       <tr>
-        <td class="when">Step 5</td>
-        <td class="kind"><span class="tag perf">Benchmark</span></td>
+        <td class="when">CT scale</td>
+        <td class="kind"><span class="tag perf">Achieved</span></td>
+        <td class="detail">100 k outages × 2 000 crews — well above any realistic Eversource event — finishes in <b>660 ms</b>. Statewide scenarios are now feasible.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Final benchmark snapshot</h3>
+  <table class="entries">
+    <thead><tr><th>Scenario</th><th>Before</th><th>After</th><th>Speedup</th></tr></thead>
+    <tbody>
+      <tr><td>2 k × 100</td><td>0.34 s (NumPy)</td><td><b>&lt; 10 ms</b></td><td>~34×</td></tr>
+      <tr><td>10 k × 500</td><td>8 s</td><td><b>0.51 s</b></td><td>16×</td></tr>
+      <tr><td>25 k × 500 (realistic)</td><td>~minutes</td><td><b>70 ms</b></td><td>huge</td></tr>
+      <tr><td>25 k × 5 000 (worst case)</td><td>118 s</td><td><b>480 ms</b></td><td>246×</td></tr>
+      <tr><td>50 k × 1 000</td><td>(untested)</td><td><b>220 ms</b></td><td>—</td></tr>
+      <tr><td>100 k × 2 000 (CT projection)</td><td>infeasible</td><td><b>660 ms</b></td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Takeaways</h3>
+  <ul class="takeaways">
+    <li>Algorithmic improvements (O(N²) → O(N log N) via grid hash) compound with constant-factor improvements (Numba JIT). Either alone wouldn't have closed the gap.</li>
+    <li>The discovery-thrashing fix wasn't about making the search faster — it was about <em>not searching at all</em> when there's nothing to find. Often the best optimisation is recognising work that doesn't need doing.</li>
+    <li>The 100 k-outage capability isn't useful because we expect 100 k-outage storms. It's useful because we can honestly claim the model is <em>prepared</em> for statewide deployment — a real engineering result for a paper's introduction.</li>
+  </ul>
+
+  <hr class="section">
+  <h2 id="ch9">Chapter IX — The Render Deployment Saga</h2>
+  <div class="marginalia">Four straight failed deploys. The root cause was Python exception-hierarchy semantics.</div>
+
+  <p class="narrative">
+    With a working backend, the next step was making it publicly callable so visitors to the
+    GitHub Pages site could use the server without needing to install anything. Render's free
+    tier seemed ideal: $0/month, auto-deploy from GitHub via a <code>render.yaml</code>
+    Blueprint, container sleeps when idle.
+  </p>
+  <div class="quote"><span class="who">User</span> can you do that for me</div>
+  <p class="narrative">
+    Honest answer: <em>no</em>. Deploying to Render needs the user's account credentials.
+    But I could prep everything so the user's part was just clicking through Render's
+    Blueprint UI. Wrote <code>render.yaml</code>, ensured the Dockerfile was self-contained,
+    pushed.
+  </p>
+
+  <h3>Failure #1 — matplotlib missing</h3>
+  <p class="narrative">
+    First deploy: <code>matplotlib + numpy required. Install with: pip install matplotlib
+    numpy</code>. Cause: <code>07_server.py</code> imported <code>05_generate_artifacts.py</code>
+    via <code>importlib</code> for the pure-Python fallback scheduler — and
+    <code>05_generate_artifacts</code> imports matplotlib at the top for its plotting
+    helpers. Server never plots; the import just has to succeed. Added matplotlib to the
+    Docker image.
+  </p>
+
+  <h3>Failure #2 — file not found</h3>
+  <p class="narrative">
+    Next deploy: <code>FileNotFoundError: '/app/data/hartford_boundary.json'</code>.
+    Same file (<code>05_generate_artifacts.py</code>) tries to load Hartford boundary GeoJSON
+    at module level. We didn't ship the data directory into the Docker image because the
+    server doesn't need it. Wrapped the <code>importlib</code> call in <code>try / except
+    Exception</code> so any import failure would just set <code>art = None</code> and
+    proceed. Server should keep working since Numba is the primary backend.
+  </p>
+
+  <h3>Failure #3 — the deep gotcha</h3>
+  <p class="narrative">
+    Same FileNotFoundError. The "fix" hadn't actually caught the error. Hours of
+    head-scratching. Then the realisation: <code>05_generate_artifacts.py</code> doesn't just
+    raise — it raises <code>SystemExit</code> when matplotlib is missing. <code>SystemExit</code>
+    inherits from <code>BaseException</code>, <em>not</em> from <code>Exception</code>. This
+    is deliberate Python design: <code>sys.exit()</code> is supposed to terminate the program
+    even when called inside a <code>try / except Exception</code> block, so the standard
+    library deliberately raises a subclass that bypasses that guard. The exception is
+    catchable, but you have to write <code>except BaseException</code> or use a bare
+    <code>except:</code> — both of which are usually a code smell.
+  </p>
+  <p class="narrative">
+    The correct fix was simpler: stop importing <code>05_generate_artifacts.py</code> at all.
+    The Numba and NumPy schedulers cover the same functionality, faster. The pure-Python
+    fallback was already dead code in production.
+  </p>
+
+  <div class="quote"><span class="who">User</span> it keeps failing no matter how many times I restart</div>
+
+  <table class="entries">
+    <thead><tr><th class="when">When</th><th class="kind">Kind</th><th>Entry</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="when">Deploy 1</td>
+        <td class="kind"><span class="tag fix">Failure</span></td>
+        <td class="detail"><code>matplotlib + numpy required</code> — added matplotlib to Dockerfile.</td>
+      </tr>
+      <tr>
+        <td class="when">Deploy 2</td>
+        <td class="kind"><span class="tag fix">Failure</span></td>
+        <td class="detail"><code>FileNotFoundError: data/hartford_boundary.json</code> — wrapped import in <code>try/except Exception</code>.</td>
+      </tr>
+      <tr>
+        <td class="when">Deploy 3</td>
+        <td class="kind"><span class="tag fix">Failure (same)</span></td>
+        <td class="detail">Same error. <code>SystemExit</code> bypasses <code>except Exception</code>. Removed the import entirely.</td>
+      </tr>
+      <tr>
+        <td class="when">Deploy 4</td>
+        <td class="kind"><span class="tag fix">Success</span></td>
+        <td class="detail">Live at <code>hartford-grid-server.onrender.com</code>. <code>/health</code> returns <code>{"status":"ok"}</code>.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Takeaways</h3>
+  <ul class="takeaways">
+    <li>Python's exception hierarchy is intentional: <code>BaseException</code> &gt; <code>Exception</code>. <code>SystemExit</code>, <code>KeyboardInterrupt</code>, and <code>GeneratorExit</code> all live <em>above</em> Exception so they can't be silenced accidentally.</li>
+    <li>The cleanest fix to an import-time problem is often "stop doing the import." Optional dependencies should be optional in code, not just in a try/except.</li>
+    <li>Render's free tier deploys are fast enough to iterate on — each deploy was 5-8 minutes. Useful for this kind of debugging.</li>
+  </ul>
+
+  <hr class="section">
+  <h2 id="ch10">Chapter X — Polish: Auto-Detect, Progress, /version</h2>
+  <div class="marginalia">"I am still a little unsure with how to check if the server is actually up to date or not."</div>
+
+  <p class="narrative">
+    After the deploy succeeded, the user raised three related concerns: (a) how do I verify
+    the server is up to date? (b) can the server be mandatory so I don't have to think about
+    the toggle? (c) can the server "live on GitHub" so it auto-launches when the page
+    loads?
+  </p>
+  <p class="narrative">
+    Answer to (c) had to be honest: GitHub Pages is static hosting — it can't run a Python
+    server. The Render service is separate infrastructure. But the <em>spirit</em> of the
+    request — "the user shouldn't have to think about the server" — was achievable through
+    three changes: a verification endpoint, a warm-up ping on page load, and an
+    auto-detect path that silently falls back to in-browser when the server is offline.
+  </p>
+
+  <table class="entries">
+    <thead><tr><th class="when">When</th><th class="kind">Kind</th><th>Entry</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="when">/version</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail">Added <code>GET /version</code> returning <code>{"commit": "...", "backend": "numba"}</code>. Reads the commit from Render's <code>RENDER_GIT_COMMIT</code> env var. Lets the frontend display "connected · commit fd87b7a · backend numba" so the user can verify the deployed server matches GitHub HEAD.</td>
+      </tr>
+      <tr>
+        <td class="when">Auto-warm</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail">On page load, the JS fires a <code>no-cors</code> GET to <code>/health</code> to wake the sleeping Render container. Then probes <code>/version</code> at 5 s, 30 s, 60 s, and every 60 s thereafter to keep the dot's state current.</td>
+      </tr>
+      <tr>
+        <td class="when">Auto-detect</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail">Health dot in the panel: gray (probing) → amber (waking) → green (ok) → red (offline). When the user clicks Plan restoration: if dot is green, request goes to the server. If red, silently runs in-browser with a status note. The toggle defaults to ON.</td>
+      </tr>
+      <tr>
+        <td class="when">Progress</td>
+        <td class="kind"><span class="tag build">Build</span></td>
+        <td class="detail">Server-side restoration is an atomic call — no intermediate progress signal. So the progress bar fakes it: exponential asymptote toward 90% with a time constant tuned for Render cold starts (~30–60 s), snaps to 100% on response, fades after 400 ms. Both Plan restoration and Monte Carlo share the same start/stop helpers.</td>
+      </tr>
+      <tr>
+        <td class="when">Health dot</td>
+        <td class="kind"><span class="tag question">Question</span></td>
         <td class="detail">
-          <table style="border-collapse:collapse;font-size:13px;width:100%;margin-top:4px">
-            <tr style="background:#f3e8c8"><th style="padding:4px 8px;text-align:left;border:1px solid var(--rule)">Scenario</th><th style="padding:4px 8px;text-align:left;border:1px solid var(--rule)">Before</th><th style="padding:4px 8px;text-align:left;border:1px solid var(--rule)">After</th></tr>
-            <tr><td style="padding:4px 8px;border:1px solid var(--rule)">2 k × 100</td><td style="padding:4px 8px;border:1px solid var(--rule)">~minutes</td><td style="padding:4px 8px;border:1px solid var(--rule)"><b>&lt; 10 ms</b></td></tr>
-            <tr><td style="padding:4px 8px;border:1px solid var(--rule)">25 k × 500</td><td style="padding:4px 8px;border:1px solid var(--rule)">~minutes</td><td style="padding:4px 8px;border:1px solid var(--rule)"><b>70 ms</b></td></tr>
-            <tr><td style="padding:4px 8px;border:1px solid var(--rule)">25 k × 5 000 (worst case)</td><td style="padding:4px 8px;border:1px solid var(--rule)">118 s</td><td style="padding:4px 8px;border:1px solid var(--rule)"><b>480 ms</b></td></tr>
-            <tr><td style="padding:4px 8px;border:1px solid var(--rule)">50 k × 1 000</td><td style="padding:4px 8px;border:1px solid var(--rule)">untested / hours</td><td style="padding:4px 8px;border:1px solid var(--rule)"><b>220 ms</b></td></tr>
-            <tr><td style="padding:4px 8px;border:1px solid var(--rule)"><b>100 k × 2 000 (CT projection)</b></td><td style="padding:4px 8px;border:1px solid var(--rule)">infeasible</td><td style="padding:4px 8px;border:1px solid var(--rule)"><b>660 ms</b></td></tr>
-          </table>
+          <div class="quote"><span class="who">User</span> where am I supposed to collect the url for my server location</div>
+          The user had pasted the Render Service ID (<code>srv-d8qs8b6gvqtc73e70mog</code>) into the Server URL field instead of the actual URL (<code>https://hartford-grid-server.onrender.com</code>). Confusion fixed by labelling the field clearly in the UI and defaulting to the deployed URL.
+        </td>
+      </tr>
+      <tr>
+        <td class="when">Render UX</td>
+        <td class="kind"><span class="tag question">Question</span></td>
+        <td class="detail">
+          <div class="quote"><span class="who">User</span> in regards to number 3, do a and b, but also check the attached image cause i cant tell what im supposed to see from here</div>
+          The attached image showed Render's cold-start splash ("INCOMING HTTP REQUEST DETECTED … SERVICE WAKING UP …"). Explained: that's expected behaviour. First request after sleep boots the container, takes 30–60 s, then real responses follow. Subsequent calls within the next 15 min are fast.
         </td>
       </tr>
     </tbody>
   </table>
 
+  <h3>Takeaways</h3>
+  <ul class="takeaways">
+    <li>"Verification" as a first-class UX feature: showing the commit SHA the running server was built from removes a whole class of "is this up to date?" anxiety.</li>
+    <li>When the underlying operation has no real progress signal, a well-tuned <em>fake</em> progress bar (asymptotic exponential) is genuinely better UX than a static spinner — it tells the user "something is happening and roughly how long."</li>
+    <li>Free-tier hosting cold starts are the user-facing tax of the $0 price tag. Auto-warm-up hides ~80% of that pain.</li>
+  </ul>
+
   <hr class="section">
-  <h2>Chapter IV — Deployment &amp; Polishing</h2>
-  <div class="marginalia">From localhost to a public Render URL, with a four-failure deploy saga along the way.</div>
+  <h2 id="ch11">Chapter XI — The Vanishing Markers</h2>
+  <div class="marginalia">A regression caught by a user observation. The server was returning a number but the map went blank.</div>
+
+  <p class="narrative">
+    After all the speed improvements, the user noticed something missing in the
+    visualisation:
+  </p>
+  <div class="quote"><span class="who">User</span> I have a question, why did you stop with those images that we used to have for when the plan restoration works. It works very well now with the processing speed as it is now able to handle the maximum settings very well. However, I still want those images on the grid so can you bring them back and lets not get rid of those to improve processing speed</div>
+  <p class="narrative">
+    What had happened: the server's <code>ScheduleResponse</code> returned only crew counts
+    and total times — not the per-job sequence that the browser needs to draw the numbered
+    repair circles. When the server backend was used, the map's depot squares and numbered
+    1/2/3 circles disappeared.
+  </p>
+  <p class="narrative">
+    Honest assessment of the cost of restoring them: <em>negligible at realistic scales,
+    +200-500 ms of network at 25 k, +1-3 s at 100 k</em>. The Numba scheduler already
+    computes which crew handles which outage during dispatch — we were just throwing that
+    data away. Recording it costs one int32 write per dispatch.
+  </p>
 
   <table class="entries">
     <thead><tr><th class="when">When</th><th class="kind">Kind</th><th>Entry</th></tr></thead>
     <tbody>
       <tr>
-        <td class="when">Deploy</td>
+        <td class="when">Build</td>
         <td class="kind"><span class="tag build">Build</span></td>
-        <td class="detail">Render Blueprint (<code>render.yaml</code>) auto-provisions the backend on push. Dockerfile pins fastapi / uvicorn / numpy / scipy / numba.</td>
+        <td class="detail">Added a flat dispatch log inside both <code>_run_scheduler</code> and <code>_run_scheduler_grid</code> (Numba-JIT'd) — three parallel <code>np.empty(N)</code> arrays (<code>log_crew</code>, <code>log_outage</code>, <code>log_eta</code>) plus a counter. One write per successful dispatch. Returned as sliced views.</td>
       </tr>
       <tr>
-        <td class="when">Deploy</td>
-        <td class="kind"><span class="tag fix">Fix</span></td>
-        <td class="detail">First failure: <code>matplotlib + numpy required</code>. Cause: <code>05_generate_artifacts.py</code> imports matplotlib unconditionally, and <code>07_server.py</code> imported it via <code>importlib</code>. Added matplotlib to image.</td>
-      </tr>
-      <tr>
-        <td class="when">Deploy</td>
-        <td class="kind"><span class="tag fix">Fix</span></td>
-        <td class="detail">Second failure: <code>FileNotFoundError: data/hartford_boundary.json</code> — same file tries to load boundary data at module level. Wrapped in <code>try/except Exception</code>. Still failed.</td>
-      </tr>
-      <tr>
-        <td class="when">Deploy</td>
-        <td class="kind"><span class="tag fix">Fix (real)</span></td>
-        <td class="detail">Third failure: same error. Reason: <code>05_generate_artifacts.py</code> raises <code>SystemExit</code>, which inherits from <code>BaseException</code>, not <code>Exception</code> — Python deliberately makes <code>except Exception</code> skip it. Stopped importing <code>05_generate_artifacts</code> entirely; fast paths cover everything. <span class="quote">Classic gotcha — and a good reminder that Python's exception hierarchy is deliberate.</span></td>
-      </tr>
-      <tr>
-        <td class="when">Frontend</td>
+        <td class="when">Build</td>
         <td class="kind"><span class="tag build">Build</span></td>
-        <td class="detail">Auto-warm + auto-detect: page load fires a no-cors GET to wake the Render container; <code>/version</code> probe at 5 s / 30 s / 60 s; health dot in the panel goes gray → amber → green. Plan restoration silently falls back to in-browser when server is offline.</td>
+        <td class="detail">Python wrapper rebuilds per-crew job lists from the flat log, preserving dispatch order within each crew. Updated <code>scheduler_fast.py</code> to return the same dict shape.</td>
       </tr>
       <tr>
-        <td class="when">Frontend</td>
+        <td class="when">Build</td>
         <td class="kind"><span class="tag build">Build</span></td>
-        <td class="detail">Server progress bar — exponential asymptote toward 90 % while waiting on a single atomic server call, snaps to 100 % on response. Designed so Render cold starts (~30–60 s) still feel like motion.</td>
+        <td class="detail">Server <code>ScheduleResponse</code> grew a <code>jobs[]</code> array of <code>{lat, lon, eta}</code> per crew. Larger JSON response but only adds 200-500 ms of network at 25 k outages — imperceptible at typical scales.</td>
       </tr>
       <tr>
-        <td class="when">Frontend</td>
-        <td class="kind"><span class="tag question">Question</span></td>
-        <td class="detail">"why did you stop with those images that we used to have for when the plan restoration works"</td>
-      </tr>
-      <tr>
-        <td class="when">Frontend</td>
+        <td class="when">Build</td>
         <td class="kind"><span class="tag build">Build</span></td>
-        <td class="detail">Flat per-job dispatch log added inside Numba scheduler; server returns full <code>jobs[]</code> per crew. Browser <code>renderPlan()</code> extracted so both local and server paths produce the same colored crew depots + numbered repair circles + canvas point cloud.</td>
+        <td class="detail">Frontend <code>renderPlan()</code> extracted from <code>planRestoration()</code> so both local and server paths share the same renderer. Server path translates the API response into the local <code>crews</code> shape then calls <code>renderPlan</code>.</td>
       </tr>
     </tbody>
   </table>
 
-  <hr class="section">
-  <h2>Chapter V — Conversations &amp; Direction</h2>
-  <div class="marginalia">The questions that steered the work.</div>
+  <h3>Takeaways</h3>
+  <ul class="takeaways">
+    <li>Speed without visualisation parity is a false win. Always check that the user-facing artefact still looks the way they expect.</li>
+    <li>"What does it cost to put it back?" is the right question. Often the answer is "very little." Optimising by deletion is sometimes correct; sometimes it's regression.</li>
+    <li>Factoring the renderer out paid for itself immediately and will pay forward — future paths (MILP comparison, scenarios from disk) all need to render the same way.</li>
+  </ul>
 
+  <hr class="section">
+  <h2 id="ch12">Chapter XII — Direction Conversations &amp; Research Strategy</h2>
+  <div class="marginalia">The conversations that shaped what to build next.</div>
+
+  <p class="narrative">
+    Several conversations through the project were about direction rather than code. Each
+    reframe shifted the priority list.
+  </p>
+
+  <h3>Conversation 1 — WebGPU as next step</h3>
+  <p class="narrative">
+    After Numba was in place, I proposed Alternative #5 (WebGPU) as the next direction.
+    The pitch: parallel argmin on the GPU for the huge-N stress test, potentially 100×
+    on 25 k × 5 000 cases. The user agreed but also asked about research direction.
+  </p>
+
+  <h3>Conversation 2 — MILP vs Calibration</h3>
+  <div class="quote"><span class="who">User</span> MLP/calibration is what I want to do if it helps leads me towards more publishable research contributions</div>
+  <p class="narrative">
+    Recommended doing MILP first — it's self-contained (PuLP + CBC solver, no external data
+    needed), produces a publishable claim ("our greedy is within X% of optimal at scales
+    where MILP is tractable"), and sets up the framework that the calibration phase will
+    plug into. Eversource calibration would happen in parallel as the user pursues data
+    access through PURA dockets.
+  </p>
+
+  <h3>Conversation 3 — Scale before research</h3>
+  <p class="narrative">
+    Before MILP started, the user re-prioritised one more time:
+  </p>
+  <div class="quote"><span class="who">User</span> the real storm data is a lot later. We need to make this more scalable and more precise for Hartford county first.</div>
+  <p class="narrative">
+    This is what triggered the Chapter VIII grid-hash + n_available work. With Connecticut
+    scale handled, MILP and calibration both become more credible: they're now plugging
+    into a model that we can honestly claim is engineered for statewide deployment.
+  </p>
+
+  <h3>Current research-direction stack (queued, not yet built)</h3>
   <table class="entries">
-    <thead><tr><th class="when">When</th><th class="kind">Kind</th><th>Entry</th></tr></thead>
+    <thead><tr><th class="when">Item</th><th class="kind">Kind</th><th>Description</th></tr></thead>
     <tbody>
       <tr>
-        <td class="when">Mid-saga</td>
-        <td class="kind"><span class="tag question">Question</span></td>
-        <td class="detail">"MLP/calibration is what I want to do if it helps leads me towards more publishable research contributions"</td>
+        <td class="when">Next</td>
+        <td class="kind"><span class="tag decision">MILP</span></td>
+        <td class="detail">PuLP + CBC for small-N (≤50 outage) optimal scheduling. Compute the greedy-vs-optimal gap. Publishable result: "our heuristic is within X% of optimal at scales where MILP is tractable, supporting its use at scales where MILP is not."</td>
       </tr>
       <tr>
-        <td class="when">Mid-saga</td>
-        <td class="kind"><span class="tag pivot">Reframe</span></td>
-        <td class="detail">Pitched the trade: MILP optimal scheduler (1 day; needs no external data) vs. Eversource calibration (1 day code but bottlenecked on data access via PURA dockets). Recommended doing MILP first so the calibration plugs into a ready framework.</td>
+        <td class="when">Parallel</td>
+        <td class="kind"><span class="tag decision">Calibration</span></td>
+        <td class="detail">PURA dockets &amp; Eversource storm post-mortems → fit travel speed, road-multiplier, workday hours, repair-time distribution to observed restoration curves. Bottlenecked on data access.</td>
       </tr>
       <tr>
-        <td class="when">Mid-saga</td>
-        <td class="kind"><span class="tag question">Question</span></td>
-        <td class="detail">"the real storm data is a lot later. We need to make this more scalable and more precise for Hartford county first … going to need to handle even heavier scenarios when scaled up to connecticut"</td>
-      </tr>
-      <tr>
-        <td class="when">Mid-saga</td>
-        <td class="kind"><span class="tag pivot">Pivot</span></td>
-        <td class="detail">Skipped MILP for now. Refocused on raw scalability so the model can survive CT-wide projection. Result: the Chapter III speedups above.</td>
-      </tr>
-      <tr>
-        <td class="when">Now</td>
-        <td class="kind"><span class="tag decision">Decision</span></td>
-        <td class="detail">Next research milestones queued, not yet built:
-          <ul>
-            <li><b>MILP optimal scheduler</b> for small N to bound greedy's optimality gap.</li>
-            <li><b>Eversource / PURA storm calibration</b> once data acquired.</li>
-            <li><b>WebGPU</b> as engineering polish — deferred; Numba already handles CT scale.</li>
-          </ul>
-        </td>
+        <td class="when">Later</td>
+        <td class="kind"><span class="tag decision">WebGPU</span></td>
+        <td class="detail">Engineering polish for the in-browser path. Deferred — Numba already handles Connecticut scale, so the urgency is gone.</td>
       </tr>
     </tbody>
   </table>
 
   <hr class="section">
-  <h2>Coda</h2>
-  <div class="marginalia">Where the project stands at the moment of writing.</div>
-  <p>The interactive simulation is live at GitHub Pages; the server backend at <code>hartford-grid-server.onrender.com</code> auto-warms on page load and serves Numba-compiled scheduler calls in tens of milliseconds. The map paints colored crew depots, numbered repair circles, and a canvas point cloud — the visualisation parity the project started with, now at Connecticut scale. The road ahead is MILP comparison and PURA-grounded calibration; the engineering is done.</p>
+  <h2 id="ch13">Chapter XIII — Documentation Push</h2>
+  <div class="marginalia">Where you, dear reader, are.</div>
+
+  <div class="quote"><span class="who">User</span> wait can you add a file in the github repository showing like a journal of all the changes and like questions and answers all in different colors. Make it in like a tabular format and make it look like a journal aesthetic. Also once again me all the research papers already published in this field related to what im doing and again tell me the niche im exploring and help me put the research paper stuff in a google docs.</div>
+
+  <p class="narrative">
+    Three deliverables produced: this <code>JOURNAL.html</code> file, a
+    <code>Hartford_Grid_Dev_Journal.docx</code> for upload to Google Docs (drag into
+    drive.google.com → right-click → Open with Google Docs → Drive auto-converts), and a
+    separate <code>Hartford_Grid_Research_Context.docx</code> with a literature map by
+    theme, niche analysis, open research questions, and data sources to pursue.
+  </p>
+  <p class="narrative">
+    Honest caveat carried into the research document: the citations are starting points
+    drawn from a directed literature scan, not a verified bibliography. Authors and
+    research groups are the most reliable parts; specific paper titles, years, and venues
+    should be verified on Google Scholar or IEEE Xplore before being cited in a
+    manuscript.
+  </p>
+
+  <hr class="section">
+  <h2 id="ch14">Coda</h2>
+  <p class="narrative">
+    The project started as a Hartford County storm simulator and ended this development
+    cycle as a Connecticut-prepared, server-backed, browser-first research platform. The
+    engineering path zig-zagged: a successful closed-form approximation, a working but
+    underwhelming WebAssembly port, a successful FastAPI backend, a NumPy port that helped,
+    a KD-tree experiment that helped less than promised, a Numba port that helped a lot, a
+    grid hash that helped little on its own and enormously when paired with an
+    <code>n_available</code> counter, and a four-attempt deployment saga whose root cause
+    was a Python exception-hierarchy subtlety.
+  </p>
+  <p class="narrative">
+    What's live now: a public-facing simulator that auto-detects its own server backend,
+    falls back gracefully when offline, handles 100 000-outage scenarios in under a
+    second, and renders the per-crew dispatch sequence as colored numbered circles on a
+    Leaflet map of Hartford County. The road ahead is MILP comparison for academic rigor
+    and PURA-grounded calibration for real-world claims. The engineering substrate is
+    done; what remains is the research story it can now support.
+  </p>
 
 </div>
 </body>
