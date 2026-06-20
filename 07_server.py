@@ -201,6 +201,18 @@ def health() -> dict[str, Any]:
     return {"status": "ok"}
 
 
+@app.get("/version")
+def version() -> dict[str, Any]:
+    """Report the git commit + backend mode the running server was built
+    from. Lets the frontend display 'connected to: 3d074d2' so the user
+    can verify the deploy is current vs. the GitHub HEAD."""
+    sha = os.environ.get("RENDER_GIT_COMMIT", "unknown")
+    if sha != "unknown":
+        sha = sha[:7]
+    backend = "numba" if _NUMBA else ("numpy" if _FAST else "python")
+    return {"commit": sha, "backend": backend}
+
+
 @app.post("/api/schedule", response_model=ScheduleResponse)
 def schedule(req: ScheduleRequest) -> ScheduleResponse:
     total, crews = _run_scheduler(req.outages, req.crews, req.seed, req.realistic)

@@ -194,13 +194,16 @@
 
     <!-- Alternative #4: Server-side compute -->
     <div class="ctrl" style="background:#eef2ff;border-color:#a5b4fc;margin-top:8px;">
-      <div style="font-size:11px;color:#3730a3;font-weight:600;margin-bottom:6px;">Server backend (optional)</div>
+      <div style="font-size:11px;color:#3730a3;font-weight:600;margin-bottom:6px;">
+        Server backend <span id="serverHealthDot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#94a3b8;margin-left:4px;" title="checking..."></span>
+      </div>
       <label style="font-size:11px;color:#3730a3;display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-        <input type="checkbox" id="useServerToggle" /> Use server for Plan restoration
+        <input type="checkbox" id="useServerToggle" checked /> Auto-use server when available
       </label>
-      <input type="text" id="serverUrl" placeholder="http://localhost:8000"
-             value="http://localhost:8000"
+      <input type="text" id="serverUrl" placeholder="https://hartford-grid-server.onrender.com"
+             value="https://hartford-grid-server.onrender.com"
              style="width:100%;padding:5px;border:1px solid #a5b4fc;border-radius:4px;font-size:11px;font-family:ui-monospace,monospace;margin-bottom:6px;" />
+      <div id="serverVersion" style="font-size:10px;color:#475569;margin-bottom:6px;font-family:ui-monospace,monospace;">probing server…</div>
       <button id="monteCarloBtn" style="width:100%;padding:8px;border:1px solid #6366f1;background:#fff;color:#3730a3;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">Monte Carlo ensemble (30 seeds)</button>
       <div id="serverStatus" style="font-size:10px;color:#3730a3;margin-top:4px;padding:6px;background:#fff;border-radius:4px;font-family:ui-monospace,monospace;display:none;white-space:pre-line;"></div>
     </div>
@@ -1516,9 +1519,71 @@ document.getElementById('presetSelect').addEventListener('change', (e) => {
   if (e.target.value) loadPreset(e.target.value);
 });
 loadPresetList();
+// Auto-detect server availability: ping /health and /version on load,
+// update the dot + version label, and decide whether to auto-route Plan
+// restoration through the server. Re-checks every 60s.
+let _serverHealthy = false;
+function setServerHealthUI(state, info){
+  const dot = document.getElementById('serverHealthDot');
+  const ver = document.getElementById('serverVersion');
+  if (state === 'ok'){
+    dot.style.background = '#16a34a'; dot.title = 'online';
+    ver.textContent = info || 'connected';
+    ver.style.color = '#15803d';
+    _serverHealthy = true;
+  } else if (state === 'warming'){
+    dot.style.background = '#f59e0b'; dot.title = 'waking up';
+    ver.textContent = 'server cold-starting (~30–60s)…';
+    ver.style.color = '#b45309';
+    _serverHealthy = false;
+  } else {
+    dot.style.background = '#dc2626'; dot.title = 'offline';
+    ver.textContent = 'server offline — falling back to in-browser scheduler';
+    ver.style.color = '#b91c1c';
+    _serverHealthy = false;
+  }
+}
+async function pingServerOnce(){
+  const url = getServerUrl();
+  if (!url) { setServerHealthUI('offline'); return; }
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 3500);
+    const r = await fetch(url + '/version', {signal: ctl.signal});
+    clearTimeout(timer);
+    if (!r.ok) throw new Error('bad status');
+    const v = await r.json();
+    setServerHealthUI('ok', `connected · commit ${v.commit} · backend ${v.backend}`);
+  } catch(e) {
+    setServerHealthUI('offline');
+  }
+}
+async function warmUpServer(){
+  // Fire-and-forget GET to wake a sleeping Render free-tier instance.
+  // We don't wait for it — the auto-ping above will pick up "ok" once
+  // the container actually boots (typically 30–60s later).
+  setServerHealthUI('warming');
+  try { await fetch(getServerUrl() + '/health', {mode: 'no-cors'}); } catch(e) {}
+  // Re-probe in a few seconds and again at 30s, 60s.
+  setTimeout(pingServerOnce, 5000);
+  setTimeout(pingServerOnce, 30000);
+  setTimeout(pingServerOnce, 60000);
+}
+// Kick off the warm-up the moment the page loads, then keep re-probing
+// every 60s so the dot reflects current state.
+window.addEventListener('load', () => { warmUpServer(); });
+setInterval(pingServerOnce, 60000);
+document.getElementById('serverUrl').addEventListener('change', warmUpServer);
+
 document.getElementById('planRestore').onclick = async function(){
-  const useServer = document.getElementById('useServerToggle').checked;
-  if (useServer) return runServerPlan();
+  // Auto-route: use server if toggle is on AND the server is healthy.
+  // Otherwise fall back to the in-browser scheduler. The user never has
+  // to think about it; if the server is down, they still get results.
+  const wantServer = document.getElementById('useServerToggle').checked;
+  if (wantServer && _serverHealthy) return runServerPlan();
+  if (wantServer && !_serverHealthy){
+    showServerStatus('Server unavailable — running locally instead.', false);
+  }
   return planRestoration();
 };
 
@@ -1600,6 +1665,10 @@ async function runServerPlan(){
   }
 }
 document.getElementById('monteCarloBtn').onclick = async function(){
+  if (!_serverHealthy){
+    showServerStatus('Monte Carlo requires the server backend.\nWaiting for it to come online — try again in ~30 sec.', true);
+    return;
+  }
   const timer = startServerProgress('monte carlo');
   try {
     const payload = buildServerPayload();
