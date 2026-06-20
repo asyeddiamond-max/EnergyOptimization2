@@ -2315,12 +2315,85 @@ function scheduleOnly(M, outages){
 
 function yieldToBrowser(){ return new Promise(r => setTimeout(r, 0)); }
 
+// Server-backed optimal-crew search. Each scheduler call inside the binary
+// search runs on Numba at ~660 ms even for 250k outages, so the whole
+// ~17-iteration search lands in ~10-12 s vs minutes of in-browser JS.
+async function recommendCrewCountServer(){
+  if (!storm || !storm.outages.length) return false;
+  const useServer = document.getElementById('useServerToggle').checked;
+  if (!(useServer && _serverHealthy)) return false;
+  const N = storm.outages.length;
+  const seed = +seedI.value | 0;
+  const realistic = document.getElementById('realisticMode').checked;
+  setRecProgress(0);
+  status.textContent = `Server: binary-searching crew count over ${N.toLocaleString()} jobs…`;
+  // Fake progress while the server crunches — the binary search is atomic
+  // from the client's perspective, so we asymptote like the plan-restoration
+  // server progress.
+  const t0 = performance.now();
+  const timer = setInterval(() => {
+    const dt = (performance.now() - t0) / 1000;
+    const pct = 95 * (1 - Math.exp(-dt / 6));
+    setRecProgress(pct);
+    _recProgressLabel.textContent = `server ${Math.round(pct)}%`;
+  }, 100);
+  try {
+    const payload = {
+      outages: storm.outages.map(o => ({lat:o.lat,lon:o.lon,critical:!!o.critical})),
+      seed, realistic,
+    };
+    const r = await fetch(getServerUrl() + '/api/recommend', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    const recM = d.recommended_crews;
+    const recT = d.recommended_time_h;
+    const floorT = d.floor_time_h;
+    const elapsed = (performance.now() - t0).toFixed(0);
+
+    function fmtH(hrs){
+      if (hrs < 24) return hrs.toFixed(1) + " h";
+      const dd = Math.floor(hrs/24);
+      const hh = Math.round(hrs - dd*24);
+      return dd + " d " + hh + " h";
+    }
+    document.getElementById('recCrewCount').textContent = recM.toLocaleString();
+    document.getElementById('recCrewDetail').innerHTML =
+      `${fmtH(recT)} restoration · within ${Math.round((d.tolerance-1)*100)}% of ${fmtH(floorT)} floor`;
+    const applyBtn = document.getElementById('applyRecCrews');
+    applyBtn.style.display = 'block';
+    applyBtn.onclick = () => {
+      cS.value = Math.min(recM, +cS.max);
+      cV.textContent = cS.value;
+      planRestoration();
+    };
+    status.textContent =
+      `Server recommended ${recM.toLocaleString()} crews → ${fmtH(recT)} ` +
+      `(floor ${fmtH(floorT)} at ${d.upper_bound.toLocaleString()} crews · ` +
+      `${d.evaluations.length} evals · ${elapsed} ms).`;
+    return true;
+  } catch (e) {
+    status.textContent = `Server recommend failed (${e.message}) — falling back to in-browser search.`;
+    return false;
+  } finally {
+    clearInterval(timer);
+    setRecProgress(100);
+    setTimeout(()=>setRecProgress(0,false), 800);
+  }
+}
+
 async function recommendCrewCount(){
   if (!storm || !storm.outages.length){
     status.textContent="Simulate a storm first.";
     document.getElementById('recCrewDetail').textContent='— simulate a storm first';
     return;
   }
+  // Prefer server (Numba) when available; falls back to in-browser if the
+  // server is down or the toggle is off.
+  if (await recommendCrewCountServer()) return;
   setRecProgress(0);
   const N = storm.outages.length;
   const seed = +seedI.value | 0;

@@ -131,6 +131,30 @@ class ScheduleResponse(BaseModel):
     backend: str = "python-greedy"
 
 
+class RecommendRequest(BaseModel):
+    outages: list[Outage]
+    seed: int = 42
+    realistic: bool = True
+    tolerance: float = Field(default=1.15, ge=1.01, le=2.0,
+        description="Acceptable multiple of the floor restoration time")
+    upper_bound: int | None = Field(default=None, description=
+        "Override the upper-bound crew count tried; defaults to max(50, N/10)")
+
+
+class RecommendEvaluation(BaseModel):
+    crews: int
+    total_time_h: float
+
+
+class RecommendResponse(BaseModel):
+    recommended_crews: int
+    recommended_time_h: float
+    floor_time_h: float
+    upper_bound: int
+    tolerance: float
+    evaluations: list[RecommendEvaluation]
+
+
 class MonteCarloRequest(BaseModel):
     outages: list[Outage]
     crews: int = Field(ge=1)
@@ -200,6 +224,7 @@ def root():
             "GET  /              — this index",
             "GET  /health        — health check",
             "POST /api/schedule  — run the greedy scheduler",
+            "POST /api/recommend — binary-search the optimal crew count",
             "POST /api/monte_carlo — N-run ensemble with different seeds",
         ],
     }
@@ -226,6 +251,75 @@ def version() -> dict[str, Any]:
 def schedule(req: ScheduleRequest) -> ScheduleResponse:
     total, crews = _run_scheduler(req.outages, req.crews, req.seed, req.realistic)
     return ScheduleResponse(total_time_h=total, crews=crews)
+
+
+def _scheduler_time_only(outage_tuples, m_crews, seed, realistic):
+    """Run the scheduler and return only the total restoration time.
+
+    Skips the expensive per-job result construction — recommend search only
+    needs the makespan, not the dispatch sequence."""
+    if _NUMBA:
+        _, total, _ = plan_restoration_numba(
+            outage_tuples, m_crews, realistic=realistic, seed=seed
+        )
+        return float(total)
+    if _FAST:
+        _, total, _ = plan_restoration_fast(
+            outage_tuples, m_crews, realistic=realistic, seed=seed
+        )
+        return float(total)
+    raise RuntimeError("No scheduler backend available")
+
+
+@app.post("/api/recommend", response_model=RecommendResponse)
+def recommend(req: RecommendRequest) -> RecommendResponse:
+    """Find the smallest crew count that achieves a restoration time within
+    `tolerance` × the theoretical floor (crews == N). Binary search; each
+    iteration runs the full Numba scheduler. At N=250k a single scheduler
+    call is ~660 ms, so the whole search (~17 iterations) takes ~10-12 s
+    — vs minutes for the in-browser JS path."""
+    N = len(req.outages)
+    if N == 0:
+        return RecommendResponse(
+            recommended_crews=0, recommended_time_h=0.0,
+            floor_time_h=0.0, upper_bound=0, tolerance=req.tolerance,
+            evaluations=[],
+        )
+
+    outage_tuples = [(o.lat, o.lon) for o in req.outages]
+    upper = req.upper_bound or max(50, (N + 9) // 10)
+    upper = min(upper, N)
+
+    cache: dict[int, float] = {}
+    evaluations: list[RecommendEvaluation] = []
+
+    def t_at(m: int) -> float:
+        if m in cache:
+            return cache[m]
+        t = _scheduler_time_only(outage_tuples, m, req.seed, req.realistic)
+        cache[m] = t
+        evaluations.append(RecommendEvaluation(crews=m, total_time_h=t))
+        return t
+
+    floor_t = t_at(upper)
+    target = floor_t * req.tolerance
+
+    lo, hi = 1, upper
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if t_at(mid) <= target:
+            hi = mid
+        else:
+            lo = mid + 1
+
+    return RecommendResponse(
+        recommended_crews=lo,
+        recommended_time_h=t_at(lo),
+        floor_time_h=floor_t,
+        upper_bound=upper,
+        tolerance=req.tolerance,
+        evaluations=evaluations,
+    )
 
 
 def _mc_worker(args):
