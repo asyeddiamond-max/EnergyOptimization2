@@ -1368,10 +1368,18 @@ def build_research():
     margin_note(doc, "Reading of the academic + industry landscape; revise as you find more sources.")
 
     niche_points = [
+        ("The UConn group has the prediction side covered — but not the restoration side.",
+         "Wanik, Anagnostou, Cerrai, Astitha and collaborators at UConn's Eversource Energy "
+         "Center have built sophisticated models for predicting WHERE and HOW MANY outages "
+         "will occur in a Connecticut storm. They have not built a comparable simulator for "
+         "HOW restoration unfolds once those outages exist. Your work plugs into the "
+         "downstream of their pipeline: their model says \"3 000 outages in this storm,\" "
+         "yours says \"with M crews, those 3 000 outages get restored in X hours.\" The "
+         "natural collaboration."),
         ("Most academic work on grid restoration is offline batch optimisation.",
-         "Coffrin, Van Hentenryck, and collaborators have produced strong MILP and convex-"
-         "relaxation models for transmission restoration. Less work targets distribution-"
-         "level, county-scale, and almost none of it is interactive."),
+         "Coffrin, Van Hentenryck, Arif, and collaborators have produced strong MILP and "
+         "stochastic-programming models for restoration. Less of it targets distribution-"
+         "level county-scale, and almost none of it is interactive."),
         ("Most utility decision-support tools are proprietary and inaccessible.",
          "Eversource, Avangrid, and others use commercial outage-management systems (OMS) "
          "like OSI Monarch or GE PowerOn. These run in control rooms and are not accessible "
@@ -1384,10 +1392,11 @@ def build_research():
          "There are a few public demos but most are toy-scale (≤ 100 nodes). Running "
          "100 000 outages + 5 000 crews + Monte Carlo in a browser-backed-by-API pipeline "
          "is a differentiator."),
-        ("Calibration against real PURA / Eversource storm filings is largely untouched in published academic work.",
-         "Statistical outage-prediction papers exist (Nateghi, Quiring, Guikema). "
+        ("Calibration of restoration timelines against real PURA / Eversource storm filings is largely untouched.",
+         "Statistical outage-prediction papers exist (Wanik 2015, Cerrai 2019, Nateghi 2011). "
          "Restoration-timeline calibration is much less common — partly because the data "
-         "lives in regulatory filings rather than open datasets."),
+         "lives in regulatory filings rather than open datasets, and partly because the "
+         "prediction community has historically stopped at the outage-count layer."),
     ]
     for headline, expansion in niche_points:
         p = doc.add_paragraph()
@@ -1412,6 +1421,89 @@ def build_research():
 
     # Each item is now (citation, why, what, key_terms).
     themes = [
+        ("UConn / Eversource Outage-Prediction Group (your most directly relevant citations)", BG_QUESTION, [
+            ("Wanik, D. W., Anagnostou, E. N., Hartman, B. M., Frediani, M. E. B., Astitha, M. "
+             "(2015). Storm outage modeling for an electric distribution network in "
+             "Northeastern USA. Natural Hazards 79(2), 1359–1384.",
+             "this is essentially the foundational paper for your project. UConn's Eversource "
+             "Energy Center built outage-prediction models on real CL&P / Eversource "
+             "distribution data in Connecticut — the exact territory your simulation models. "
+             "Anything you publish should cite this work; your simulator can be positioned as "
+             "the restoration-side counterpart to their outage-prediction side.",
+             "develops a machine-learning model (Random Forest) that predicts the number of "
+             "outages per municipality for a given storm, using weather and land-cover "
+             "features. Validated against a multi-year storm catalogue from a Connecticut "
+             "utility. Establishes the data pipeline that the rest of the UConn corpus builds on.",
+             "Random Forest · outage prediction · storm catalogue · weather features · "
+             "land-cover features · municipality-level aggregation · Connecticut Light & "
+             "Power (CL&P) · Eversource Energy Center"),
+            ("Wanik, D. W., Parent, J. R., Anagnostou, E. N., Hartman, B. M. (2017). Using "
+             "vegetation management and LiDAR-derived tree height data to improve outage "
+             "predictions for electric utilities. Electric Power Systems Research 146, 236–245.",
+             "the vegetation-aware extension. Trees are the dominant cause of storm-induced "
+             "distribution outages in CT, and this paper shows that adding tree-height data "
+             "to the model materially improves predictions. Useful citation if you ever add "
+             "a vegetation layer to your storm model.",
+             "augments the Random Forest outage-prediction model with LiDAR-derived tree-"
+             "height data and vegetation-management records. Demonstrates that tree height "
+             "near distribution lines is one of the strongest single predictors of outage "
+             "count.",
+             "LiDAR · vegetation management · tree height · feature engineering · variable "
+             "importance · trim cycle · right-of-way · canopy cover"),
+            ("Cerrai, D., Wanik, D. W., Bhuiyan, M. A. E., Zhang, X., Yang, J., Frediani, "
+             "M. E. B., Anagnostou, E. N. (2019). Predicting Storm Outages Through New "
+             "Representations of Weather and Vegetation. IEEE Access 7, 29639–29654.",
+             "the most refined version of the UConn outage-prediction pipeline. Uses WRF "
+             "numerical weather model output + vegetation features to predict outages at "
+             "high spatial resolution. If you ever drive your storm model from real weather "
+             "forecasts rather than uniform sampling, this paper is the bridge.",
+             "predicts outages on a 2 km grid using WRF (Weather Research & Forecasting) "
+             "atmospheric model output combined with vegetation rasters. Uses gradient-"
+             "boosted decision trees; reports significant accuracy improvements over the "
+             "2015/2017 baselines.",
+             "Weather Research & Forecasting (WRF) · gradient boosting · spatial "
+             "resolution · feature representation · model ensemble · outage density · "
+             "numerical weather prediction · IEEE Access"),
+            ("Wanik, D. W., Anagnostou, E. N., Astitha, M., Hartman, B. M., Lackmann, G. M., "
+             "Yang, J., Cerrai, D., He, J., Frediani, M. (2018). A case study on power "
+             "outage impacts from future Hurricane Sandy scenarios. Journal of Applied "
+             "Meteorology and Climatology 57(1), 51–79.",
+             "climate-change-relevant outage modelling. Uses pseudo-global-warming WRF runs "
+             "to project how Hurricane Sandy would behave under future climate conditions, "
+             "then runs the outage model on those scenarios. Strong forward-looking "
+             "citation for any climate-resilience framing of your work.",
+             "couples future-climate atmospheric simulations with the UConn outage model to "
+             "project how a Sandy-like event would affect Connecticut under 2050s/2080s "
+             "climate. Quantifies the increase in expected outages under warmer "
+             "atmospheric scenarios.",
+             "pseudo-global-warming (PGW) · climate scenarios · Hurricane Sandy · "
+             "tropical cyclone · downscaling · WRF · climate impact assessment · "
+             "future projection"),
+            ("Yang, F., Wanik, D. W., Cerrai, D., Bhuiyan, M. A. E., Anagnostou, E. N. "
+             "(2020). Quantifying Uncertainty in Machine Learning-Based Power Outage "
+             "Prediction Model Training Requirements. Forecasting 2(2), 152–169.",
+             "the uncertainty-quantification companion to the prediction work. Important "
+             "because any restoration model calibrated against outage predictions inherits "
+             "their uncertainty. Methodology to mirror in your own calibration phase.",
+             "studies how prediction-model accuracy and uncertainty scale with the amount "
+             "of historical storm data available for training. Provides explicit guidance "
+             "on data requirements for outage-prediction model deployment.",
+             "uncertainty quantification · training-set size · learning curves · "
+             "bootstrap · cross-validation · model variance · forecast skill · operational "
+             "deployment"),
+            ("Frediani, M. E. B., Anagnostou, E. N., Astitha, M. (2017). A new "
+             "verification method for assessing the performance of high-resolution "
+             "atmospheric simulations. Monthly Weather Review 145(2), 769–784.",
+             "the atmospheric-model verification methodology underlying the UConn pipeline. "
+             "Cite this when explaining how the storm inputs to the outage-prediction model "
+             "are themselves validated.",
+             "develops object-based verification methods for high-resolution mesoscale "
+             "atmospheric simulations, used to validate WRF runs against observed storm "
+             "events.",
+             "mesoscale atmospheric simulation · object-based verification · forecast "
+             "skill · WRF validation · feature detection · storm tracking · MODE · "
+             "verification metric"),
+        ]),
         ("Grid Restoration Optimisation (MILP / Stochastic)", BG_BUILD, [
             ("Van Hentenryck, P., Coffrin, C., Bent, R. (2011). Vehicle Routing for the Last "
              "Mile of Power System Restoration. Proc. Power Systems Computation Conference (PSCC).",
@@ -1679,22 +1771,27 @@ def build_research():
     body(doc,
          "Restoration scheduling for distribution-system outages has a rich operations-"
          "research literature dominated by MILP and stochastic-programming formulations "
-         "(Van Hentenryck, Arif et al., Watson et al.). In parallel, statistical outage-"
-         "prediction work (Nateghi, Guikema, Quiring) has matured into utility-grade tools. "
-         "Yet two gaps remain: (i) the decision-support pipeline between these two "
-         "communities is largely proprietary, trapped inside commercial OMS platforms; and "
-         "(ii) academic restoration models are rarely validated against the publicly "
-         "available PURA storm-event filings that Connecticut utilities are required to "
-         "produce.")
+         "(Van Hentenryck et al. 2011; Coffrin & Van Hentenryck 2015; Arif et al. 2018). In "
+         "parallel, the UConn Eversource Energy Center group (Wanik, Anagnostou, Cerrai, "
+         "Astitha and collaborators) has built sophisticated machine-learning outage-"
+         "prediction pipelines tuned specifically to Connecticut Light & Power / Eversource "
+         "service territory (Wanik et al. 2015, 2017, 2018; Cerrai et al. 2019). Yet two "
+         "gaps remain: (i) the decision-support pipeline between the prediction community "
+         "and the restoration-scheduling community is largely proprietary, trapped inside "
+         "commercial OMS platforms; and (ii) academic restoration models are rarely "
+         "validated against the publicly available PURA storm-event filings that "
+         "Connecticut utilities are required to produce.")
     body(doc,
          "This work contributes a publicly accessible, browser-first interactive simulator "
          "for Hartford County and (by extension) the Connecticut service territory, with "
          "the engineering capacity to run 100 000-outage scenarios and Monte Carlo "
-         "ensembles in tens of milliseconds. The simulator is positioned as the calibration "
-         "substrate for future work matching synthetic restoration timelines against real "
-         "Eversource event histories. The intended contribution is the integration — an "
-         "accessible, scale-validated, calibratable tool — rather than a novel scheduling "
-         "algorithm.")
+         "ensembles in tens of milliseconds. It is positioned as the downstream complement "
+         "to the UConn prediction pipeline — their work answers \"how many outages and "
+         "where?\"; this work answers \"once those outages exist, how long until "
+         "restoration?\" The simulator is also positioned as the calibration substrate for "
+         "future work matching synthetic restoration timelines against real Eversource "
+         "event histories. The intended contribution is the integration — an accessible, "
+         "scale-validated, calibratable tool — rather than a novel scheduling algorithm.")
 
     body(doc, "")
     h2(doc, "Open Questions Your Paper Can Answer")
