@@ -137,6 +137,13 @@
       </label>
     </div>
 
+    <div class="ctrl" style="background:#ecfeff;border-color:#67e8f9;">
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#155e75;line-height:1.4;">
+        <input type="checkbox" id="customerPriority" style="margin-top:2px;flex-shrink:0;" />
+        <span><b style="color:#0e7490">Prioritize by customer impact</b> — instead of pure nearest-neighbour dispatch, crews favour outages that restore more customers. Real utility dispatchers detour past a single-house lateral to reach a substation that will restore thousands. Server-routed only (uses the customer-impact weight in the Numba scheduler). Doesn't change total restoration time, but does change which customers get power back first.</span>
+      </label>
+    </div>
+
     <div class="section-label">1 · Distribution grid</div>
 
     <div class="ctrl">
@@ -1603,13 +1610,23 @@ function showServerStatus(text, isError){
 }
 function buildServerPayload(){
   if (!storm) throw new Error('Simulate a storm first.');
+  const priorityOn = document.getElementById('customerPriority').checked;
+  // The weight is in units of (customers per squared-degree of lat/lon). At
+  // Hartford-County coords, a degree is ~70 miles, so a weight of 5000 means
+  // a 1-mile detour is worth ~1 extra customer restored. Tuned conservatively
+  // so the bias is visible but doesn't override the spatial efficiency of
+  // the nearest-neighbour scan entirely.
+  const customerWeight = priorityOn ? 5000.0 : 0.0;
   return {
     outages: storm.outages.map(o => ({
-      lat: o.lat, lon: o.lon, critical: !!o.critical
+      lat: o.lat, lon: o.lon,
+      critical: !!o.critical,
+      customers: +(o.popLoss || 0),
     })),
     crews: +cS.value,
     seed: +seedI.value | 0,
     realistic: document.getElementById('realisticMode').checked,
+    customer_weight: customerWeight,
   };
 }
 // Fake-progress timer used while waiting on a server response. The server

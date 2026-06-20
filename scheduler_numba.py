@@ -30,8 +30,12 @@ def _mulberry32_step(state):
 
 
 @njit(cache=True, fastmath=True)
-def _run_scheduler(lat, lon, m_crews, realistic, seed):
+def _run_scheduler(lat, lon, m_crews, realistic, seed, customers, customer_weight):
+    """Dense-scan scheduler. When customer_weight > 0, dispatch picks the
+    outage maximizing (customers - customer_weight * d²) rather than the
+    nearest one. Default 0 preserves pure-nearest behavior."""
     N = lat.shape[0]
+    use_weighted = customer_weight > 0.0
     TRAVEL_MPH = 25.0 if realistic else 30.0
     ASSESSMENT_DELAY = 12.0 if realistic else 0.0
     WORKDAY_HOURS = 14.0 if realistic else 24.0
@@ -144,11 +148,14 @@ def _run_scheduler(lat, lon, m_crews, realistic, seed):
         cx = crew_lat[ci]
         cy = crew_lon[ci]
 
-        # Find nearest undone visible outage. Pure scan in JIT'd code is
-        # very fast — beats numpy's argmin on the same array because no
-        # intermediate temporaries are allocated.
+        # Find best undone visible outage. With customer_weight == 0 this is
+        # pure-nearest (pick min d²). With customer_weight > 0 it's the
+        # outage that maximises customers - customer_weight*d² — a real-world
+        # utility heuristic where dispatchers detour to high-customer
+        # restorations rather than blindly taking the nearest job.
         best = -1
         best_d2 = INF
+        best_score = -INF
         for i in range(N):
             if done[i]:
                 continue
@@ -157,9 +164,15 @@ def _run_scheduler(lat, lon, m_crews, realistic, seed):
             dx = lat[i] - cx
             dy = lon[i] - cy
             d2 = dx * dx + dy * dy
-            if d2 < best_d2:
-                best_d2 = d2
-                best = i
+            if use_weighted:
+                score = customers[i] - customer_weight * d2
+                if score > best_score:
+                    best_score = score
+                    best = i
+            else:
+                if d2 < best_d2:
+                    best_d2 = d2
+                    best = i
 
         if best == -1:
             # Idle — fast-forward to next discovery via binary search on the
@@ -259,7 +272,12 @@ def _run_scheduler(lat, lon, m_crews, realistic, seed):
 
 
 @njit(cache=True, fastmath=True)
-def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G):
+def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G, customers, customer_weight):
+    # NOTE: customer_weight is accepted for signature parity but ignored —
+    # ring-expansion termination assumes the score is a monotonic function
+    # of distance, which weighted scoring breaks. When the caller wants
+    # weighted scoring at scale, the wrapper routes through _run_scheduler
+    # (dense flat scan) instead.
     """Spatial-grid-hash variant. Same algorithm as _run_scheduler but the
     nearest-outage search uses a GxG bucket grid: look up the crew's cell,
     walk concentric rings of cells until a valid outage is found, then
@@ -601,22 +619,40 @@ def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G):
     return total, crew_time, crew_jobs, log_crew[:n_log], log_outage[:n_log], log_eta[:n_log]
 
 
-def plan_restoration_numba(outages, m_crews, realistic=True, seed=42):
-    """Public wrapper that returns the same shape as plan_restoration_fast."""
+def plan_restoration_numba(outages, m_crews, realistic=True, seed=42,
+                           customers=None, customer_weight=0.0):
+    """Public wrapper that returns the same shape as plan_restoration_fast.
+
+    customers: optional list of per-outage customer counts. If None, treated
+        as zeros and customer-weighted scoring becomes pure-nearest anyway.
+    customer_weight: float >= 0. When > 0, dispatch maximises
+        (customers - customer_weight * d²) instead of minimising d². Routes
+        through the dense scheduler regardless of N because the grid hash's
+        ring-expansion termination doesn't generalise to weighted scoring.
+    """
     N = len(outages)
     if N == 0 or m_crews == 0:
         return [], 0.0, []
     lat = np.array([o[0] for o in outages], dtype=np.float64)
     lon = np.array([o[1] for o in outages], dtype=np.float64)
-    # Pick grid resolution so each cell holds ~5 outages on average. Below
-    # ~1000 outages the dense scan is faster (build overhead dominates).
-    if N >= 1000:
+    if customers is not None and len(customers) == N:
+        cust_arr = np.array(customers, dtype=np.float64)
+    else:
+        cust_arr = np.zeros(N, dtype=np.float64)
+
+    use_weighted = customer_weight > 0.0
+    # Grid hash + ring expansion assumes nearest-distance termination, which
+    # breaks under customer-weighted scoring. Use dense flat scan for the
+    # weighted path even at large N.
+    if N >= 1000 and not use_weighted:
         G = max(8, int(math.sqrt(N / 5.0)))
         total, crew_time, crew_jobs, log_crew, log_outage, log_eta = \
-            _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G)
+            _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G,
+                                cust_arr, 0.0)
     else:
         total, crew_time, crew_jobs, log_crew, log_outage, log_eta = \
-            _run_scheduler(lat, lon, m_crews, realistic, seed)
+            _run_scheduler(lat, lon, m_crews, realistic, seed,
+                           cust_arr, float(customer_weight))
 
     # Rebuild per-crew job sequences from the flat dispatch log. The log is
     # already in dispatch order, so iterating it preserves repair sequence

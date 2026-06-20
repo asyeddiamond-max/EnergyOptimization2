@@ -102,6 +102,7 @@ class Outage(BaseModel):
     lat: float
     lon: float
     critical: bool = False
+    customers: float = 0.0  # number of customers served by this outage point
 
 
 class ScheduleRequest(BaseModel):
@@ -109,6 +110,11 @@ class ScheduleRequest(BaseModel):
     crews: int = Field(ge=1, description="Number of repair crews")
     seed: int = 42
     realistic: bool = True
+    # Customer-impact weighting (realism factor #4). When > 0, the scheduler
+    # biases dispatch toward outages that restore more customers, not just
+    # nearest. score(o) = customers(o) - customer_weight * distance²(o).
+    # Default 0 preserves the original pure-nearest behavior.
+    customer_weight: float = Field(default=0.0, ge=0.0)
 
 
 class JobResult(BaseModel):
@@ -179,15 +185,15 @@ class MonteCarloResponse(BaseModel):
 # --- Helpers --------------------------------------------------------------
 
 def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
-                   realistic: bool) -> tuple[float, list[CrewResult]]:
+                   realistic: bool, customer_weight: float = 0.0
+                   ) -> tuple[float, list[CrewResult]]:
     """Call the shared scheduler and convert the result into our response shape."""
-    # The scheduler expects outages as a list of (lat, lon) tuples plus a
-    # parallel list of critical flags. We also pass criticals via a property
-    # on each outage; 05_generate_artifacts uses a custom calling convention.
     outage_tuples = [(o.lat, o.lon) for o in req_outages]
+    customers = [o.customers for o in req_outages]
     if _NUMBA:
         crews_out, total_time, _timeline = plan_restoration_numba(
-            outage_tuples, crews, realistic=realistic, seed=seed
+            outage_tuples, crews, realistic=realistic, seed=seed,
+            customers=customers, customer_weight=customer_weight,
         )
     elif _FAST:
         crews_out, total_time, _timeline = plan_restoration_fast(
@@ -249,7 +255,8 @@ def version() -> dict[str, Any]:
 
 @app.post("/api/schedule", response_model=ScheduleResponse)
 def schedule(req: ScheduleRequest) -> ScheduleResponse:
-    total, crews = _run_scheduler(req.outages, req.crews, req.seed, req.realistic)
+    total, crews = _run_scheduler(req.outages, req.crews, req.seed,
+                                  req.realistic, req.customer_weight)
     return ScheduleResponse(total_time_h=total, crews=crews)
 
 
