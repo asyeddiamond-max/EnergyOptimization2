@@ -1410,196 +1410,242 @@ def build_research():
     h2(doc, "Literature Map by Theme")
     margin_note(doc, "Authors and groups whose work directly intersects this project. Verify each citation independently — these are starting points for your own search.")
 
+    # Each item is now (citation, why, what, key_terms).
     themes = [
         ("Grid Restoration Optimisation (MILP / Stochastic)", BG_BUILD, [
             ("Van Hentenryck, P., Coffrin, C., Bent, R. (2011). Vehicle Routing for the Last "
              "Mile of Power System Restoration. Proc. Power Systems Computation Conference (PSCC).",
-             "Why it matters: formulates power restoration explicitly as a vehicle-routing "
-             "problem (VRP) on top of network constraints — essentially the academic version "
-             "of the dispatch problem your scheduler solves heuristically.",
-             "What it does: derives a constraint-programming formulation that schedules "
-             "repair crews across damaged feeders to minimise total customer-minutes "
-             "without service, with travel times and repair durations as inputs. Uses "
-             "constraint-based search rather than MILP. Closest single citation to your "
-             "problem statement."),
+             "formulates power restoration explicitly as a vehicle-routing problem (VRP) on "
+             "top of network constraints — essentially the academic version of the dispatch "
+             "problem your scheduler solves heuristically.",
+             "derives a constraint-programming formulation that schedules repair crews "
+             "across damaged feeders to minimise total customer-minutes without service, "
+             "with travel times and repair durations as inputs. Uses constraint-based "
+             "search rather than MILP. Closest single citation to your problem statement.",
+             "Vehicle Routing Problem (VRP) · last-mile restoration · constraint programming · "
+             "crew scheduling · customer-minutes · feeder repair · objective function · "
+             "branch-and-bound"),
             ("Coffrin, C., Van Hentenryck, P. (2015). Transmission System Restoration with "
              "Co-Optimization of Repairs, Load Pickups, and Generation Dispatch. IEEE "
              "Transactions on Power Systems.",
-             "Why it matters: defines the MILP optimal scheduler you'd benchmark your greedy "
-             "against. Establishes the standard form for restoration-as-optimisation in the "
+             "defines the MILP optimal scheduler you'd benchmark your greedy against. "
+             "Establishes the standard form for restoration-as-optimisation in the "
              "academic literature.",
-             "What it does: joint MILP for choosing which damaged lines to repair, in what "
-             "order, while simultaneously dispatching generation and picking up load. "
-             "Demonstrated on transmission case studies; the formulation generalises to "
-             "distribution."),
+             "joint MILP for choosing which damaged lines to repair, in what order, while "
+             "simultaneously dispatching generation and picking up load. Demonstrated on "
+             "transmission case studies; the formulation generalises to distribution.",
+             "Mixed-Integer Linear Program (MILP) · co-optimisation · transmission "
+             "restoration · load pickup · generation dispatch · convex relaxation · "
+             "decision variables · feasibility cuts"),
             ("Arif, A., Wang, Z., Wang, J., Mather, B., Bashualdo, H., Zhao, D. (2018). "
              "Power Distribution System Outage Management with Co-Optimization of Repairs, "
              "Reconfiguration, and DG Dispatch. IEEE Transactions on Smart Grid 9(5), "
              "4109–4118.",
-             "Why it matters: closest single paper to your problem at the distribution level. "
-             "Same kind of problem (crews + outages + time), same scale (distribution, not "
-             "transmission), with the addition of distributed-generation islanding.",
-             "What it does: a two-stage stochastic MILP that schedules repair crews while "
-             "simultaneously reconfiguring the network topology and dispatching distributed "
-             "generators. Models uncertainty in repair times via scenarios."),
+             "closest single paper to your problem at the distribution level. Same kind of "
+             "problem (crews + outages + time), same scale (distribution, not transmission), "
+             "with the addition of distributed-generation islanding.",
+             "a two-stage stochastic MILP that schedules repair crews while simultaneously "
+             "reconfiguring the network topology and dispatching distributed generators. "
+             "Models uncertainty in repair times via scenarios.",
+             "two-stage stochastic optimisation · distribution feeder reconfiguration · "
+             "distributed generation (DG) · microgrid islanding · scenario tree · repair "
+             "crew dispatch · outage management system (OMS) · MILP"),
             ("Watson, J-P., Hart, W. E., Murray, R. (2005). Formal Methods for the Real-"
              "Time Restoration of Electric Power. Sandia National Laboratories Technical "
              "Report.",
-             "Why it matters: one of the early Sandia/DOE-funded reports defining the "
-             "infrastructure-restoration scheduling problem formally. Foundational reference "
-             "for situating your work in the security-of-supply literature.",
-             "What it does: develops mathematical-programming foundations for the "
-             "restoration problem with uncertainty, including stochastic repair durations "
-             "and crew availability."),
+             "one of the early Sandia/DOE-funded reports defining the infrastructure-"
+             "restoration scheduling problem formally. Foundational reference for situating "
+             "your work in the security-of-supply literature.",
+             "develops mathematical-programming foundations for the restoration problem "
+             "with uncertainty, including stochastic repair durations and crew availability.",
+             "infrastructure resilience · stochastic programming · scenario-based "
+             "optimisation · mathematical programming · critical-infrastructure protection · "
+             "real-time decision support · Sandia · DOE"),
             ("Castillo, A. (2014). Risk Analysis and Management in Power Outage and "
              "Restoration: A Literature Survey. Electric Power Systems Research 107, 9–15.",
-             "Why it matters: the single survey to cite in your introduction when situating "
-             "your greedy among the broader model family.",
-             "What it does: surveys restoration approaches across heuristics, MILP, "
-             "stochastic programming, and decomposition methods; tabulates assumptions and "
-             "limitations."),
+             "the single survey to cite in your introduction when situating your greedy "
+             "among the broader model family.",
+             "surveys restoration approaches across heuristics, MILP, stochastic "
+             "programming, and decomposition methods; tabulates assumptions and limitations.",
+             "literature survey · risk analysis · heuristics · MILP · stochastic "
+             "programming · Benders decomposition · taxonomy · outage restoration"),
         ]),
         ("Storm-Induced Outage Modelling & Prediction", BG_PERF, [
             ("Nateghi, R., Guikema, S. D., Quiring, S. M. (2011). Comparison and Validation "
              "of Statistical Methods for Predicting Power Outage Durations in the Event of "
              "Hurricanes. Risk Analysis 31(12), 1897–1906.",
-             "Why it matters: this is the calibration target methodology. If you ever fit "
-             "your scheduler against real Eversource event timelines, this paper's "
-             "evaluation framework (statistical durations vs observed) is what you'll "
-             "follow.",
-             "What it does: benchmarks several statistical models (Cox proportional "
-             "hazards, accelerated failure time, etc.) for predicting how long restoration "
-             "will take after a hurricane, validated against utility data."),
+             "the calibration target methodology. If you ever fit your scheduler against "
+             "real Eversource event timelines, this paper's evaluation framework "
+             "(statistical durations vs observed) is what you'll follow.",
+             "benchmarks several statistical models (Cox proportional hazards, accelerated "
+             "failure time, etc.) for predicting how long restoration will take after a "
+             "hurricane, validated against utility data.",
+             "Cox proportional hazards · accelerated failure time (AFT) · survival "
+             "analysis · outage duration · hurricane impact · cross-validation · model "
+             "comparison · MAPE / RMSE"),
             ("Han, S-R., Guikema, S. D., Quiring, S. M., Lee, D-Y., Rosowsky, D., Davidson, "
              "R. A. (2009). Estimating the Spatial Distribution of Power Outages during "
              "Hurricanes in the Gulf Coast Region. Reliability Engineering & System Safety "
              "94(2), 199–210.",
-             "Why it matters: spatial outage prediction. If you want to make your storm "
-             "model less synthetic — driving outage locations from weather forecasts rather "
-             "than uniform random sampling — this is the template.",
-             "What it does: spatial generalized linear mixed model for predicting where, "
-             "geographically, outages will occur during a hurricane. Inputs include wind "
-             "speed, soil moisture, tree cover; outputs are spatially explicit outage "
-             "probabilities."),
+             "spatial outage prediction. If you want to make your storm model less "
+             "synthetic — driving outage locations from weather forecasts rather than "
+             "uniform random sampling — this is the template.",
+             "spatial generalized linear mixed model for predicting where, geographically, "
+             "outages will occur during a hurricane. Inputs include wind speed, soil "
+             "moisture, tree cover; outputs are spatially explicit outage probabilities.",
+             "generalised linear mixed model (GLMM) · spatial regression · wind speed · "
+             "soil moisture · tree canopy cover · outage density · spatially explicit "
+             "prediction · grid cell aggregation"),
             ("Liu, H., Davidson, R. A., Apanasovich, T. V. (2007). Statistical Forecasting "
              "of Electric Power Restoration Times in Hurricanes and Ice Storms. IEEE "
              "Transactions on Power Systems 22(4), 2270–2279.",
-             "Why it matters: a direct predecessor of the Nateghi line, focused on "
-             "restoration time forecasting (not just outage counts). Useful for situating "
-             "the calibration phase.",
-             "What it does: regression-based forecasts of restoration completion times "
-             "given storm intensity and grid attributes; evaluated on Carolinas hurricane "
-             "and ice storm data."),
+             "a direct predecessor of the Nateghi line, focused on restoration time "
+             "forecasting (not just outage counts). Useful for situating the calibration "
+             "phase.",
+             "regression-based forecasts of restoration completion times given storm "
+             "intensity and grid attributes; evaluated on Carolinas hurricane and ice "
+             "storm data.",
+             "restoration time forecasting · negative binomial regression · ice storm · "
+             "hurricane · storm intensity index · customer-restored curve · service "
+             "territory · forecast horizon"),
         ]),
         ("Synthetic Grid Generation", BG_DECISION, [
             ("Birchfield, A. B., Xu, T., Gegner, K. M., Shetye, K. S., Overbye, T. J. (2017). "
              "Grid Structural Characteristics as Validation Criteria for Synthetic Networks. "
              "IEEE Transactions on Power Systems 32(4), 3258–3265.",
-             "Why it matters: the canonical Texas A&M synthetic-grid paper. Methods "
-             "(k-means clustering, demand allocation, topology validation) directly informed "
-             "your distribution-level approach even though the paper itself targets "
-             "transmission.",
-             "What it does: develops statistical criteria (degree distribution, line "
-             "lengths, generator-load distance) for judging whether a synthetic grid "
-             "behaves like a real one, then uses those criteria to validate the Texas A&M "
-             "transmission test cases used widely in the literature."),
+             "the canonical Texas A&M synthetic-grid paper. Methods (k-means clustering, "
+             "demand allocation, topology validation) directly informed your distribution-"
+             "level approach even though the paper itself targets transmission.",
+             "develops statistical criteria (degree distribution, line lengths, generator-"
+             "load distance) for judging whether a synthetic grid behaves like a real one, "
+             "then uses those criteria to validate the Texas A&M transmission test cases "
+             "used widely in the literature.",
+             "synthetic transmission network · k-means clustering · degree distribution · "
+             "line length distribution · graph topology · validation criteria · ACTIVSg "
+             "test cases · generator-load proximity"),
             ("Kersting, W. H. (2001/2018). Distribution System Modeling and Analysis. "
              "CRC Press (textbook).",
-             "Why it matters: the standard reference for IEEE PES distribution test "
-             "feeders (13-node, 34-node, 123-node). If you ever want a hand-curated "
-             "ground-truth feeder topology to validate your synthetic generator against, "
-             "this is the source.",
-             "What it does: textbook covering radial distribution analysis methods plus "
-             "the standard IEEE PES test feeder dataset definitions."),
+             "the standard reference for IEEE PES distribution test feeders (13-node, "
+             "34-node, 123-node). If you ever want a hand-curated ground-truth feeder "
+             "topology to validate your synthetic generator against, this is the source.",
+             "textbook covering radial distribution analysis methods plus the standard "
+             "IEEE PES test feeder dataset definitions.",
+             "radial distribution feeder · IEEE 13/34/123-node test feeder · three-phase "
+             "modelling · ladder iterative method · per-unit system · backbone vs lateral · "
+             "service transformer · load model"),
         ]),
         ("Crew Routing & Vehicle Routing Variants", BG_FIX, [
             ("Toth, P., Vigo, D. (eds.) (2014). Vehicle Routing: Problems, Methods, and "
              "Applications (2nd edition). SIAM MOS-SIAM Series on Optimization.",
-             "Why it matters: the foundational reference for VRP variants. Your crew "
-             "dispatch is structurally a multi-vehicle VRP with time-dependent service "
-             "(discovery delays) and stochastic service times (repair durations). "
-             "Citing this places your work in the right algorithmic family.",
-             "What it does: comprehensive textbook chapters on VRP variants (time windows, "
-             "stochastic demands, dynamic VRP, multi-depot) and the exact / heuristic / "
-             "metaheuristic methods used to solve them."),
+             "the foundational reference for VRP variants. Your crew dispatch is "
+             "structurally a multi-vehicle VRP with time-dependent service (discovery "
+             "delays) and stochastic service times (repair durations). Citing this places "
+             "your work in the right algorithmic family.",
+             "comprehensive textbook chapters on VRP variants (time windows, stochastic "
+             "demands, dynamic VRP, multi-depot) and the exact / heuristic / metaheuristic "
+             "methods used to solve them.",
+             "Vehicle Routing Problem (VRP) · VRP with time windows (VRPTW) · stochastic "
+             "VRP · multi-depot VRP · branch-and-cut · column generation · savings "
+             "algorithm · large neighbourhood search"),
             ("Solomon, M. M. (1987). Algorithms for the Vehicle Routing and Scheduling "
              "Problems with Time Window Constraints. Operations Research 35(2), 254–265.",
-             "Why it matters: the canonical VRPTW benchmark instances are the de facto "
-             "standard test set. If you ever compare your greedy on a synthetic benchmark "
-             "against published MILP / metaheuristic results, this is where the instances "
-             "come from.",
-             "What it does: introduces VRPTW benchmark instances (the 'Solomon "
-             "benchmarks') plus several construction and improvement heuristics."),
+             "the canonical VRPTW benchmark instances are the de facto standard test set. "
+             "If you ever compare your greedy on a synthetic benchmark against published "
+             "MILP / metaheuristic results, this is where the instances come from.",
+             "introduces VRPTW benchmark instances (the 'Solomon benchmarks') plus several "
+             "construction and improvement heuristics.",
+             "Solomon benchmarks · VRPTW · time windows · insertion heuristic · savings "
+             "algorithm · construction heuristic · improvement heuristic · feasibility "
+             "check"),
             ("Perrier, N., Langevin, A., Campbell, J. F. (2007). A Survey of Models and "
              "Algorithms for Winter Road Maintenance. Part IV: Vehicle Routing and Depot "
              "Location for Spreading. Computers & Operations Research 34(1), 258–294.",
-             "Why it matters: snowplow routing is the canonical 'crews dispatched after "
-             "disruption' problem. Methodologically the closest analogue to power "
-             "restoration outside the power-engineering literature.",
-             "What it does: surveys VRP variants tailored to winter road maintenance with "
-             "time-critical service, route-density constraints, and depot placement — all "
-             "of which have direct analogues in crew-restoration dispatch."),
+             "snowplow routing is the canonical 'crews dispatched after disruption' "
+             "problem. Methodologically the closest analogue to power restoration outside "
+             "the power-engineering literature.",
+             "surveys VRP variants tailored to winter road maintenance with time-critical "
+             "service, route-density constraints, and depot placement — all of which have "
+             "direct analogues in crew-restoration dispatch.",
+             "winter road maintenance · snowplow routing · Chinese postman problem · arc "
+             "routing · depot location · time-critical service · multi-period routing · "
+             "fleet sizing"),
         ]),
         ("Resilience Metrics & Frameworks", BG_QUESTION, [
             ("Panteli, M., Mancarella, P. (2015). The Grid: Stronger, Bigger, Smarter?: "
              "Presenting a Conceptual Framework of Power System Resilience. IEEE Power "
              "and Energy Magazine 13(3), 58–66.",
-             "Why it matters: defines the widely cited 'resilience trapezoid' — the "
-             "before/during/after-disturbance performance curve. This is the figure shape "
-             "your simulation's customer-minutes-without-service output naturally produces, "
-             "so framing your output in this language helps a paper introduction.",
-             "What it does: introduces a conceptual framework distinguishing reliability "
-             "(steady-state) from resilience (under disturbance), with metrics for each "
-             "phase of the trapezoid."),
+             "defines the widely cited 'resilience trapezoid' — the before/during/after-"
+             "disturbance performance curve. This is the figure shape your simulation's "
+             "customer-minutes-without-service output naturally produces, so framing your "
+             "output in this language helps a paper introduction.",
+             "introduces a conceptual framework distinguishing reliability (steady-state) "
+             "from resilience (under disturbance), with metrics for each phase of the "
+             "trapezoid.",
+             "resilience trapezoid · reliability vs resilience · disturbance phase · "
+             "post-event recovery · hardening · operational resilience · performance "
+             "function F(t) · system performance metric"),
             ("Panteli, M., Mancarella, P. (2015). Influence of Extreme Weather and Climate "
              "Change on the Resilience of Power Systems: Impacts and Possible Mitigation "
              "Strategies. Electric Power Systems Research 127, 259–270.",
-             "Why it matters: directly relevant to motivating Connecticut storm-resilience "
-             "work in your introduction. Establishes the climate-change connection.",
-             "What it does: reviews extreme-weather impacts on power systems and surveys "
-             "hardening / restoration mitigation strategies."),
+             "directly relevant to motivating Connecticut storm-resilience work in your "
+             "introduction. Establishes the climate-change connection.",
+             "reviews extreme-weather impacts on power systems and surveys hardening / "
+             "restoration mitigation strategies.",
+             "extreme weather · climate change · hardening strategy · undergrounding · "
+             "vegetation management · mitigation · high-impact low-probability (HILP) "
+             "events · adaptation"),
             ("Bie, Z., Lin, Y., Li, G., Li, F. (2017). Battling the Extreme: A Study on "
              "the Power System Resilience. Proceedings of the IEEE 105(7), 1253–1266.",
-             "Why it matters: a recent (relatively) survey of resilience in distribution "
-             "systems including microgrid islanding. Good for the literature-review "
-             "section of any paper.",
-             "What it does: survey article covering resilience metrics, modelling "
-             "approaches, hardening strategies, and the role of distributed energy "
-             "resources."),
+             "a recent (relatively) survey of resilience in distribution systems including "
+             "microgrid islanding. Good for the literature-review section of any paper.",
+             "survey article covering resilience metrics, modelling approaches, hardening "
+             "strategies, and the role of distributed energy resources.",
+             "distribution-system resilience · microgrid · distributed energy resources "
+             "(DER) · islanding · resilience index · self-healing grid · sectionalising "
+             "switch · proactive operation"),
             ("National Academies of Sciences, Engineering, and Medicine (2017). Enhancing "
              "the Resilience of the Nation's Electricity System. Washington, DC: The "
              "National Academies Press.",
-             "Why it matters: the policy-context citation. Cite this in your introduction "
-             "to establish that grid resilience is a recognised national-priority research "
-             "area, not a niche academic interest.",
-             "What it does: National Academies consensus study laying out the research and "
-             "policy agenda for U.S. electricity-system resilience. Open-access download."),
+             "the policy-context citation. Cite this in your introduction to establish "
+             "that grid resilience is a recognised national-priority research area, not a "
+             "niche academic interest.",
+             "National Academies consensus study laying out the research and policy "
+             "agenda for U.S. electricity-system resilience. Open-access download.",
+             "policy framework · research agenda · electricity system · national resilience · "
+             "interdependent infrastructure · cyber-physical security · federal R&D · "
+             "consensus study"),
         ]),
         ("Interactive & Browser-Based Visualization", BG_PIVOT, [
             ("Overbye, T. J., Wiegmann, D. A., Rich, A. M., Sun, Y. (2003). Human Factors "
              "Aspects of Power System Voltage Contour Visualization. IEEE Transactions on "
              "Power Systems 18(1), 76–82.",
-             "Why it matters: one of the few peer-reviewed papers on grid visualisation "
-             "specifically. Cite as a methodological precedent if asked why visualisation "
-             "is part of your contribution rather than just engineering polish.",
-             "What it does: human-factors evaluation of contour-map visualisation of "
-             "power-system voltages. Establishes that visualisation choices materially "
-             "affect operator decisions."),
+             "one of the few peer-reviewed papers on grid visualisation specifically. Cite "
+             "as a methodological precedent if asked why visualisation is part of your "
+             "contribution rather than just engineering polish.",
+             "human-factors evaluation of contour-map visualisation of power-system "
+             "voltages. Establishes that visualisation choices materially affect operator "
+             "decisions.",
+             "human factors · situational awareness · voltage contour map · operator "
+             "decision support · visualisation evaluation · cognitive load · energy "
+             "management system (EMS) · control-room display"),
             ("Note on the broader gap",
-             "Why this section is short: the academic literature on web-based / "
-             "browser-first interactive grid simulation is sparse. Most decision-support "
-             "tools are commercial (OSI Monarch, GE PowerOn) and proprietary; most "
-             "open demos are toy-scale (≤100 nodes). The peer-reviewed gap is itself part "
-             "of the case for your work occupying a distinctive niche.",
-             "What to do instead: cite engineering precedents (Leaflet, D3.js) in methods, "
-             "not literature; cite Overbye for the visualisation-matters point; build the "
-             "rest of the niche argument around the access/scale/calibration gaps."),
+             "the academic literature on web-based / browser-first interactive grid "
+             "simulation is sparse. Most decision-support tools are commercial (OSI "
+             "Monarch, GE PowerOn) and proprietary; most open demos are toy-scale "
+             "(≤100 nodes). The peer-reviewed gap is itself part of the case for your "
+             "work occupying a distinctive niche.",
+             "cite engineering precedents (Leaflet, D3.js) in methods, not literature; "
+             "cite Overbye for the visualisation-matters point; build the rest of the "
+             "niche argument around the access/scale/calibration gaps.",
+             "outage management system (OMS) · decision-support tool · proprietary vs "
+             "open-source · Leaflet · D3.js · interactive simulation · web-based GIS · "
+             "literature gap"),
         ]),
     ]
 
     for theme_name, bg, items in themes:
         h2(doc, theme_name)
-        for citation, why, what in items:
+        for citation, why, what, vocab in items:
             # Citation row (colored band)
             t = doc.add_table(rows=1, cols=1)
             cell = t.rows[0].cells[0]
@@ -1611,12 +1657,21 @@ def build_research():
             # Why-it-matters
             p = doc.add_paragraph()
             add_styled(p, "Why it matters.  ", bold=True, color=ACCENT, size=11)
-            add_styled(p, why.replace("Why it matters: ", ""), color=INK, size=11)
+            add_styled(p, why, color=INK, size=11)
             # What-it-does
             p = doc.add_paragraph()
             add_styled(p, "What it does.  ", bold=True, color=ACCENT, size=11)
-            add_styled(p, what.replace("What it does: ", "").replace("What to do instead: ", ""),
-                       color=INK, size=11)
+            add_styled(p, what, color=INK, size=11)
+            # Key terms — in a light-gray banded cell so it visually reads as
+            # a vocabulary list, with each term separated by a middle dot.
+            t = doc.add_table(rows=1, cols=1)
+            cell = t.rows[0].cells[0]
+            cell.width = Inches(6.4)
+            shade(cell, "F0E5CB")
+            set_cell_borders(cell)
+            p = cell.paragraphs[0]
+            add_styled(p, "Key terms.  ", bold=True, color=ACCENT, size=10)
+            add_styled(p, vocab, italic=True, color=INK, size=10)
             body(doc, "")
 
     body(doc, "")
