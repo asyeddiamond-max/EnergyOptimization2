@@ -1572,17 +1572,19 @@ window.addEventListener('load', () => { warmUpServer(); });
 setInterval(pingServerOnce, 60000);
 document.getElementById('serverUrl').addEventListener('change', warmUpServer);
 
-document.getElementById('planRestore').onclick = async function(){
-  // Auto-route: use server if toggle is on AND the server is healthy.
-  // Otherwise fall back to the in-browser scheduler. The user never has
-  // to think about it; if the server is down, they still get results.
+// Shared routing helper so the "Plan restoration" button AND "Apply to slider"
+// both honor the server toggle. Without this, hitting Apply after a server-
+// recommended crew count would invoke the in-browser scheduler with that
+// crew count + a 25k+ outage storm and crash the page.
+async function runPlanAutoRoute(){
   const wantServer = document.getElementById('useServerToggle').checked;
   if (wantServer && _serverHealthy) return runServerPlan();
   if (wantServer && !_serverHealthy){
     showServerStatus('Server unavailable — running locally instead.', false);
   }
   return planRestoration();
-};
+}
+document.getElementById('planRestore').onclick = runPlanAutoRoute;
 
 // --- Alternative #4: server-side compute ------------------------------------
 //
@@ -2368,7 +2370,7 @@ async function recommendCrewCountServer(){
     applyBtn.onclick = () => {
       cS.value = Math.min(recM, +cS.max);
       cV.textContent = cS.value;
-      planRestoration();
+      runPlanAutoRoute();
     };
     status.textContent =
       `Server recommended ${recM.toLocaleString()} crews → ${fmtH(recT)} ` +
@@ -2610,7 +2612,7 @@ async function recommendCrewCount(){
   applyBtn.onclick = () => {
     cS.value = Math.min(recM, +cS.max);
     cV.textContent = cS.value;
-    planRestoration();
+    runPlanAutoRoute();
   };
   status.textContent = `Recommended ${recM.toLocaleString()} crews → ${fmtH(recT)} (floor ${fmtH(floorTime)} at ${upperBound.toLocaleString()} crews).`;
   setRecProgress(100);
