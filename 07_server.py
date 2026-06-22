@@ -285,8 +285,13 @@ def _split_for_specialization(req_outages: list[Outage], crews: int, seed: int,
 def _run_scheduler_specialized(req_outages, crews, seed, realistic,
                                customer_weight, tree_blocked_rate, tree_crew_share):
     """Crew specialization model: split outages by type, split crews by type,
-    run two independent scheduler calls, merge results. Total restoration
-    time = max of the two subsystems' finish times."""
+    run two independent scheduler calls IN PARALLEL, merge results. Total
+    restoration time = max of the two subsystems' finish times.
+
+    The two subsystems are independent so running them sequentially wastes
+    wall-clock time. Numba releases the GIL during JIT-compiled code, so a
+    plain ThreadPoolExecutor delivers real parallelism here."""
+    from concurrent.futures import ThreadPoolExecutor
     tree_idx, line_idx, n_tree, n_line = _split_for_specialization(
         req_outages, crews, seed, tree_blocked_rate, tree_crew_share,
     )
@@ -298,12 +303,13 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
     tree_outages = [req_outages[i] for i in tree_idx]
     line_outages = [req_outages[i] for i in line_idx]
 
-    t_tree, crews_tree = _run_scheduler(
-        tree_outages, n_tree, seed + 1, realistic, customer_weight,
-    )
-    t_line, crews_line = _run_scheduler(
-        line_outages, n_line, seed + 2, realistic, customer_weight,
-    )
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        fut_tree = ex.submit(_run_scheduler, tree_outages, n_tree,
+                             seed + 1, realistic, customer_weight)
+        fut_line = ex.submit(_run_scheduler, line_outages, n_line,
+                             seed + 2, realistic, customer_weight)
+        t_tree, crews_tree = fut_tree.result()
+        t_line, crews_line = fut_line.result()
 
     # Merge crew lists; relabel jobs with the right outage type tag so the
     # frontend can color or tooltip them differently if it wants.

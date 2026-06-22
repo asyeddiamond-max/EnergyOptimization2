@@ -277,17 +277,27 @@ def _run_scheduler(lat, lon, m_crews, realistic, seed, customers, customer_weigh
 @njit(cache=True, fastmath=True)
 def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G, customers, customer_weight,
                         travel_mph, assessment_delay, workday_hours, road_multiplier):
-    # NOTE: customer_weight is accepted for signature parity but ignored —
-    # ring-expansion termination assumes the score is a monotonic function
-    # of distance, which weighted scoring breaks. When the caller wants
-    # weighted scoring at scale, the wrapper routes through _run_scheduler
-    # (dense flat scan) instead.
     """Spatial-grid-hash variant. Same algorithm as _run_scheduler but the
-    nearest-outage search uses a GxG bucket grid: look up the crew's cell,
-    walk concentric rings of cells until a valid outage is found, then
-    pick the nearest within those rings. O(K) per dispatch where K is
-    local bucket density, not O(N)."""
+    nearest-outage search uses a GxG bucket grid: walk concentric rings of
+    cells until termination. O(K) per dispatch where K is local bucket
+    density, not O(N).
+
+    Customer-weighted mode (customer_weight > 0): score(o) = customers(o) -
+    customer_weight * d². Ring expansion can still terminate early because
+    we know an upper bound on the score of any outage in an unsearched
+    cell: max_customers_global - customer_weight * (ring_min_distance)².
+    If that upper bound < best_score_found_so_far, no need to keep
+    expanding. This keeps the grid hash O(K) even with weighted scoring
+    (modulo a larger K depending on how the weight compares to the
+    customer distribution)."""
     N = lat.shape[0]
+    use_weighted = customer_weight > 0.0
+    # Global upper bound on customers for the score-bound termination check.
+    max_customers = 0.0
+    if use_weighted:
+        for i in range(N):
+            if customers[i] > max_customers:
+                max_customers = customers[i]
     TRAVEL_MPH = travel_mph if realistic else 30.0
     ASSESSMENT_DELAY = assessment_delay if realistic else 0.0
     WORKDAY_HOURS = workday_hours if realistic else 24.0
@@ -458,18 +468,15 @@ def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G, customers, custom
 
         best = -1
         best_d2 = INF
+        best_score = -INF  # for customer-weighted mode
         ring = 0
-        # Expand outward in concentric rings until we either find a valid
-        # candidate and a full ring with no closer one possible, or exhaust.
         max_ring = G  # at most full grid
+        # Pre-compute the cell-min-side for termination distance bounds.
+        cell_h = lat_span / G
+        cell_w = lon_span / G
+        cell_min = cell_h if cell_h < cell_w else cell_w
         while ring <= max_ring:
-            # Enumerate Chebyshev-distance == ring cells without duplicates.
-            # Ring 0 = single center cell. Ring>=1 = 4 strips (top, bottom,
-            # left, right) clamped at use site.
             if ring == 0:
-                gy_list_lo = cy_; gy_list_hi = cy_
-                gx_list_lo = cx_; gx_list_hi = cx_
-                # Single cell.
                 if 0 <= cy_ < G and 0 <= cx_ < G:
                     c = cy_ * G + cx_
                     s = bucket_start[c]; e = bucket_start[c + 1]
@@ -479,11 +486,15 @@ def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G, customers, custom
                         if realistic and disc[i] > t_now: continue
                         dx = lat[i] - cx; dy = lon[i] - cy_pos
                         d2 = dx * dx + dy * dy
-                        if d2 < best_d2:
-                            best_d2 = d2; best = i
+                        if use_weighted:
+                            score = customers[i] - customer_weight * d2
+                            if score > best_score:
+                                best_score = score; best = i; best_d2 = d2
+                        else:
+                            if d2 < best_d2:
+                                best_d2 = d2; best = i
             else:
-                # Top and bottom rows: gy in {cy_-ring, cy_+ring}, gx full
-                # range [cx_-ring, cx_+ring].
+                # Top and bottom rows.
                 for side in range(2):
                     gy = cy_ - ring if side == 0 else cy_ + ring
                     if gy < 0 or gy >= G:
@@ -501,10 +512,14 @@ def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G, customers, custom
                             if realistic and disc[i] > t_now: continue
                             dx = lat[i] - cx; dy = lon[i] - cy_pos
                             d2 = dx * dx + dy * dy
-                            if d2 < best_d2:
-                                best_d2 = d2; best = i
-                # Left and right columns: gx in {cx_-ring, cx_+ring}, gy
-                # in (cy_-ring, cy_+ring) exclusive (corners already done).
+                            if use_weighted:
+                                score = customers[i] - customer_weight * d2
+                                if score > best_score:
+                                    best_score = score; best = i; best_d2 = d2
+                            else:
+                                if d2 < best_d2:
+                                    best_d2 = d2; best = i
+                # Left and right columns (corners already done).
                 for side in range(2):
                     gx = cx_ - ring if side == 0 else cx_ + ring
                     if gx < 0 or gx >= G:
@@ -522,18 +537,27 @@ def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G, customers, custom
                             if realistic and disc[i] > t_now: continue
                             dx = lat[i] - cx; dy = lon[i] - cy_pos
                             d2 = dx * dx + dy * dy
-                            if d2 < best_d2:
-                                best_d2 = d2; best = i
+                            if use_weighted:
+                                score = customers[i] - customer_weight * d2
+                                if score > best_score:
+                                    best_score = score; best = i; best_d2 = d2
+                            else:
+                                if d2 < best_d2:
+                                    best_d2 = d2; best = i
 
             if best >= 0:
-                # Stop expanding when no cell at distance > ring can hold
-                # an outage closer than our current best.
-                cell_h = lat_span / G
-                cell_w = lon_span / G
-                cell_min = cell_h if cell_h < cell_w else cell_w
                 ring_min = ring * cell_min
-                if ring >= 1 and ring_min * ring_min >= best_d2:
-                    break
+                ring_min2 = ring_min * ring_min
+                if use_weighted:
+                    # Best possible score in any unsearched cell ≤
+                    # max_customers - customer_weight * ring_min². If that's
+                    # below our current best, no further ring can improve.
+                    upper_bound = max_customers - customer_weight * ring_min2
+                    if ring >= 1 and upper_bound < best_score:
+                        break
+                else:
+                    if ring >= 1 and ring_min2 >= best_d2:
+                        break
             # Check if we've covered the whole grid.
             if (cy_ - ring <= 0) and (cy_ + ring >= G - 1) \
                and (cx_ - ring <= 0) and (cx_ + ring >= G - 1):
@@ -661,15 +685,15 @@ def plan_restoration_numba(outages, m_crews, realistic=True, seed=42,
     else:
         cust_arr = np.zeros(N, dtype=np.float64)
 
-    use_weighted = customer_weight > 0.0
-    # Grid hash + ring expansion assumes nearest-distance termination, which
-    # breaks under customer-weighted scoring. Use dense flat scan for the
-    # weighted path even at large N.
-    if N >= 1000 and not use_weighted:
+    # Both dense and grid schedulers now handle customer-weighted scoring.
+    # The grid path uses an upper-bound termination condition so ring
+    # expansion stays bounded even under weighted scoring. Use grid above
+    # N=1000 regardless of weighting; under that the dense scan is faster.
+    if N >= 1000:
         G = max(8, int(math.sqrt(N / 5.0)))
         total, crew_time, crew_jobs, log_crew, log_outage, log_eta = \
             _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G,
-                                cust_arr, 0.0,
+                                cust_arr, float(customer_weight),
                                 float(travel_mph), float(assessment_delay),
                                 float(workday_hours), float(road_multiplier))
     else:
