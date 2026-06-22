@@ -95,6 +95,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Gzip-compress responses > 1 KB. At 25k outages the schedule response is
+# ~1.5 MB of JSON; gzip brings it to ~150 KB. Major savings on network time.
+from starlette.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+
+# Pre-warm the Numba JIT at server startup so the first user request after
+# a Render redeploy doesn't pay a ~10s JIT compile penalty. Runs synthetic
+# scheduler calls covering every (grid/dense × weighted/nearest) signature
+# the production code paths use.
+@app.on_event("startup")
+def _prewarm_numba():
+    if not _NUMBA:
+        return
+    try:
+        import random as _r
+        _r.seed(0)
+        warm_pts = [(41.7 + _r.random() * 0.01, -72.7 + _r.random() * 0.01)
+                    for _ in range(1200)]
+        warm_cust = [10.0 + 100.0 * _r.random() for _ in range(1200)]
+        # Triggers compile of: grid + pure-nearest, dense + pure-nearest.
+        plan_restoration_numba(warm_pts, 8, realistic=True, seed=1,
+                               customers=warm_cust, customer_weight=0.0)
+        plan_restoration_numba(warm_pts[:500], 4, realistic=True, seed=1,
+                               customers=warm_cust[:500], customer_weight=0.0)
+        # Triggers compile of: grid + weighted, dense + weighted.
+        plan_restoration_numba(warm_pts, 8, realistic=True, seed=1,
+                               customers=warm_cust, customer_weight=5000.0)
+        plan_restoration_numba(warm_pts[:500], 4, realistic=True, seed=1,
+                               customers=warm_cust[:500], customer_weight=5000.0)
+        print("[startup] Numba JIT pre-warmed for all scheduler signatures")
+    except Exception as e:
+        print(f"[startup] JIT pre-warm failed (non-fatal): {e}")
+
 
 # --- Schemas ---------------------------------------------------------------
 

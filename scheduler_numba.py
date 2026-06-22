@@ -470,8 +470,13 @@ def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G, customers, custom
         best_d2 = INF
         best_score = -INF  # for customer-weighted mode
         ring = 0
-        max_ring = G  # at most full grid
-        # Pre-compute the cell-min-side for termination distance bounds.
+        # Cap ring expansion. For pure-nearest mode the score-bound check
+        # below kicks in much earlier (typically ring 1-4). For weighted
+        # mode the score bound is looser, so we explicitly cap at 8 rings
+        # (covers a 17x17-cell window, ~1450 outages at default grid sizing).
+        # Accepts a slight optimality loss in exchange for much shorter
+        # dispatches at large N + weighted mode.
+        max_ring = 8 if use_weighted else G
         cell_h = lat_span / G
         cell_w = lon_span / G
         cell_min = cell_h if cell_h < cell_w else cell_w
