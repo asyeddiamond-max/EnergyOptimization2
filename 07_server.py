@@ -170,6 +170,43 @@ class RecommendResponse(BaseModel):
     evaluations: list[RecommendEvaluation]
 
 
+class BatchScenario(BaseModel):
+    """One storm scenario in a batch sweep. Reuses the same fields as
+    ScheduleRequest, plus an optional human-readable label so the response
+    can be matched up with the request order."""
+    label: str = ""
+    outages: list[Outage]
+    crews: int = Field(ge=1)
+    seed: int = 42
+    realistic: bool = True
+    customer_weight: float = 0.0
+    crew_specialization: bool = False
+    tree_blocked_rate: float = 0.30
+    tree_crew_share: float = 0.20
+
+
+class BatchRequest(BaseModel):
+    scenarios: list[BatchScenario] = Field(min_length=1, max_length=200)
+    # Optional list of worker URLs to fan out to. When empty, runs all
+    # scenarios serially on this server (still works, just no parallelism).
+    workers: list[str] = []
+
+
+class BatchScenarioResult(BaseModel):
+    label: str
+    total_time_h: float
+    n_crews: int
+    elapsed_ms: float
+    worker: str
+    error: str = ""
+
+
+class BatchResponse(BaseModel):
+    results: list[BatchScenarioResult]
+    total_elapsed_ms: float
+    n_workers: int
+
+
 class ObservedPoint(BaseModel):
     hour: float
     customers_restored: float
@@ -342,6 +379,7 @@ def root():
             "POST /api/recommend — binary-search the optimal crew count",
             "POST /api/monte_carlo — N-run ensemble with different seeds",
             "POST /api/calibrate — tune realism parameters against an observed curve",
+            "POST /api/batch    — fan out N scenarios across worker URLs in parallel",
         ],
     }
 
@@ -552,6 +590,89 @@ def calibrate(req: CalibrateRequest) -> CalibrateResponse:
             ObservedPoint(hour=h, customers_restored=c)
             for h, c in zip(sample_hours, final_sim)
         ],
+    )
+
+
+def _dispatch_batch_scenario(scenario: BatchScenario, worker_url: str
+                             ) -> BatchScenarioResult:
+    """Run one scenario. If worker_url is empty or matches our own server,
+    runs locally (in-process). Otherwise POSTs to that worker's /api/schedule
+    and returns just the total time + crew count from the response."""
+    import time
+    start = time.time()
+    try:
+        if not worker_url:
+            # Local in-process path.
+            total, crews = _run_scheduler(
+                scenario.outages, scenario.crews, scenario.seed,
+                scenario.realistic, scenario.customer_weight,
+                crew_specialization=scenario.crew_specialization,
+                tree_blocked_rate=scenario.tree_blocked_rate,
+                tree_crew_share=scenario.tree_crew_share,
+            )
+            elapsed = (time.time() - start) * 1000
+            return BatchScenarioResult(
+                label=scenario.label, total_time_h=total, n_crews=len(crews),
+                elapsed_ms=elapsed, worker="local",
+            )
+
+        # Remote worker path — POST to the worker's /api/schedule.
+        import json
+        import urllib.request
+        body = scenario.model_dump()
+        body.pop("label", None)
+        data = json.dumps(body).encode()
+        req = urllib.request.Request(
+            worker_url.rstrip("/") + "/api/schedule",
+            data=data, headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=300) as r:
+            resp = json.loads(r.read())
+        elapsed = (time.time() - start) * 1000
+        return BatchScenarioResult(
+            label=scenario.label,
+            total_time_h=float(resp.get("total_time_h", 0.0)),
+            n_crews=len(resp.get("crews", [])),
+            elapsed_ms=elapsed, worker=worker_url,
+        )
+    except Exception as e:
+        elapsed = (time.time() - start) * 1000
+        return BatchScenarioResult(
+            label=scenario.label, total_time_h=0.0, n_crews=0,
+            elapsed_ms=elapsed, worker=worker_url or "local", error=str(e),
+        )
+
+
+@app.post("/api/batch", response_model=BatchResponse)
+def batch(req: BatchRequest) -> BatchResponse:
+    """Fan out N scenarios across M worker URLs in parallel. Each scenario
+    becomes one HTTP POST to a worker's /api/schedule. When workers list is
+    empty, runs serially in-process. The user spins up additional free
+    Render services (each with its own URL) and pastes their URLs into the
+    workers list to scale linearly."""
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+    start = time.time()
+    workers = [w.strip() for w in req.workers if w.strip()]
+    # Round-robin scenarios onto workers (or local if list empty).
+    assignments: list[tuple[BatchScenario, str]] = []
+    if workers:
+        for i, s in enumerate(req.scenarios):
+            assignments.append((s, workers[i % len(workers)]))
+    else:
+        for s in req.scenarios:
+            assignments.append((s, ""))
+    # Parallel fan-out via threads (one thread per scenario; bounded so we
+    # don't open hundreds of sockets at once).
+    max_parallel = max(1, len(workers)) if workers else 1
+    max_parallel = min(max_parallel * 4, len(assignments), 32)
+    with ThreadPoolExecutor(max_workers=max_parallel) as pool:
+        results = list(pool.map(lambda a: _dispatch_batch_scenario(*a),
+                                assignments))
+    total_elapsed = (time.time() - start) * 1000
+    return BatchResponse(
+        results=results, total_elapsed_ms=total_elapsed,
+        n_workers=len(workers) if workers else 1,
     )
 
 
