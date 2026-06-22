@@ -226,6 +226,14 @@
       <div class="lbl">Total restoration time</div>
       <div class="big" id="restoreTime">—</div>
       <div class="sub" id="restoreDetail">— customers restored</div>
+      <div id="restoreCurveBox" style="display:none;margin-top:8px;">
+        <div style="font-size:10px;color:#475569;margin-bottom:2px;">Customers restored over time</div>
+        <svg id="restoreCurve" viewBox="0 0 280 80" preserveAspectRatio="none"
+             style="width:100%;height:80px;background:#fff;border:1px solid #e2e8f0;border-radius:3px;display:block;"></svg>
+        <div id="restoreCurveLabels" style="font-size:9px;color:#94a3b8;display:flex;justify-content:space-between;margin-top:1px;">
+          <span>0h</span><span>—</span>
+        </div>
+      </div>
     </div>
 
     <div class="ctrl" style="background:#fff7ed;border-color:#fdba74;">
@@ -912,6 +920,7 @@ function generateGrid(){
   outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
   affectedEl.textContent='0'; affectedPctEl.textContent='0% of county population';
   outageCountEl.textContent='0'; restoreTimeEl.textContent='—'; restoreDetailEl.textContent='— customers restored';
+  const _curveBox = document.getElementById('restoreCurveBox'); if (_curveBox) _curveBox.style.display = 'none';
 }
 
 function renderGrid(){
@@ -1373,6 +1382,82 @@ function renderPlan(crews, totalTime, N, realistic){
   const modeNote = realistic ? ' · realistic mode' : ' · optimistic baseline';
   restoreDetailEl.textContent=`${N.toLocaleString()} jobs across ${crews.length.toLocaleString()} crews${modeNote}`;
   status.textContent=`Restoration: ${crews.length.toLocaleString()} crews finish all ${N.toLocaleString()} repairs in ${fmtDuration(totalTime)}${realistic?' (includes 12 h assessment + overnight downtime)':''}.`;
+
+  renderRestorationCurve(crews, totalTime, fmtDuration);
+}
+
+// Draw the cumulative-customers-restored curve as an inline SVG line chart.
+// Pulls (eta, customers) from every dispatched job; the per-job lat/lon
+// already lines up with the storm's outages by spatial coincidence so we
+// can look up the customer count for each job by nearest-outage match.
+function renderRestorationCurve(crews, totalTime, fmtDuration){
+  const box = document.getElementById('restoreCurveBox');
+  const svg = document.getElementById('restoreCurve');
+  const labelsRow = document.getElementById('restoreCurveLabels');
+  if (!storm || !crews || !crews.length) { box.style.display = 'none'; return; }
+
+  // Collect (eta, customers) for every job. Look up customers by matching
+  // the job's outage lat/lon to the closest known outage in the storm
+  // (server response doesn't carry customer counts back; client already
+  // has them).
+  const pairs = [];
+  // Build a quick index of customers by lat,lon key for O(1) lookup.
+  const custByKey = new Map();
+  for (const o of storm.outages){
+    custByKey.set(`${o.lat.toFixed(6)},${o.lon.toFixed(6)}`, o.popLoss || 0);
+  }
+  for (const c of crews){
+    for (const j of (c.jobs || [])){
+      const k = `${j.o.lat.toFixed(6)},${j.o.lon.toFixed(6)}`;
+      const cust = custByKey.get(k) || 0;
+      pairs.push([j.etaFinish, cust]);
+    }
+  }
+  if (!pairs.length){ box.style.display = 'none'; return; }
+  pairs.sort((a, b) => a[0] - b[0]);
+
+  // Cumulative curve.
+  let running = 0;
+  const curve = [];
+  for (const [t, c] of pairs){
+    running += c;
+    curve.push([t, running]);
+  }
+  const totalCust = running;
+  const tMax = totalTime;
+  if (totalCust <= 0 || tMax <= 0){ box.style.display = 'none'; return; }
+
+  // Down-sample to at most ~140 points for the SVG path so we don't ship
+  // thousands of polyline points for huge scenarios.
+  const TARGET = 140;
+  let sampled = curve;
+  if (curve.length > TARGET){
+    const step = curve.length / TARGET;
+    sampled = [];
+    for (let i = 0; i < curve.length; i += step) sampled.push(curve[Math.floor(i)]);
+    if (sampled[sampled.length - 1] !== curve[curve.length - 1]) sampled.push(curve[curve.length - 1]);
+  }
+
+  // SVG path: viewBox is 0..280 wide × 0..80 tall. Map t→x, customers→y
+  // (inverted because SVG y grows downward).
+  const W = 280, H = 80;
+  let d = `M 0 ${H}`;
+  for (const [t, cum] of sampled){
+    const x = (t / tMax) * W;
+    const y = H - (cum / totalCust) * (H - 4);
+    d += ` L ${x.toFixed(1)} ${y.toFixed(1)}`;
+  }
+  d += ` L ${W} ${H} Z`;
+
+  svg.innerHTML = `
+    <path d="${d}" fill="rgba(20,184,166,0.18)" stroke="#0d9488" stroke-width="1.5"/>
+    <line x1="0" y1="${H-1}" x2="${W}" y2="${H-1}" stroke="#cbd5e1" stroke-width="0.5"/>
+  `;
+  labelsRow.innerHTML =
+    `<span>0h</span>` +
+    `<span style="color:#475569">${totalCust.toLocaleString(undefined,{maximumFractionDigits:0})} customers</span>` +
+    `<span>${fmtDuration(tMax)}</span>`;
+  box.style.display = 'block';
 }
 
 function resetStorm(){
@@ -1384,6 +1469,7 @@ function resetStorm(){
   if (window._repairCloud){ map.removeLayer(window._repairCloud); window._repairCloud=null; }
   affectedEl.textContent='0'; affectedPctEl.textContent='0% of county population';
   outageCountEl.textContent='0'; restoreTimeEl.textContent='—'; restoreDetailEl.textContent='— customers restored';
+  const _curveBox = document.getElementById('restoreCurveBox'); if (_curveBox) _curveBox.style.display = 'none';
   status.textContent='Storm cleared.';
 }
 
