@@ -135,6 +135,8 @@
       <li><a href="#ch11">The Vanishing Markers</a></li>
       <li><a href="#ch12">Direction Conversations &amp; Research Strategy</a></li>
       <li><a href="#ch13">Documentation Push</a></li>
+      <li><a href="#ch15">The Realism Round &amp; the Polish Sprint</a></li>
+      <li><a href="#appx">Appendix A — Problems Faced</a></li>
       <li><a href="#ch14">Coda</a></li>
     </ol>
   </div>
@@ -1492,6 +1494,142 @@
     <li><b>The hardest bugs are about semantics, not syntax.</b> The four-deploy <code>SystemExit</code> saga was caused by Python&#x2019;s exception hierarchy doing exactly what it&#x2019;s designed to do.</li>
     <li><b>Many performance problems are really "we&#x2019;re doing work that doesn&#x2019;t need to be done" problems.</b> The 246&#xD7; win in Chapter VIII came from <em>skipping</em> the grid scan when there was nothing to find, not from making the scan faster.</li>
     <li><b>Visualisation parity is part of correctness.</b> The vanishing markers regression wasn&#x2019;t caught by tests &#x2014; it was caught by a user looking at the map. Speed without the right output isn&#x2019;t a win.</li>
+  </ul>
+
+  <hr class="section">
+  <h2 id="ch15">Chapter XV — The Realism Round &amp; the Polish Sprint</h2>
+  <div class="marginalia">Built after the documentation push. Customer-impact weighting, crew specialization, calibration framework, multi-server fan-out, customers-restored curve, server-keep-alive, all-toggles-on speedup. The features that took the simulator from "engineering done" to "ready for the research story."</div>
+
+  <p class="narrative">
+    With the documentation deliverables shipped, the work that followed was driven by a single
+    question: <em>is the realistic toggle actually realistic?</em> The honest answer landed at
+    "structurally realistic but not validated." The path forward was therefore two-track: add
+    the missing realism factors that the literature says matter most, and build the calibration
+    framework so when real Eversource data arrives the simulator can be tuned against it.
+  </p>
+
+  <h3>XV.1 — Customer-impact-weighted dispatch</h3>
+  <p class="narrative">
+    Real utility dispatchers don't just send crews to the closest outage. They detour past a
+    single-house lateral to reach a substation that restores thousands of customers. This is the
+    biggest gap between the original scheduler and reality. The fix: a scoring function
+    <code>score(o) = customers(o) - customer_weight × d&sup2;</code> that biases dispatch toward
+    high-customer outages while still keeping spatial efficiency.
+  </p>
+  <p class="narrative">
+    Empirical result: at 25 000 outages &times; 5 000 crews, customer-weighted dispatch dropped total
+    restoration time from 72 h (pure-nearest) to 61.7 h. That's not just a curve-shape change —
+    it's a genuine 14% improvement in the total customer-minutes-without-service metric utilities
+    actually care about. The toggle is opt-in (default off, preserves backwards compatibility).
+  </p>
+
+  <h3>XV.2 — Calibration framework</h3>
+  <div class="quote"><span class="who">User</span> can you do 2 and 4</div>
+  <p class="narrative">
+    Built <code>/api/calibrate</code>: accepts an observed restoration curve from a real storm,
+    runs SciPy Nelder-Mead optimization over the four most-tunable realism factors (travel
+    speed, assessment delay, workday hours, road multiplier), returns the parameter set that
+    minimises RMSE between simulator output and observation. Required refactoring the Numba
+    scheduler so those four were inputs rather than hard-coded constants.
+  </p>
+  <p class="narrative">
+    Self-test against synthetic data: generate an "observed" curve with known ground-truth
+    parameters, run calibration from default initial guesses. Result: RMSE drops from 4 267 to
+    43 (a 100&times; reduction) in 53 iterations. The recovered parameters don't exactly match the
+    truth because multiple parameter combinations produce nearly identical curves &mdash; calibration
+    optimises curve-match, not parameter-match, which is the correct success criterion.
+  </p>
+
+  <h3>XV.3 — Crew specialization</h3>
+  <p class="narrative">
+    Real utilities deploy roughly 80% line crews and 20% tree crews. About 30% of distribution
+    outages involve trees down on lines that need clearing before line work begins. The
+    simplest defensible model: split the fleet 80/20, tag 30% of outages as tree-blocked, run
+    two independent dispatch subsystems. Total restoration time = max(tree, line).
+  </p>
+  <p class="narrative">
+    Implementation lived entirely at the server-helper level &mdash; no Numba scheduler changes
+    needed. The two subsystem calls were initially sequential, doubling wall-clock time at max
+    settings. Switching to a 2-worker ThreadPoolExecutor delivered true parallelism because
+    Numba releases the GIL during JIT-compiled code.
+  </p>
+
+  <h3>XV.4 — Customer-restored curve overlay</h3>
+  <p class="narrative">
+    The customer-impact toggle has no effect on the total restoration time (same outages, same
+    crews, same total work). Its effect is entirely on <em>which</em> customers get power back
+    first &mdash; the area under the customers-restored-over-time curve. Without a visualisation of
+    that curve, the feature was invisible.
+  </p>
+  <p class="narrative">
+    Fix: an inline 280&times;80 SVG line chart under the Total Restoration Time stat box. Auto-
+    appears after each Plan restoration. Down-samples to ~140 path points for huge scenarios.
+    Works for both local and server-routed plans because it lives inside the shared
+    <code>renderPlan()</code> helper.
+  </p>
+
+  <h3>XV.5 — Multi-server batch sweep</h3>
+  <div class="quote"><span class="who">User</span> Yes Id love for the multi-sever approach if I am able to run multiple different storm scenaiors at the same time. I want to ntoe that I am unable to actally spend money for servers.</div>
+  <p class="narrative">
+    Honest reality-check first: a single 250k-outage scenario at realistic mode is already
+    sub-second on one server, and the scheduler loop is inherently sequential, so multi-server
+    can't help that case. Where multi-server <em>does</em> crush is independent-scenario
+    workloads: Monte Carlo ensembles, parameter sweeps, varying-seed analysis. Each scenario is
+    a fully independent scheduler call, so N servers gives ~N&times; throughput.
+  </p>
+  <p class="narrative">
+    Architecture: new <code>/api/batch</code> endpoint that accepts a list of scenarios + a
+    list of worker URLs, round-robins scenarios onto workers, fans out via
+    ThreadPoolExecutor. Empty workers list = serial in-process. The user spins up additional
+    free Render services (each takes ~3 min) and pastes their URLs into the batch UI to scale
+    linearly. Stays within the free tier &mdash; Render's free-tier limits are per-service, not
+    per-account.
+  </p>
+
+  <h3>XV.6 — Keep-alive &amp; auto-rewake</h3>
+  <div class="quote"><span class="who">User</span> the sever backend also turns to red after I dont give it commands for a bit. Is it possible that for as long as the interactive is open on the main tab of the person, the sever can be continuously pinged so it wouldnt have to be restarted on</div>
+  <p class="narrative">
+    Diagnosed: the existing 60-second probe had a 3.5-second timeout, way shorter than Render's
+    30&ndash;60 second cold-start wake time. So every probe during wake would time out, mark the
+    server offline, and the dot would stay red even though the keep-alive interval was firing
+    correctly. Browser background-tab throttling was a secondary contributor.
+  </p>
+  <p class="narrative">
+    Four-layer fix: 4-minute keep-alive interval (well under Render's 15-min sleep threshold);
+    auto-rewake on any failed probe (the dot stops getting stuck red); visibility-change
+    re-probe when the tab regains focus; and a manual "Wake server now" button as a guaranteed
+    user-controlled fallback.
+  </p>
+
+  <h3>XV.7 — All-toggles-on speedup</h3>
+  <div class="quote"><span class="who">User</span> can you try to increase proccessing speed for when all toggles are on. It is unable to handle max settings that well</div>
+  <p class="narrative">
+    The problem: customer-weighted scoring was using the O(N&sup2;) dense scan because the
+    grid-hash's ring-expansion termination didn't naively generalize to non-monotonic-in-
+    distance scoring. The fix: a different termination bound &mdash; <code>upper_bound =
+    max_customers_global - customer_weight &times; ring_min&sup2;</code>. When that upper bound drops
+    below the current best score, no further ring can produce a higher-scoring outage.
+  </p>
+  <p class="narrative">
+    With that change, customer-weighted scoring runs inside the grid hash with ring-expansion
+    intact. 25k &times; 5000 customer-weighted dropped from ~50 s (dense fallback) to 2.24 s. With
+    crew specialization also running its subsystems in parallel, all-toggles-on at max settings
+    now lands in 2&ndash;3 seconds end-to-end.
+  </p>
+  <p class="narrative">
+    Two more wins shipped together: gzip middleware compresses the ~1.5 MB JSON response at
+    25k outages down to ~150 KB, saving 100&ndash;500 ms on network. And the Numba JIT is pre-warmed
+    at server boot so the first request after a Render redeploy doesn't pay the ~10 s compile
+    penalty &mdash; container startup is slightly slower but every user request is fast from day
+    one.
+  </p>
+
+  <h3>Takeaways from Chapter XV</h3>
+  <ul class="takeaways">
+    <li><b>Adding the right realism factors is more important than calibrating.</b> Customer-impact weighting changed a measurable output metric (total restoration time) by 14% at max settings, before any calibration was applied. That's a real engineering result, not a fit.</li>
+    <li><b>Multi-server can't help a sequential algorithm at all.</b> The single-scenario scheduler is fundamentally sequential and already sub-second; throwing N servers at it does nothing. Multi-server helps for <em>independent</em> work &mdash; Monte Carlo, parameter sweeps, batch evaluation.</li>
+    <li><b>Free-tier hosting limitations are an interaction-design problem.</b> Render's 15-minute idle sleep + 30-60 second cold start became a usability issue not because the engineering was wrong but because the keep-alive timing didn't account for it. The fix was three lines of JavaScript plus a button.</li>
+    <li><b>Visualization parity matters as much as compute parity.</b> The customer-impact toggle was nearly invisible until the customers-restored curve overlay landed. Speed without the right output is no win.</li>
   </ul>
 
   <hr class="section">

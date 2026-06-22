@@ -1,17 +1,77 @@
-# Hartford County Power-Grid Simulation
+# Hartford County Power-Grid Resilience Simulation
 
-An interactive browser-based model of a synthetic electric distribution grid covering Hartford County, Connecticut, with a storm-outage simulator, a crew-restoration planner, an optimal-crew-count recommender, and GeoJSON / Esri Shapefile export. Built as a research and visualization tool — not a production utility-planning system.
+A browser-first, server-augmented, Connecticut-scale interactive simulator for distribution-grid storm restoration. Models 100 000+ outages and 5 000+ crews per scenario in under a second, with seven realism factors, a calibration framework for future tuning against real Eversource data, customer-impact-weighted dispatch, and Monte Carlo ensemble analysis.
+
+Designed as a research instrument for the **restoration side** of the distribution-grid resilience problem — a downstream complement to the UConn Eversource Energy Center group's outage-prediction work.
 
 ---
 
 ## Try it live
 
-[**Open the full simulation →**](https://asyeddiamond-max.github.io/EnergyOptimization2/03_grid_simulation.html)
+[**Open the simulator →**](https://asyeddiamond-max.github.io/EnergyOptimization2/03_grid_simulation.html)
 
-No install required. Works in any modern browser — sliders, map, storm simulation, restoration plan, and GIS export all run client-side.
+The server backend at `hartford-grid-server.onrender.com` is auto-detected by the page. The simulator runs entirely in the browser as a fallback if the server is offline.
 
-For a lighter standalone preview (single SVG, no Leaflet basemap, no server needed):
+- [`/health`](https://hartford-grid-server.onrender.com/health) — server health check
+- [`/version`](https://hartford-grid-server.onrender.com/version) — running commit + backend mode
+
+For a lighter standalone preview (single SVG, no Leaflet basemap):
 [**Open the inline preview →**](https://asyeddiamond-max.github.io/EnergyOptimization2/03_grid_inline_preview.html)
+
+---
+
+## What's in the simulator
+
+| Capability | How |
+|---|---|
+| Synthetic Hartford County distribution grid | k-means substations, branching feeders + laterals, population-weighted demand |
+| Realistic-mode scheduler with seven factors | assessment delay, log-normal repair, discovery ramp, mutual-aid waves, road proxy, workday clamp, critical priority |
+| Customer-impact-weighted dispatch | scheduler can favor outages serving more customers, not just nearest |
+| Crew specialization (line vs tree) | 80/20 fleet split, 30% tree-blocked outages, parallel subsystems |
+| Optimal-crew-count recommendation | server-side binary search via Numba (10 s at 250 k outages) |
+| Monte Carlo ensembles | N seeds, returns mean / median / stddev / 5th / 95th percentiles |
+| Calibration framework | `/api/calibrate` tunes 4 realism parameters via SciPy Nelder-Mead against an observed restoration curve |
+| Multi-server batch sweeps | `/api/batch` fans scenarios out across worker URLs |
+| Customers-restored-over-time curve | inline SVG overlay after each Plan restoration |
+| Pre-computed scenario library | 12 canned storms in `scenarios/`, loadable without compute |
+| GIS export | GeoJSON + Esri shapefile |
+
+---
+
+## Architecture
+
+```
+                       ┌────────────────────────────────┐
+                       │ Browser (GitHub Pages)         │
+                       │ 03_grid_simulation.html        │
+                       │  - Leaflet map + UI            │
+                       │  - In-browser scheduler        │
+                       │    (JS, fallback)              │
+                       │  - Auto-detects + warm-pings   │
+                       │    the server backend          │
+                       └─────────┬──────────────────────┘
+                                 │  HTTPS, gzip
+                                 ▼
+                       ┌────────────────────────────────┐
+                       │ Render free-tier service       │
+                       │ FastAPI (07_server.py)         │
+                       │  - /api/schedule               │
+                       │  - /api/recommend              │
+                       │  - /api/monte_carlo            │
+                       │  - /api/calibrate              │
+                       │  - /api/batch                  │
+                       └─────────┬──────────────────────┘
+                                 │
+                                 ▼
+                       ┌────────────────────────────────┐
+                       │ Numba-JIT scheduler            │
+                       │ scheduler_numba.py             │
+                       │  - Grid-hash + Chebyshev rings │
+                       │  - n_available counter         │
+                       │  - Customer-weighted scoring   │
+                       │  - Pre-warmed at server boot   │
+                       └────────────────────────────────┘
+```
 
 ---
 
@@ -21,370 +81,114 @@ For a lighter standalone preview (single SVG, no Leaflet basemap, no server need
 .
 ├── 01_fetch_county_boundary.py    # cache Hartford polygon from OSM
 ├── 02_fetch_town_boundaries.py    # cache the 29 town polygons from OSM
-├── 03_grid_simulation.html        # the main interactive (run via local server)
+├── 03_grid_simulation.html        # the main interactive (~3k LOC, runs in any browser)
 ├── 03_grid_inline_preview.html    # lighter standalone SVG preview
-├── 04_geojson_to_shapefile.py     # offline GeoJSON to shapefile converter
-├── 05_generate_artifacts.py       # produce matplotlib PNG snapshots in output/
+├── 04_geojson_to_shapefile.py     # offline GeoJSON → shapefile converter (optional)
+├── 05_generate_artifacts.py       # offline matplotlib PNG generator (used by scenario precomputer)
+├── 06_precompute_scenarios.py     # batches scenario library JSON for the Alternative #2 dropdown
+├── 07_server.py                   # FastAPI backend (~780 LOC)
+├── scheduler_fast.py              # NumPy-vectorized fallback scheduler
+├── scheduler_numba.py             # Numba-JIT production scheduler (~730 LOC)
+├── build_docx.py                  # regenerates the two .docx deliverables
 ├── data/                          # cached OSM inputs
-│   ├── hartford_boundary.json
-│   ├── hartford_towns.geojson
-│   └── hartford_towns.js
-├── output/                        # generated artifacts
-│   ├── 03a_county_topology.png    # county outline + 29 towns + centroids
-│   ├── 03b_synthetic_grid.png     # adds substations, feeders, laterals
-│   ├── 03c_grid_outages.png       # adds a 500-outage storm
-│   ├── 03d_restoration_plan.png   # adds 10 crews with numbered repairs
-│   ├── 03e_outage_curve.png       # customers without power vs hours
-│   ├── 03f_substations_on_county.png  # clean substations-only reference
-│   └── exports/                   # user GeoJSON / shapefile bundles (gitignored)
-├── README.md
-├── LICENSE
-├── .gitignore
-└── requirements.txt               # geopandas (for 04), matplotlib (for 05)
+├── output/                        # generated artifacts (PNGs)
+├── scenarios/                     # pre-computed scenario JSON files (Alt #2)
+├── wasm_scheduler/                # Rust source for the WASM scheduler (kept as reference;
+│                                  #   benchmarked slower than V8 JS, not used in production)
+├── wasm/scheduler.wasm            # compiled WASM artifact (17 KB)
+├── render.yaml                    # Render Blueprint for auto-deploy
+├── Dockerfile                     # for the server backend
+├── requirements.txt
+├── JOURNAL.html                   # development journal (14 chapters, colored, browser-viewable)
+├── Hartford_Grid_Dev_Journal.docx # same content as Word doc (drag into Google Drive)
+├── Hartford_Grid_Research_Context.docx # 19 cited papers + niche analysis + open questions
+└── PROGRESS_REPORT.md             # period progress report for academic review
 ```
 
-Each numbered file is a self-contained step. Run them in order the first time, or just open `03_grid_simulation.html` directly (the cached data in `data/` is committed so you don't need 01/02 unless you want to refresh from OSM).
-
-### Regenerating the artifacts in output/
-
-The repo ships with pre-generated PNG snapshots in `output/` so you can see what the simulation produces without running anything. To regenerate them:
-
-```
-pip install matplotlib numpy
-python 05_generate_artifacts.py
-```
-
-Outputs are deterministic at seed 42, so re-running produces bit-identical files.
-
 ---
 
-## What this is
+## Running locally
 
-A single self-contained HTML file (`03_grid_simulation.html`) plus cached OSM data (`data/hartford_boundary.json` and `data/hartford_towns.js`). It runs entirely in the browser using Leaflet and a CARTO basemap. No backend, no database, no build step.
-
-When you open it, the model:
-
-1. Loads the real Hartford County boundary from OpenStreetMap (cached locally).
-2. Loads the real outlines of all 29 Hartford County towns (cached locally).
-3. Places `N` synthetic substations across the county using a hybrid of population-weighted and area-weighted k-means clustering.
-4. Generates a synthetic distribution network — colored feeder backbones radiating from each substation, plus gray laterals branching from the feeders.
-5. On demand, simulates a storm that knocks out `M` random points across the network, flags ~2% as critical-facility sites, and counts the customers affected.
-6. On demand, plans a restoration: assigns repair crews from depots, computes the total time, and optionally models real-world delays (damage assessment, overnight downtime, tiered priority).
-7. On demand, recommends the smallest crew count that gets restoration within 15% of the theoretical minimum.
-8. On demand, exports the entire scenario (grid + storm + plan + manifest) as a GeoJSON zip or a real Esri shapefile bundle.
-
-Every random choice is controlled by a single integer seed, so any given configuration is fully reproducible.
-
----
-
-## Realistic mode
-
-A yellow toggle at the top of the sidebar (just under the seed) controls whether the simulation uses a perfectly-coordinated theoretical operation or one calibrated against published Eversource storm-after-action reports. **The toggle is ON by default.**
-
-When realistic mode is **on**, the scheduler models seven real-world factors that turn an "optimistic 12-hour" restoration into the 2-7 day reality:
-
-| # | Factor | What the model does |
-|---|---|---|
-| 1 | **Rolling-horizon scheduling** | The scheduler commits one job at a time as the clock advances. A crew that frees up at hour 6 can only consider outages discovered by hour 6 — no future-knowledge optimization. This is the workhorse pattern utilities actually run (15-minute re-solves against current state). |
-| 2 | **Stochastic repair durations** | Each repair time is sampled from a log-normal distribution (median 2 h, 90th percentile 6 h, capped at 12 h) instead of a fixed value. Captures the real spread between "tripped fuse" jobs and "broken pole" jobs. |
-| 3 | **Damage-assessment ramp** | Outages reveal over time, not all at t=0. 30% are visible within an hour of dispatch; the remaining 70% reveal exponentially over the next 24-36 hours as patrols complete. A crew with no visible work fast-forwards to the next discovery time. |
-| 4 | **Mutual-aid waves** | 50% of the slider's crew count dispatch immediately (after the 12 h assessment delay). +30% arrive at hour 36 (24 h later, in-region mutual aid). +20% arrive at hour 60 (48 h later, out-of-state). Matches the typical wave pattern of major-storm responses. |
-| 5 | **Road-network proxy** | Actual driving time = haversine × **1.5** to account for road indirectness and storm-debris detours. (A full OSRM/Valhalla road-graph integration is in `SCALING.md` as future work; this is the cheap first-order proxy.) |
-| 6 | **14 h daylight workday** | When a crew's running clock crosses 8 pm, it pauses overnight and resumes at 6 am. Real utilities suspend most pole-and-wire work after dark for safety. |
-| 7 | **Tiered priority + sectionalizers** | ~2% of outages are flagged critical (hospitals, fire stations, water plants) and scheduled first. Per-outage customer loss is halved (real protective devices isolate just the broken segment). |
-
-Plus the **12 hour pre-dispatch damage-assessment delay** — every crew sits at its depot until hour 12 while the utility surveys the network.
-
-When realistic mode is **off**, the original optimistic single-shot baseline runs — 1.5 h fixed repair time, 30 mph straight-line travel, all outages visible at t=0, no waves, no workday cap, no tiering, full downstream loss per outage. Useful as the "perfect-information theoretical floor" you'd compare a real stochastic policy against.
-
-**Order-of-magnitude effect on a 5,000-outage Sandy-scale storm:**
-- *Optimistic baseline (off):* ~9-15 hours to full restoration.
-- *Realistic mode (on):* ~3-7 days to full restoration — within range of the 2-7 day public Eversource reports for major storms.
-
----
-
-## Goals
-
-1. **Make grid-resilience problems visible and interactive.** Most power-system research lives in textbooks, MATLAB scripts, or proprietary utility software. The goal here is to give anyone with a browser a way to *play* with substation counts, storm severity, and crew counts, and watch the impact numbers move.
-
-2. **Provide a transparent, reproducible baseline.** Because the entire grid + storm + plan is regenerated from a seed and a handful of sliders, two people running the same configuration get identical results. Reproducibility matters for research and for sharing scenarios.
-
-3. **Honestly separate what's real from what's synthetic.**
-   - **Real:** the Hartford County boundary, the 29 town polygons, town centroids, and 2020-census populations.
-   - **Synthetic:** every substation, feeder, lateral, outage location, and crew depot. Real distribution-network topology is not public information.
-
-4. **Lay the groundwork for outage-optimization research.** The current simulation answers descriptive questions: *if a storm hits, how many customers go dark, and how long does restoration take with N crews?* The natural next step is normative — where should substations actually go, and how should crews be pre-positioned to minimize expected customer-minutes-out.
-
-5. **Be portable.** A single HTML file + a few JSONs. No npm. No Docker. No login. You can email it to a collaborator, post it on a class website, or run it offline.
-
----
-
-## What is an "outage location"?
-
-An **outage location** is a single point on the synthetic distribution network where a fault has occurred — a downed wire, a fallen tree on a feeder, a blown transformer. Each outage is:
-
-- A **point in space** (lat, lon) sampled uniformly along a randomly chosen line segment, weighted toward laterals (which represent more total miles of line in the county than backbone feeders).
-- **Attached to a parent segment**: each outage carries an attribute saying it lives on feeder `fi` or lateral `li`. That's what the GIS exports preserve so downstream analysts can join outages back to network topology.
-- **Associated with a population loss** equal to the affected segment's share of its parent feeder's customer base. If a feeder serves 5,000 customers across 10 lateral branches, taking down one of those laterals drops ~500 customers.
-
-Each outage is also a **work order** the restoration scheduler must assign to a crew. The restoration plan visits every outage location in some order, with each visit consuming `1.5 h + travel_time` of a crew's day.
-
-The storm-outages slider lets you place from 50 to **25,000** outage locations across the county. For reference:
-- 50–200 outages ≈ a typical thunderstorm or minor weather event.
-- 500–2,000 outages ≈ a significant storm.
-- 5,000–10,000 outages ≈ a tropical storm (Isaias 2020 in CT was around this scale).
-- 15,000–25,000 outages ≈ a major-disaster scenario (Sandy 2012 was past 25K in southern New England).
-
-The cap is generous — the synthetic network has tens of thousands of segments, so a 25K-outage storm leaves no segment untouched. Beyond that, outages start colliding with each other.
-
-To keep 25,000 markers fast to pan, outage rendering switches to Leaflet's Canvas backend instead of SVG.
-
----
-
-## How to run it
-
-The HTML uses `fetch()` to load the boundary polygon, so you need a tiny web server (not a `file://` open). Pick whichever you have installed:
-
-| Tool | Command (run from the project folder) |
-|------|---------------------------------------|
-| Python | `python -m http.server 8000` |
-| Node.js | `npx serve .` |
-| PHP | `php -S localhost:8000` |
-| VS Code | Install the "Live Server" extension, right-click the HTML, "Open with Live Server" |
-
-Then open `http://localhost:8000/03_grid_simulation.html` in any modern browser.
-
-External CDN dependencies (auto-loaded at runtime — nothing to install):
-- **Leaflet 1.9.4** — the map library
-- **CARTO basemap tiles** — the soft-gray background
-- **JSZip 3.10.1** — for bundling the GeoJSON / shapefile exports
-- **shp-write 0.3.1** — for writing shapefile bytes in the browser
-
----
-
-## Every control, explained
-
-The sidebar is laid out top-to-bottom as a workflow: seed → grid → storm → restoration → export. Each section either configures the model or shows results.
-
-### Random seed (yellow callout at the top)
-
-A single integer that controls *every* random choice in the model: where substations land, where feeders branch, where the storm strikes, and where crew depots sit. Same seed + same sliders = bit-identical output every time, across reloads and across machines.
-
-**Why seed and storm-outages are separate sliders:** the *number* of outages comes from the slider; the *positions* of outages come from the seed. Changing the slider gives you a different storm intensity at the same locations (within the network). Changing the seed re-rolls everything.
-
-### Section 1 · Distribution grid
-
-| Control | Range | Meaning |
-|---------|-------|---------|
-| Substations slider | 20 – 300 (default 100) | How many synthetic substations to place. Higher = denser coverage, smaller service areas, less population per substation. |
-| Feeders / substation slider | 3 – 10 (default 5) | How many backbone feeder circuits radiate from each substation. More feeders = more redundancy and more total miles of medium-voltage line. |
-| **Generate distribution grid** button | — | Runs the k-means placement and the network builder. Re-renders the grid in well under a second at k=100. |
-
-### Section 2 · Storm simulation
-
-| Control | Range | Meaning |
-|---------|-------|---------|
-| Storm outages slider | 50 – 25,000 (default 500) | How many failure points to scatter across feeders and laterals. |
-| **Simulate storm** button | — | Places the outages and computes downstream customer impact. |
-| Customers without power (red stat) | computed | Sum of population on disabled segments, capped at county population. |
-| Outage locations (orange stat) | computed | Number of damaged points the crews will need to visit. |
-
-### Section 3 · Restoration plan
-
-| Control | Range | Meaning |
-|---------|-------|---------|
-| Repair crews slider | 1 – 5,000 (default 10) | Number of independent two-person line crews available. |
-| **Plan restoration** button | — | Runs the scheduler: assigns each crew to outages using an earliest-free + nearest-outage greedy. |
-| Total restoration time (green stat) | computed | `max(crew.finish_time)` across all crews — when the last customer gets power back. |
-| **Find optimal crew count** button | — | Binary-searches for the smallest crew count that gets restoration within 15% of the theoretical floor. |
-| Recommended crews (yellow stat) | computed | The result of the search, with a one-click **Apply to slider** that re-runs the plan with that count. |
-| **Reset storm** button | — | Clears storm and restoration state without touching the grid layout. |
-
-### Section 4 · Export
-
-| Control | Output |
-|---------|--------|
-| **Download GeoJSON** | Zip with one GeoJSON FeatureCollection per layer (`substations.geojson`, `feeders.geojson`, `laterals.geojson`, `outages.geojson`, `restoration_plan.geojson`) plus a `manifest.json` recording every input parameter. |
-| **Download Shapefile (zip)** | Multi-layer Esri shapefile bundle — `.shp`/`.shx`/`.dbf`/`.prj` per layer, organized into subfolders. CRS = WGS84 (EPSG:4326). |
-
-Both files reuse the same underlying data; pick whichever your downstream tooling expects.
-
----
-
-## Visual conventions on the map
-
-Once a scenario is generated, the map carries the following layers (bottom-up):
-
-| Layer | What you see | What it means |
-|-------|--------------|---------------|
-| CARTO light basemap | soft gray streets and labels | Geographic context |
-| Town boundaries | thin green outlines | The 29 Hartford County towns (real OSM data) |
-| County boundary | bold red outline | Hartford County boundary (real OSM data) |
-| Laterals | thin gray polylines | Synthetic distribution laterals |
-| Feeders | colored polylines | Synthetic feeder backbones, color = parent substation |
-| Substations | colored stars | Synthetic substations, color from the palette |
-| Outages | small dark red dots | Storm-induced failure points (Canvas rendered) |
-| Crew depots | colored squares with a black border | Crew home bases, color = crew identity |
-| Repair jobs | numbered colored circles (first 30 per crew) and small colored dots (after that) | Assigned outages, the number is the order in which that crew handles them |
-
-Hovering over a substation or town shows a tooltip with its identifier or name.
-
----
-
-## Architecture & in-memory data flow
-
-The model maintains a few JavaScript arrays as the "world state." Every button mutates or reads them; every visual element is derived from them.
-
-```
-TOWNS (constant, 29 entries: name, lat, lon, pop)
-        │
-        ▼
-buildDemandPoints(seed) ───► demand[] = town clusters + uniform-area samples
-        │
-        ▼
-kmeans(demand, k) ───► substations[] = {lat, lon, color, popServed}
-        │
-        ▼
-generateGrid() ─┬─► feeders[] = {subIdx, pts[], color, popServed}
-                └─► laterals[] = {feederIdx, pts[], popServed}
-        │
-        ▼
-simulateStorm(N) ───► storm.outages[] = {lat, lon, kind, fi|li, popLoss}
-        │
-        ▼
-planRestoration(M) ───► plan.crews[] = {depot, color, jobs[], time}
-```
-
-Each of these arrays is what the GeoJSON / Shapefile exports serialize to disk — see `buildFeatureCollections()` in the source.
-
----
-
-## Algorithms, explained
-
-### Weighted k-means substation placement
-
-Each town spawns a cluster of "demand points" — small jittered samples around its centroid, the count proportional to √population. On top of that, ~1,200 uniformly-sampled points spread across the county polygon contribute another ~35% of total weight. The mix encourages substations to cluster where people live *and* still reach rural corners.
-
-K-means then runs with:
-- **k-means++ seeding** (weighted by min-distance², for diversified initialization).
-- **Squared-Euclidean lat/lon distance** — no trig in the inner loop, ~5x faster than haversine while preserving nearest-cluster ordering.
-- **15 Lloyd iterations** on flat `Float64Array`s for cache efficiency.
-- A **centroid-snap step** at the end of each iteration: if a centroid drifts outside the county (using the precomputed inside-county bitmap), it's snapped back to the nearest demand point.
-
-### Feeder and lateral generation
-
-For each substation:
-- 3–10 **feeder backbones** radiate outward as random walks (8–16 segments each, ~0.4–1 km per segment). Each backbone is colored by its parent substation.
-- From each backbone, 4–8 **laterals** branch off at midpoints as shorter random walks (3–7 segments each, ~150–400 m per segment).
-- Every step is clipped to the county polygon — when the walk leaves Hartford County, that branch stops.
-
-The inside-county check is accelerated by a 256×256 boolean **bitmap** precomputed once at boot. Each cell stores whether its center is inside the polygon, reducing per-step checks from O(P) ray-casts (P ≈ 800 polygon vertices) to O(1) array lookups.
-
-### Storm placement
-
-The storm picks `N` random line segments (weighted toward laterals since they make up the bulk of network mileage), and for each picks a uniform random point along that segment. Population loss per outage = the segment's share of its parent feeder's customer base. The seeded PRNG means the same `(seed, N)` always produces the same exact outage locations.
-
-### Restoration scheduler
-
-The fast scheduler that supports up to 5,000 crews:
-
-1. **Depot placement:** for M ≤ 200 crews, depots come from a k-means on the outage locations themselves. For M > 200, depots are seeded by cycling through the outage points (k-means at that scale would dominate runtime).
-2. **Min-heap of (finish_time, crew_idx):** popping the next-free crew is O(log M).
-3. **Each crew's turn:** linear scan over remaining outages to find the closest (squared lat/lon distance). The actual mile distance is computed once at assignment for the travel-time math.
-4. **Job time:** `eta = crew.time + dist/30 mph + 1.5 h repair`. Travel speed and repair time are constants — tunable in code.
-5. **Termination:** when all outages are assigned. Total restoration time = `max(crew.time)` across all crews.
-
-Complexity: O(N · (log M + N_remaining)). At N=5,000 outages and M=5,000 crews this finishes in ~50 ms.
-
-### Optimal crew count recommendation
-
-"Optimal" here means the smallest crew count whose restoration time is within **15% of the theoretical floor**.
-
-- **Floor:** `scheduleOnly(N)` — one crew per outage, no queueing. This is the practical lower bound; beyond M=N, extra crews are idle.
-- **Search:** binary search over M ∈ [1, N], evaluating the scheduler at each midpoint until the smallest M satisfying `t(M) ≤ floor × 1.15` is found.
-- **Cost:** ~⌈log₂ N⌉ scheduler runs, each O(N²) = ~50 ms at N=5,000 → whole search in well under a second.
-
-Tweak the tolerance by editing `const tolerance = 1.15;` in `recommendCrewCount()`.
-
----
-
-## Performance notes
-
-| Pipeline stage | Hot path | Optimization |
-|----------------|----------|--------------|
-| Inside-county check | per-segment polygon ray-cast | 256×256 precomputed bitmap → O(1) lookup |
-| K-means distance | inner loop over k centroids | Squared lat/lon (no sin/cos/sqrt) on `Float64Array` |
-| Feeder/lateral walks | thousands of segments | Bitmap inside-check + tight typed-array loops |
-| Storm outage placement | uniform random along segments | O(N) linear pass, no per-storm rebuilding |
-| Restoration scheduler | nearest-outage from current crew | Min-heap on crew time + `Uint8Array` done-flag (no `splice`) |
-| Outage rendering | up to 25,000 markers | Leaflet Canvas renderer (`L.canvas()`) instead of SVG |
-| Repair-job rendering | up to ~5,000 numbered icons | SVG `divIcon`s. Limit yourself if you go past ~10,000 jobs. |
-
-Typical end-to-end timing at the defaults (k=100, 500 outages, 10 crews): grid generation ≈ 150 ms, storm ≈ 30 ms, plan ≈ 25 ms, recommendation ≈ 200 ms.
-
----
-
-## What's modeled vs. abstracted
-
-This is *not* a power-flow model. It does not solve Kirchhoff's laws, model voltage sag, fault currents, or protection coordination. It treats the grid as a topological tree: customers attach to laterals, laterals attach to feeders, feeders attach to substations. A failure anywhere along a branch disconnects everything downstream.
-
-This is also *not* a true facility-location optimization. The substations are placed by k-means clustering for visual realism and reasonable spatial coverage, not to minimize a real objective like capacity-constrained customer-minutes-out under N-1 contingency.
-
-What it *does* model reasonably:
-- Population-weighted demand distribution
-- Approximate spatial extent of a distribution network
-- Customer counts affected by random failure points
-- Crew scheduling with realistic travel and repair-time parameters
-
-What you should **not** do:
-- Don't show the feeder routes to anyone and tell them it's Eversource's grid. It isn't.
-- Don't use the restoration time estimate to make planning decisions for a real utility — it's calibrated only to the orders of magnitude reported in public storm-after-action reports.
-
----
-
-## Exporting to GIS formats (GeoJSON, Shapefile)
-
-Section 4 of the sidebar saves the current scenario for use in QGIS, ArcGIS, geopandas, R `sf`, or any standard GIS tool.
-
-**Download GeoJSON** → a zip with five GeoJSON FeatureCollections (one per layer) plus a `manifest.json` recording the seed and all slider positions. Use this for web tools and Python pipelines.
-
-**Download Shapefile (zip)** → a multi-layer Esri shapefile bundle (`.shp`/`.shx`/`.dbf`/`.prj`) organized into subfolders per layer. CRS is WGS84 (EPSG:4326). Use this for ArcGIS Pro and utility GIS workflows.
-
-Attribute schema (kept under the 10-character shapefile column-name limit):
-
-| Layer | Geometry | Columns |
-|-------|----------|---------|
-| `substations` | Point | `sub_id`, `lat`, `lon`, `pop_serv`, `n_feeders`, `color_hex` |
-| `feeders` | LineString | `feed_id`, `sub_id`, `pop_serv`, `length_km`, `color_hex` |
-| `laterals` | LineString | `lat_id`, `feed_id`, `pop_serv`, `length_km` |
-| `outages` | Point | `out_id`, `seed`, `kind`, `feed_id`, `lat_id`, `pop_loss` |
-| `restoration_plan` | Point | `job_ord`, `crew_id`, `out_id`, `eta_h`, `depot_lat`, `depot_lon` |
-
-If the in-browser shapefile path ever fails (CDN block, etc.), download the GeoJSON zip and convert offline:
+### Just the browser interactive (zero install)
 
 ```bash
-pip install geopandas
-python 04_geojson_to_shapefile.py path/to/hartford_grid_seed42_*.zip
+# Any local web server pointed at the repo root
+python -m http.server 8080
+# Then: http://localhost:8080/03_grid_simulation.html
 ```
 
-The script writes a `<input>_shp/` folder next to the input with all the shapefiles. Same column schema either way.
+The page works entirely client-side. The server backend is optional; the page auto-detects whether it's reachable and falls back to in-browser compute.
+
+### With the FastAPI backend locally
+
+```bash
+pip install -r requirements.txt
+python -m uvicorn 07_server:app --port 8000
+```
+
+Then open the interactive and either leave the default Server URL (`https://hartford-grid-server.onrender.com`) or change it to `http://localhost:8000`.
+
+### With Docker
+
+```bash
+docker build -t hartford-grid-server .
+docker run -p 8000:8000 hartford-grid-server
+```
 
 ---
 
-## Files in this project
+## Benchmarks
 
-See the top-of-README "Repository layout" section. In short: numbered scripts at the root, cached OSM data in `data/`, generated artifacts in `output/`, plus `README.md`, `LICENSE`, `.gitignore`, and `requirements.txt` at the root.
+End-to-end times for a single Plan restoration at varying scales, with the Numba server backend:
+
+| Scenario | Time |
+|---|---|
+| 2 k outages × 100 crews | **< 10 ms** (server scheduler) |
+| 10 k × 500 | ~50 ms |
+| 25 k × 500 | ~70 ms |
+| 25 k × 5 000 (worst case, realistic) | ~480 ms |
+| 25 k × 5 000 + customer-priority + crew-specialization | ~2.3 s |
+| 50 k × 1 000 | ~220 ms |
+| **100 k × 2 000 (Connecticut projection)** | **~660 ms** |
+
+History of the speedup at 25k × 5000 over the project:
+
+| Step | Time |
+|---|---|
+| Reference (pure Python on server) | ~minutes / unusable |
+| NumPy vectorization | tens of seconds |
+| Numba JIT | 118 s |
+| Numba + grid hash + `n_available` counter | **0.48 s** (246× from prior step) |
 
 ---
 
-## Acknowledgments
+## Documentation deliverables
 
-- **OpenStreetMap contributors** — county boundary and town polygons (ODbL license)
-- **CARTO** — gray basemap tiles
-- **Leaflet** — map rendering
-- **JSZip and shp-write** — GIS-format export libraries
-- **US Census Bureau** — town population data (2020 decennial census)
+Three documents in the repo capture the project's full development arc and research context:
+
+- **`JOURNAL.html`** — open in any browser. 14 chapters covering everything from foundations through the most recent commits, with verbatim user-question quotes, colored category tags, and a cross-project "Problems Faced" appendix. Browser-viewable and printable.
+- **`Hartford_Grid_Dev_Journal.docx`** — same content as a Word document for upload to Google Docs (drag into `drive.google.com` → right-click → Open with Google Docs → auto-converts).
+- **`Hartford_Grid_Research_Context.docx`** — 19 cited research papers across 6 themes (each with author/title/venue + "Why it matters" + "What it does" + "Key terms" vocab), niche analysis, sketch of paper introduction, open research questions, and PURA / Eversource data sources to pursue.
+- **`PROGRESS_REPORT.md`** — focused snapshot of what changed in the most recent reporting period.
+
+---
+
+## Status & roadmap
+
+**Engineering side:** essentially complete for the Hartford County / Connecticut scope. Calibration framework is ready, multi-server batch is ready, all toggles work at max settings.
+
+**Research side:** next milestone is calibration against one real Eversource event (Isaias 2020 PURA filing, May 2018 tornado, etc.). The framework is built; data acquisition is the bottleneck.
+
+**Deferred:** WebGPU (Alternative #5). The Numba server already handles Connecticut scale, so the urgency went away. Could be revisited if multi-state projection becomes the goal.
+
+---
 
 ## License
 
-MIT-style — do whatever you want with the code; please don't represent it as utility-source data.
+MIT. See [LICENSE](LICENSE).
+
+## Citation
+
+If this work informs research, please cite the GitHub repository:
+
+> Diamond, A. S. (2026). *Hartford County Power-Grid Resilience Simulation.* GitHub repository: https://github.com/asyeddiamond-max/EnergyOptimization2

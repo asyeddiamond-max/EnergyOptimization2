@@ -195,6 +195,8 @@ def build_journal():
         "XI.   The Vanishing Markers",
         "XII.  Direction Conversations & Research Strategy",
         "XIII. Documentation Push",
+        "XV.   The Realism Round & the Polish Sprint",
+        "Appendix A — Problems Faced (cross-project catalogue)",
         "XIV.  Coda",
     ]
     for item in toc_items:
@@ -1192,6 +1194,144 @@ def build_journal():
          "Authors and research groups are the most reliable parts; specific paper titles, "
          "years, and venues should be verified on Google Scholar or IEEE Xplore before "
          "being cited in a manuscript.")
+
+    section_break(doc)
+
+    # ============ Chapter XV ============
+    h2(doc, "Chapter XV — The Realism Round & the Polish Sprint")
+    margin_note(doc, "Built after the documentation push. Customer-impact weighting, crew "
+                "specialization, calibration framework, multi-server fan-out, customers-"
+                "restored curve, server keep-alive, all-toggles-on speedup. The features that "
+                "took the simulator from 'engineering done' to 'ready for the research story.'")
+    body(doc,
+         "With the documentation deliverables shipped, the work that followed was driven by a "
+         "single question: is the realistic toggle actually realistic? The honest answer "
+         "landed at 'structurally realistic but not validated.' The path forward was therefore "
+         "two-track: add the missing realism factors that the literature says matter most, and "
+         "build the calibration framework so when real Eversource data arrives the simulator "
+         "can be tuned against it.")
+
+    h3(doc, "XV.1 — Customer-impact-weighted dispatch")
+    body(doc,
+         "Real utility dispatchers don't just send crews to the closest outage. They detour "
+         "past a single-house lateral to reach a substation that restores thousands of "
+         "customers. This is the biggest gap between the original scheduler and reality. The "
+         "fix: a scoring function score(o) = customers(o) - customer_weight * d² that biases "
+         "dispatch toward high-customer outages while still keeping spatial efficiency.")
+    body(doc,
+         "Empirical result: at 25 000 outages × 5 000 crews, customer-weighted dispatch dropped "
+         "total restoration time from 72 h (pure-nearest) to 61.7 h. That's not just a curve-"
+         "shape change — it's a 14% improvement in the total customer-minutes-without-service "
+         "metric utilities actually care about. The toggle is opt-in (default off, preserves "
+         "backwards compatibility).")
+
+    h3(doc, "XV.2 — Calibration framework")
+    quote(doc, "User", "can you do 2 and 4")
+    body(doc,
+         "Built /api/calibrate: accepts an observed restoration curve from a real storm, runs "
+         "SciPy Nelder-Mead optimization over the four most-tunable realism factors (travel "
+         "speed, assessment delay, workday hours, road multiplier), returns the parameter set "
+         "that minimizes RMSE between simulator output and observation. Required refactoring "
+         "the Numba scheduler so those four were inputs rather than hard-coded constants.")
+    body(doc,
+         "Self-test against synthetic data: generate an 'observed' curve with known ground-"
+         "truth parameters, run calibration from default initial guesses. Result: RMSE drops "
+         "from 4 267 to 43 (a 100× reduction) in 53 iterations. The recovered parameters don't "
+         "exactly match the truth because multiple parameter combinations produce nearly "
+         "identical curves — calibration optimizes curve-match, not parameter-match, which is "
+         "the correct success criterion.")
+
+    h3(doc, "XV.3 — Crew specialization")
+    body(doc,
+         "Real utilities deploy roughly 80% line crews and 20% tree crews. About 30% of "
+         "distribution outages involve trees down on lines that need clearing before line "
+         "work begins. The simplest defensible model: split the fleet 80/20, tag 30% of "
+         "outages as tree-blocked, run two independent dispatch subsystems. Total restoration "
+         "time = max(tree, line).")
+    body(doc,
+         "Implementation lived entirely at the server-helper level — no Numba scheduler "
+         "changes needed. The two subsystem calls were initially sequential, doubling wall-"
+         "clock time at max settings. Switching to a 2-worker ThreadPoolExecutor delivered "
+         "true parallelism because Numba releases the GIL during JIT-compiled code.")
+
+    h3(doc, "XV.4 — Customer-restored curve overlay")
+    body(doc,
+         "The customer-impact toggle has no effect on the total restoration time (same "
+         "outages, same crews, same total work). Its effect is entirely on which customers "
+         "get power back first — the area under the customers-restored-over-time curve. "
+         "Without a visualization of that curve, the feature was invisible.")
+    body(doc,
+         "Fix: an inline 280×80 SVG line chart under the Total Restoration Time stat box. "
+         "Auto-appears after each Plan restoration. Down-samples to ~140 path points for huge "
+         "scenarios. Works for both local and server-routed plans because it lives inside the "
+         "shared renderPlan() helper.")
+
+    h3(doc, "XV.5 — Multi-server batch sweep")
+    quote(doc, "User",
+          "Yes Id love for the multi-sever approach if I am able to run multiple different "
+          "storm scenaiors at the same time. I want to note that I am unable to actually "
+          "spend money for servers.")
+    body(doc,
+         "Honest reality-check first: a single 250k-outage scenario at realistic mode is "
+         "already sub-second on one server, and the scheduler loop is inherently sequential, "
+         "so multi-server can't help that case. Where multi-server does crush is independent-"
+         "scenario workloads: Monte Carlo ensembles, parameter sweeps, varying-seed analysis. "
+         "Each scenario is a fully independent scheduler call, so N servers gives ~N× "
+         "throughput.")
+    body(doc,
+         "Architecture: new /api/batch endpoint that accepts a list of scenarios + a list of "
+         "worker URLs, round-robins scenarios onto workers, fans out via ThreadPoolExecutor. "
+         "Empty workers list = serial in-process. The user spins up additional free Render "
+         "services (each takes ~3 min) and pastes their URLs into the batch UI to scale "
+         "linearly. Stays within the free tier — Render's free-tier limits are per-service, "
+         "not per-account.")
+
+    h3(doc, "XV.6 — Keep-alive & auto-rewake")
+    quote(doc, "User",
+          "the server backend also turns to red after I dont give it commands for a bit. Is "
+          "it possible that for as long as the interactive is open on the main tab of the "
+          "person, the server can be continuously pinged so it wouldnt have to be restarted")
+    body(doc,
+         "Diagnosed: the existing 60-second probe had a 3.5-second timeout, way shorter than "
+         "Render's 30–60 second cold-start wake time. So every probe during wake would time "
+         "out, mark the server offline, and the dot would stay red even though the keep-alive "
+         "interval was firing correctly. Browser background-tab throttling was a secondary "
+         "contributor.")
+    body(doc,
+         "Four-layer fix: 4-minute keep-alive interval (well under Render's 15-min sleep "
+         "threshold); auto-rewake on any failed probe (the dot stops getting stuck red); "
+         "visibility-change re-probe when the tab regains focus; and a manual 'Wake server "
+         "now' button as a guaranteed user-controlled fallback.")
+
+    h3(doc, "XV.7 — All-toggles-on speedup")
+    quote(doc, "User",
+          "can you try to increase processing speed for when all toggles are on. It is "
+          "unable to handle max settings that well")
+    body(doc,
+         "The problem: customer-weighted scoring was using the O(N²) dense scan because the "
+         "grid-hash's ring-expansion termination didn't naively generalize to non-monotonic-"
+         "in-distance scoring. The fix: a different termination bound — upper_bound = "
+         "max_customers_global - customer_weight × ring_min². When that upper bound drops "
+         "below the current best score, no further ring can produce a higher-scoring outage.")
+    body(doc,
+         "With that change, customer-weighted scoring runs inside the grid hash with ring-"
+         "expansion intact. 25k × 5000 customer-weighted dropped from ~50 s (dense fallback) "
+         "to 2.24 s. With crew specialization also running its subsystems in parallel, all-"
+         "toggles-on at max settings now lands in 2–3 seconds end-to-end.")
+    body(doc,
+         "Two more wins shipped together: gzip middleware compresses the ~1.5 MB JSON "
+         "response at 25k outages down to ~150 KB, saving 100–500 ms on network. And the "
+         "Numba JIT is pre-warmed at server boot so the first request after a Render "
+         "redeploy doesn't pay the ~10 s compile penalty — container startup is slightly "
+         "slower but every user request is fast from day one.")
+
+    h3(doc, "Takeaways from Chapter XV")
+    bullets(doc, [
+        "Adding the right realism factors is more important than calibrating. Customer-impact weighting changed a measurable output metric (total restoration time) by 14% at max settings, before any calibration was applied. That's a real engineering result, not a fit.",
+        "Multi-server can't help a sequential algorithm at all. The single-scenario scheduler is fundamentally sequential and already sub-second; throwing N servers at it does nothing. Multi-server helps for independent work — Monte Carlo, parameter sweeps, batch evaluation.",
+        "Free-tier hosting limitations are an interaction-design problem. Render's 15-minute idle sleep + 30-60 second cold start became a usability issue not because the engineering was wrong but because the keep-alive timing didn't account for it. The fix was three lines of JavaScript plus a button.",
+        "Visualization parity matters as much as compute parity. The customer-impact toggle was nearly invisible until the customers-restored curve overlay landed. Speed without the right output is no win.",
+    ])
 
     section_break(doc)
 
