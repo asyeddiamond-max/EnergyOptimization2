@@ -246,6 +246,7 @@
              value="https://hartford-grid-server.onrender.com"
              style="width:100%;padding:5px;border:1px solid #a5b4fc;border-radius:4px;font-size:11px;font-family:ui-monospace,monospace;margin-bottom:6px;" />
       <div id="serverVersion" style="font-size:10px;color:#475569;margin-bottom:6px;font-family:ui-monospace,monospace;">probing server…</div>
+      <button id="wakeServerBtn" style="width:100%;padding:6px;border:1px solid #a5b4fc;background:#eef2ff;color:#3730a3;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;margin-bottom:6px;">Wake server now</button>
       <button id="monteCarloBtn" style="width:100%;padding:8px;border:1px solid #6366f1;background:#fff;color:#3730a3;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">Monte Carlo ensemble (30 seeds)</button>
       <div id="serverStatus" style="font-size:10px;color:#3730a3;margin-top:4px;padding:6px;background:#fff;border-radius:4px;font-family:ui-monospace,monospace;display:none;white-space:pre-line;"></div>
     </div>
@@ -1668,37 +1669,76 @@ function setServerHealthUI(state, info){
     _serverHealthy = false;
   }
 }
+// _lastPingOk records when we last saw the server healthy. Used by the
+// drift-resistant interval to detect when setInterval got throttled (browsers
+// throttle setInterval on backgrounded tabs to ≥ 1 min, sometimes much more)
+// and we need to force a probe regardless of how long ago the last fired.
+let _lastPingOk = 0;
+let _lastPingAttempt = 0;
 async function pingServerOnce(){
   const url = getServerUrl();
   if (!url) { setServerHealthUI('offline'); return; }
+  _lastPingAttempt = performance.now();
   try {
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 3500);
+    const timer = setTimeout(() => ctl.abort(), 4000);
     const r = await fetch(url + '/version', {signal: ctl.signal});
     clearTimeout(timer);
     if (!r.ok) throw new Error('bad status');
     const v = await r.json();
     setServerHealthUI('ok', `connected · commit ${v.commit} · backend ${v.backend}`);
+    _lastPingOk = performance.now();
   } catch(e) {
-    setServerHealthUI('offline');
+    // A failed probe usually means the container went to sleep. Don't just
+    // sit on red — kick off the wake sequence so we recover automatically.
+    if (_serverHealthy || performance.now() - _lastPingOk > 30000) {
+      warmUpServer();
+    } else {
+      setServerHealthUI('offline');
+    }
   }
 }
 async function warmUpServer(){
   // Fire-and-forget GET to wake a sleeping Render free-tier instance.
-  // We don't wait for it — the auto-ping above will pick up "ok" once
-  // the container actually boots (typically 30–60s later).
   setServerHealthUI('warming');
   try { await fetch(getServerUrl() + '/health', {mode: 'no-cors'}); } catch(e) {}
-  // Re-probe in a few seconds and again at 30s, 60s.
+  // Re-probe at 5s / 15s / 30s / 60s — covers the typical 30-60s wake window.
   setTimeout(pingServerOnce, 5000);
+  setTimeout(pingServerOnce, 15000);
   setTimeout(pingServerOnce, 30000);
   setTimeout(pingServerOnce, 60000);
 }
-// Kick off the warm-up the moment the page loads, then keep re-probing
-// every 60s so the dot reflects current state.
+// Keep-alive: ping every 4 minutes while the page is open. Render free-tier
+// sleeps at 15 min of idle, so 4-min pings keep it warm with healthy margin
+// even if browser throttling stretches the interval out. The drift-resistant
+// check below covers the case where the tab was hidden long enough that the
+// interval effectively never fired.
+const KEEPALIVE_MS = 4 * 60 * 1000;
 window.addEventListener('load', () => { warmUpServer(); });
-setInterval(pingServerOnce, 60000);
+setInterval(pingServerOnce, KEEPALIVE_MS);
+
+// When the tab regains focus (user comes back to the page), immediately
+// re-probe and fire a wake if it's been long enough that the server might
+// have gone to sleep. This catches the common case where the page sat in a
+// background tab for an hour and the throttled setInterval barely ran.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible'){
+    const sinceLast = performance.now() - _lastPingAttempt;
+    if (sinceLast > 90000) {  // > 90s since last attempt → probably stale
+      warmUpServer();
+    } else {
+      pingServerOnce();
+    }
+  }
+});
+
 document.getElementById('serverUrl').addEventListener('change', warmUpServer);
+// Manual wake button — same effect as a URL change but without forcing the
+// user to retype the URL. Useful when the dot has been red for a while and
+// the user wants to force a wake without waiting for the next probe.
+document.getElementById('wakeServerBtn').addEventListener('click', () => {
+  warmUpServer();
+});
 
 // Shared routing helper so the "Plan restoration" button AND "Apply to slider"
 // both honor the server toggle. Without this, hitting Apply after a server-
