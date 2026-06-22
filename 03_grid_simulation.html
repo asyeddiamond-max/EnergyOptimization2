@@ -144,6 +144,13 @@
       </label>
     </div>
 
+    <div class="ctrl" style="background:#f0fdf4;border-color:#86efac;">
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#14532d;line-height:1.4;">
+        <input type="checkbox" id="crewSpecialization" style="margin-top:2px;flex-shrink:0;" />
+        <span><b style="color:#166534">Crew specialization (line vs tree)</b> — real utilities deploy ~80% line crews and ~20% tree crews. ~30% of distribution outages involve trees down on lines that need clearing before line work can begin. Splits your crew slider 80/20, tags 30% of outages as tree-blocked, then runs two independent dispatch subsystems. Total restoration time = max(tree_time, line_time). Server-routed only.</span>
+      </label>
+    </div>
+
     <div class="section-label">1 · Distribution grid</div>
 
     <div class="ctrl">
@@ -1617,6 +1624,7 @@ function buildServerPayload(){
   // so the bias is visible but doesn't override the spatial efficiency of
   // the nearest-neighbour scan entirely.
   const customerWeight = priorityOn ? 5000.0 : 0.0;
+  const specializationOn = document.getElementById('crewSpecialization').checked;
   return {
     outages: storm.outages.map(o => ({
       lat: o.lat, lon: o.lon,
@@ -1627,6 +1635,9 @@ function buildServerPayload(){
     seed: +seedI.value | 0,
     realistic: document.getElementById('realisticMode').checked,
     customer_weight: customerWeight,
+    crew_specialization: specializationOn,
+    tree_blocked_rate: 0.30,
+    tree_crew_share: 0.20,
   };
 }
 // Fake-progress timer used while waiting on a server response. The server

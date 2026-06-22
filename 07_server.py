@@ -115,6 +115,15 @@ class ScheduleRequest(BaseModel):
     # nearest. score(o) = customers(o) - customer_weight * distance²(o).
     # Default 0 preserves the original pure-nearest behavior.
     customer_weight: float = Field(default=0.0, ge=0.0)
+    # Crew specialization. When True, splits outages into tree-blocked
+    # (need a tree crew to clear before line work) vs line-only, and splits
+    # crews into tree (20%) and line (80%). The two subsystems run
+    # independently — total restoration time = max(tree_time, line_time).
+    crew_specialization: bool = False
+    tree_blocked_rate: float = Field(default=0.30, ge=0.0, le=1.0,
+        description="Fraction of outages requiring tree clearing")
+    tree_crew_share: float = Field(default=0.20, ge=0.05, le=0.5,
+        description="Fraction of total crews that are tree crews")
 
 
 class JobResult(BaseModel):
@@ -221,10 +230,73 @@ class MonteCarloResponse(BaseModel):
 
 # --- Helpers --------------------------------------------------------------
 
+def _split_for_specialization(req_outages: list[Outage], crews: int, seed: int,
+                              tree_blocked_rate: float, tree_crew_share: float):
+    """Partition outages and crews into tree vs line subsystems. The split
+    is seed-deterministic so the same scenario produces the same partition
+    every run."""
+    import random as _rand
+    rng = _rand.Random((seed * 7919 + 17) & 0xFFFFFFFF)
+    tree_idx, line_idx = [], []
+    for i in range(len(req_outages)):
+        (tree_idx if rng.random() < tree_blocked_rate else line_idx).append(i)
+    n_tree = max(1, int(round(crews * tree_crew_share)))
+    n_line = max(1, crews - n_tree)
+    return tree_idx, line_idx, n_tree, n_line
+
+
+def _run_scheduler_specialized(req_outages, crews, seed, realistic,
+                               customer_weight, tree_blocked_rate, tree_crew_share):
+    """Crew specialization model: split outages by type, split crews by type,
+    run two independent scheduler calls, merge results. Total restoration
+    time = max of the two subsystems' finish times."""
+    tree_idx, line_idx, n_tree, n_line = _split_for_specialization(
+        req_outages, crews, seed, tree_blocked_rate, tree_crew_share,
+    )
+    # Avoid degenerate sub-systems where a partition is empty.
+    if not tree_idx or not line_idx:
+        return _run_scheduler(req_outages, crews, seed, realistic,
+                              customer_weight)
+
+    tree_outages = [req_outages[i] for i in tree_idx]
+    line_outages = [req_outages[i] for i in line_idx]
+
+    t_tree, crews_tree = _run_scheduler(
+        tree_outages, n_tree, seed + 1, realistic, customer_weight,
+    )
+    t_line, crews_line = _run_scheduler(
+        line_outages, n_line, seed + 2, realistic, customer_weight,
+    )
+
+    # Merge crew lists; relabel jobs with the right outage type tag so the
+    # frontend can color or tooltip them differently if it wants.
+    merged = []
+    for c in crews_tree:
+        merged.append(CrewResult(
+            depot_lat=c.depot_lat, depot_lon=c.depot_lon,
+            finish_time_h=c.finish_time_h, n_jobs=c.n_jobs, jobs=c.jobs,
+        ))
+    for c in crews_line:
+        merged.append(CrewResult(
+            depot_lat=c.depot_lat, depot_lon=c.depot_lon,
+            finish_time_h=c.finish_time_h, n_jobs=c.n_jobs, jobs=c.jobs,
+        ))
+    total = max(t_tree, t_line)
+    return total, merged
+
+
 def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
-                   realistic: bool, customer_weight: float = 0.0
+                   realistic: bool, customer_weight: float = 0.0,
+                   crew_specialization: bool = False,
+                   tree_blocked_rate: float = 0.30,
+                   tree_crew_share: float = 0.20,
                    ) -> tuple[float, list[CrewResult]]:
     """Call the shared scheduler and convert the result into our response shape."""
+    if crew_specialization and len(req_outages) >= 10:
+        return _run_scheduler_specialized(
+            req_outages, crews, seed, realistic, customer_weight,
+            tree_blocked_rate, tree_crew_share,
+        )
     outage_tuples = [(o.lat, o.lon) for o in req_outages]
     customers = [o.customers for o in req_outages]
     if _NUMBA:
@@ -293,8 +365,12 @@ def version() -> dict[str, Any]:
 
 @app.post("/api/schedule", response_model=ScheduleResponse)
 def schedule(req: ScheduleRequest) -> ScheduleResponse:
-    total, crews = _run_scheduler(req.outages, req.crews, req.seed,
-                                  req.realistic, req.customer_weight)
+    total, crews = _run_scheduler(
+        req.outages, req.crews, req.seed, req.realistic, req.customer_weight,
+        crew_specialization=req.crew_specialization,
+        tree_blocked_rate=req.tree_blocked_rate,
+        tree_crew_share=req.tree_crew_share,
+    )
     return ScheduleResponse(total_time_h=total, crews=crews)
 
 
