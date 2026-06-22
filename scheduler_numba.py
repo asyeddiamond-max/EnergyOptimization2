@@ -30,16 +30,19 @@ def _mulberry32_step(state):
 
 
 @njit(cache=True, fastmath=True)
-def _run_scheduler(lat, lon, m_crews, realistic, seed, customers, customer_weight):
-    """Dense-scan scheduler. When customer_weight > 0, dispatch picks the
-    outage maximizing (customers - customer_weight * d²) rather than the
-    nearest one. Default 0 preserves pure-nearest behavior."""
+def _run_scheduler(lat, lon, m_crews, realistic, seed, customers, customer_weight,
+                   travel_mph, assessment_delay, workday_hours, road_multiplier):
+    """Dense-scan scheduler. Realism factors are now scheduler parameters
+    rather than hardcoded constants so the calibration endpoint can tune
+    them against observed restoration data. The realistic flag still
+    controls whether the workday clamp + discovery ramp + mutual-aid
+    waves are active; the four float parameters set their magnitudes."""
     N = lat.shape[0]
     use_weighted = customer_weight > 0.0
-    TRAVEL_MPH = 25.0 if realistic else 30.0
-    ASSESSMENT_DELAY = 12.0 if realistic else 0.0
-    WORKDAY_HOURS = 14.0 if realistic else 24.0
-    ROAD_MULTIPLIER = 1.5 if realistic else 1.0
+    TRAVEL_MPH = travel_mph if realistic else 30.0
+    ASSESSMENT_DELAY = assessment_delay if realistic else 0.0
+    WORKDAY_HOURS = workday_hours if realistic else 24.0
+    ROAD_MULTIPLIER = road_multiplier if realistic else 1.0
     INF = 1e18
 
     # Per-seed RNG streams.
@@ -272,7 +275,8 @@ def _run_scheduler(lat, lon, m_crews, realistic, seed, customers, customer_weigh
 
 
 @njit(cache=True, fastmath=True)
-def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G, customers, customer_weight):
+def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G, customers, customer_weight,
+                        travel_mph, assessment_delay, workday_hours, road_multiplier):
     # NOTE: customer_weight is accepted for signature parity but ignored —
     # ring-expansion termination assumes the score is a monotonic function
     # of distance, which weighted scoring breaks. When the caller wants
@@ -284,10 +288,10 @@ def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G, customers, custom
     pick the nearest within those rings. O(K) per dispatch where K is
     local bucket density, not O(N)."""
     N = lat.shape[0]
-    TRAVEL_MPH = 25.0 if realistic else 30.0
-    ASSESSMENT_DELAY = 12.0 if realistic else 0.0
-    WORKDAY_HOURS = 14.0 if realistic else 24.0
-    ROAD_MULTIPLIER = 1.5 if realistic else 1.0
+    TRAVEL_MPH = travel_mph if realistic else 30.0
+    ASSESSMENT_DELAY = assessment_delay if realistic else 0.0
+    WORKDAY_HOURS = workday_hours if realistic else 24.0
+    ROAD_MULTIPLIER = road_multiplier if realistic else 1.0
     INF = 1e18
 
     # Bounding box + cell mapping.
@@ -619,8 +623,20 @@ def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G, customers, custom
     return total, crew_time, crew_jobs, log_crew[:n_log], log_outage[:n_log], log_eta[:n_log]
 
 
+# Default realism-mode parameters. Live in one place so the calibration
+# endpoint and the standard "realistic mode" toggle share a baseline.
+DEFAULT_TRAVEL_MPH = 25.0
+DEFAULT_ASSESSMENT_DELAY = 12.0
+DEFAULT_WORKDAY_HOURS = 14.0
+DEFAULT_ROAD_MULTIPLIER = 1.5
+
+
 def plan_restoration_numba(outages, m_crews, realistic=True, seed=42,
-                           customers=None, customer_weight=0.0):
+                           customers=None, customer_weight=0.0,
+                           travel_mph=DEFAULT_TRAVEL_MPH,
+                           assessment_delay=DEFAULT_ASSESSMENT_DELAY,
+                           workday_hours=DEFAULT_WORKDAY_HOURS,
+                           road_multiplier=DEFAULT_ROAD_MULTIPLIER):
     """Public wrapper that returns the same shape as plan_restoration_fast.
 
     customers: optional list of per-outage customer counts. If None, treated
@@ -629,6 +645,11 @@ def plan_restoration_numba(outages, m_crews, realistic=True, seed=42,
         (customers - customer_weight * d²) instead of minimising d². Routes
         through the dense scheduler regardless of N because the grid hash's
         ring-expansion termination doesn't generalise to weighted scoring.
+    travel_mph / assessment_delay / workday_hours / road_multiplier:
+        the four most-tunable realism factors. Defaults match the previously-
+        hardcoded constants so callers that don't pass them get the existing
+        realistic-mode behaviour. The calibration endpoint passes scipy's
+        candidate values here.
     """
     N = len(outages)
     if N == 0 or m_crews == 0:
@@ -648,11 +669,15 @@ def plan_restoration_numba(outages, m_crews, realistic=True, seed=42,
         G = max(8, int(math.sqrt(N / 5.0)))
         total, crew_time, crew_jobs, log_crew, log_outage, log_eta = \
             _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G,
-                                cust_arr, 0.0)
+                                cust_arr, 0.0,
+                                float(travel_mph), float(assessment_delay),
+                                float(workday_hours), float(road_multiplier))
     else:
         total, crew_time, crew_jobs, log_crew, log_outage, log_eta = \
             _run_scheduler(lat, lon, m_crews, realistic, seed,
-                           cust_arr, float(customer_weight))
+                           cust_arr, float(customer_weight),
+                           float(travel_mph), float(assessment_delay),
+                           float(workday_hours), float(road_multiplier))
 
     # Rebuild per-crew job sequences from the flat dispatch log. The log is
     # already in dispatch order, so iterating it preserves repair sequence

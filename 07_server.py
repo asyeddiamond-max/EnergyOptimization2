@@ -161,6 +161,43 @@ class RecommendResponse(BaseModel):
     evaluations: list[RecommendEvaluation]
 
 
+class ObservedPoint(BaseModel):
+    hour: float
+    customers_restored: float
+
+
+class CalibrateRequest(BaseModel):
+    """Inputs for the calibration framework. The observed curve is a list of
+    (hour, customers_restored) samples from a real storm — typically pulled
+    from a PURA storm-event filing or an Eversource post-mortem. We optimise
+    the four most-tunable realism parameters to minimise RMSE between the
+    simulator's restoration curve on the given scenario and this observed
+    curve."""
+    outages: list[Outage]
+    crews: int = Field(ge=1)
+    seed: int = 42
+    observed: list[ObservedPoint] = Field(min_length=2,
+        description="Sampled points from the real restoration curve")
+    # Optional starting point + bounds for the optimisation.
+    initial_travel_mph: float = 25.0
+    initial_assessment_delay: float = 12.0
+    initial_workday_hours: float = 14.0
+    initial_road_multiplier: float = 1.5
+    max_iters: int = Field(default=80, ge=10, le=400)
+
+
+class CalibrateResponse(BaseModel):
+    travel_mph: float
+    assessment_delay: float
+    workday_hours: float
+    road_multiplier: float
+    rmse: float
+    initial_rmse: float
+    n_evaluations: int
+    converged: bool
+    simulated_curve: list[ObservedPoint]
+
+
 class MonteCarloRequest(BaseModel):
     outages: list[Outage]
     crews: int = Field(ge=1)
@@ -232,6 +269,7 @@ def root():
             "POST /api/schedule  — run the greedy scheduler",
             "POST /api/recommend — binary-search the optimal crew count",
             "POST /api/monte_carlo — N-run ensemble with different seeds",
+            "POST /api/calibrate — tune realism parameters against an observed curve",
         ],
     }
 
@@ -326,6 +364,118 @@ def recommend(req: RecommendRequest) -> RecommendResponse:
         upper_bound=upper,
         tolerance=req.tolerance,
         evaluations=evaluations,
+    )
+
+
+def _build_simulated_curve(outage_tuples, customers, m_crews, seed,
+                           travel_mph, assessment_delay,
+                           workday_hours, road_multiplier,
+                           sample_hours):
+    """Run the scheduler with the given realism parameters and return a
+    (sample_hours, simulated_customers_restored) curve sampled at the same
+    hours as the observed curve so RMSE is comparable point-for-point."""
+    if not _NUMBA:
+        raise RuntimeError("Calibration requires the Numba scheduler")
+    crews_out, _total, _timeline = plan_restoration_numba(
+        outage_tuples, m_crews, realistic=True, seed=seed,
+        customers=customers, customer_weight=0.0,
+        travel_mph=travel_mph, assessment_delay=assessment_delay,
+        workday_hours=workday_hours, road_multiplier=road_multiplier,
+    )
+    # Collect (eta, customers) pairs across all crews/jobs.
+    pairs = []
+    for c in crews_out:
+        for j in c["jobs"]:
+            cust = customers[j["outage_idx"]] if j["outage_idx"] < len(customers) else 0.0
+            pairs.append((j["eta"], cust))
+    pairs.sort()
+    # Cumulative customers restored over time.
+    cum_t, cum_c = [], []
+    running = 0.0
+    for t, c in pairs:
+        running += c
+        cum_t.append(t); cum_c.append(running)
+    # Sample the cumulative curve at each requested hour. Step-function
+    # interpolation: at hour h, find the latest dispatch eta <= h.
+    out = []
+    j = 0
+    for h in sample_hours:
+        while j < len(cum_t) and cum_t[j] <= h:
+            j += 1
+        out.append(cum_c[j - 1] if j > 0 else 0.0)
+    return out
+
+
+@app.post("/api/calibrate", response_model=CalibrateResponse)
+def calibrate(req: CalibrateRequest) -> CalibrateResponse:
+    """Calibration framework. Optimises the four most-tunable realism
+    parameters (travel_mph, assessment_delay, workday_hours, road_multiplier)
+    to minimise RMSE between the simulator's restoration curve on the given
+    scenario and the observed curve from a real storm.
+
+    Uses scipy.optimize.minimize with Nelder-Mead (gradient-free, well-suited
+    to this kind of black-box objective). Each evaluation is one full Numba
+    scheduler run, so a 50-iteration calibration on a 5k-outage scenario
+    takes a few seconds. At 250k outages it's a minute or two — still
+    feasible for a research workflow."""
+    from scipy.optimize import minimize
+
+    outage_tuples = [(o.lat, o.lon) for o in req.outages]
+    customers = [o.customers for o in req.outages]
+    sample_hours = [p.hour for p in req.observed]
+    observed = [p.customers_restored for p in req.observed]
+
+    eval_count = {"n": 0}
+
+    def objective(x):
+        travel, assess, workday, road = x
+        eval_count["n"] += 1
+        # Reject implausible parameter values up front to keep Nelder-Mead
+        # inside a reasonable region.
+        if travel < 5.0 or travel > 60.0: return 1e12
+        if assess < 0.0 or assess > 48.0: return 1e12
+        if workday < 4.0 or workday > 24.0: return 1e12
+        if road < 1.0 or road > 4.0: return 1e12
+        sim = _build_simulated_curve(
+            outage_tuples, customers, req.crews, req.seed,
+            travel, assess, workday, road, sample_hours,
+        )
+        # RMSE between simulated and observed cumulative restoration curves.
+        diffs = [(s - o) for s, o in zip(sim, observed)]
+        return (sum(d * d for d in diffs) / len(diffs)) ** 0.5
+
+    x0 = [req.initial_travel_mph, req.initial_assessment_delay,
+          req.initial_workday_hours, req.initial_road_multiplier]
+    initial_rmse = objective(x0)
+
+    result = minimize(
+        objective, x0, method="Nelder-Mead",
+        options={"maxiter": req.max_iters, "xatol": 0.1, "fatol": 1.0,
+                 "disp": False},
+    )
+
+    best = result.x
+    final_rmse = float(result.fun)
+    # Compute the final simulated curve at the best fit so the client can plot.
+    final_sim = _build_simulated_curve(
+        outage_tuples, customers, req.crews, req.seed,
+        float(best[0]), float(best[1]), float(best[2]), float(best[3]),
+        sample_hours,
+    )
+
+    return CalibrateResponse(
+        travel_mph=float(best[0]),
+        assessment_delay=float(best[1]),
+        workday_hours=float(best[2]),
+        road_multiplier=float(best[3]),
+        rmse=final_rmse,
+        initial_rmse=float(initial_rmse),
+        n_evaluations=eval_count["n"],
+        converged=bool(result.success),
+        simulated_curve=[
+            ObservedPoint(hour=h, customers_restored=c)
+            for h, c in zip(sample_hours, final_sim)
+        ],
     )
 
 
