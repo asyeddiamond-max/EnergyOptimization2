@@ -151,6 +151,13 @@
       </label>
     </div>
 
+    <div class="ctrl" style="background:#faf5ff;border-color:#d8b4fe;">
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#581c87;line-height:1.4;">
+        <input type="checkbox" id="hierarchicalMode" style="margin-top:2px;flex-shrink:0;" />
+        <span><b style="color:#6b21a8">Hierarchical restoration (substation→feeder→lateral)</b> — power flows top-down: a lateral's customers can't be energized until its parent feeder's backbone faults are repaired. Crews still repair geographically, but downstream customers only count as restored once the feeder above them is back. Models the real top-down restoration sequence and makes "fix the backbone first" matter. Server-routed only.</span>
+      </label>
+    </div>
+
     <div class="section-label">1 · Distribution grid</div>
 
     <div class="ctrl">
@@ -1779,11 +1786,18 @@ function buildServerPayload(){
   // the nearest-neighbour scan entirely.
   const customerWeight = priorityOn ? 5000.0 : 0.0;
   const specializationOn = document.getElementById('crewSpecialization').checked;
+  const hierarchicalOn = document.getElementById('hierarchicalMode').checked;
   return {
     outages: storm.outages.map(o => ({
       lat: o.lat, lon: o.lon,
       critical: !!o.critical,
       customers: +(o.popLoss || 0),
+      // Hierarchy: map each outage to its parent feeder. A feeder-backbone
+      // fault (kind 'f') is its own feeder; a lateral fault (kind 'l') points
+      // to the feeder its lateral branches from.
+      feeder_id: o.kind === 'f' ? (o.fi | 0)
+                 : (laterals[o.li] ? (laterals[o.li].feederIdx | 0) : -1),
+      is_feeder: o.kind === 'f' ? 1 : 0,
     })),
     crews: +cS.value,
     seed: +seedI.value | 0,
@@ -1792,6 +1806,7 @@ function buildServerPayload(){
     crew_specialization: specializationOn,
     tree_blocked_rate: 0.30,
     tree_crew_share: 0.20,
+    hierarchical: hierarchicalOn,
   };
 }
 // Fake-progress timer used while waiting on a server response. The server

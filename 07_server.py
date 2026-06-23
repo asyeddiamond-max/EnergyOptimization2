@@ -137,6 +137,8 @@ class Outage(BaseModel):
     lon: float
     critical: bool = False
     customers: float = 0.0  # number of customers served by this outage point
+    feeder_id: int = -1     # parent feeder index (for hierarchical restoration)
+    is_feeder: int = 0      # 1 if this is a backbone fault, 0 if a lateral fault
 
 
 class ScheduleRequest(BaseModel):
@@ -158,6 +160,10 @@ class ScheduleRequest(BaseModel):
         description="Fraction of outages requiring tree clearing")
     tree_crew_share: float = Field(default=0.20, ge=0.05, le=0.5,
         description="Fraction of total crews that are tree crews")
+    # The Realism Fix: hierarchical restoration. When True, a lateral's
+    # customers are not energized until its parent feeder's backbone faults
+    # are repaired (post-process gating of restoration times).
+    hierarchical: bool = False
 
 
 class JobResult(BaseModel):
@@ -317,7 +323,8 @@ def _split_for_specialization(req_outages: list[Outage], crews: int, seed: int,
 
 
 def _run_scheduler_specialized(req_outages, crews, seed, realistic,
-                               customer_weight, tree_blocked_rate, tree_crew_share):
+                               customer_weight, tree_blocked_rate, tree_crew_share,
+                               hierarchical=False):
     """Crew specialization model: split outages by type, split crews by type,
     run two independent scheduler calls IN PARALLEL, merge results. Total
     restoration time = max of the two subsystems' finish times.
@@ -332,16 +339,20 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
     # Avoid degenerate sub-systems where a partition is empty.
     if not tree_idx or not line_idx:
         return _run_scheduler(req_outages, crews, seed, realistic,
-                              customer_weight)
+                              customer_weight, hierarchical=hierarchical)
 
     tree_outages = [req_outages[i] for i in tree_idx]
     line_outages = [req_outages[i] for i in line_idx]
 
     with ThreadPoolExecutor(max_workers=2) as ex:
         fut_tree = ex.submit(_run_scheduler, tree_outages, n_tree,
-                             seed + 1, realistic, customer_weight)
+                             seed + 1, realistic, customer_weight,
+                             False, tree_blocked_rate, tree_crew_share,
+                             hierarchical)
         fut_line = ex.submit(_run_scheduler, line_outages, n_line,
-                             seed + 2, realistic, customer_weight)
+                             seed + 2, realistic, customer_weight,
+                             False, tree_blocked_rate, tree_crew_share,
+                             hierarchical)
         t_tree, crews_tree = fut_tree.result()
         t_line, crews_line = fut_line.result()
 
@@ -367,12 +378,13 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
                    crew_specialization: bool = False,
                    tree_blocked_rate: float = 0.30,
                    tree_crew_share: float = 0.20,
+                   hierarchical: bool = False,
                    ) -> tuple[float, list[CrewResult]]:
     """Call the shared scheduler and convert the result into our response shape."""
     if crew_specialization and len(req_outages) >= 10:
         return _run_scheduler_specialized(
             req_outages, crews, seed, realistic, customer_weight,
-            tree_blocked_rate, tree_crew_share,
+            tree_blocked_rate, tree_crew_share, hierarchical,
         )
     outage_tuples = [(o.lat, o.lon) for o in req_outages]
     customers = [o.customers for o in req_outages]
@@ -380,6 +392,9 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
         crews_out, total_time, _timeline = plan_restoration_numba(
             outage_tuples, crews, realistic=realistic, seed=seed,
             customers=customers, customer_weight=customer_weight,
+            feeder_id=[o.feeder_id for o in req_outages] if hierarchical else None,
+            is_feeder=[o.is_feeder for o in req_outages] if hierarchical else None,
+            hierarchical=hierarchical,
         )
     elif _FAST:
         crews_out, total_time, _timeline = plan_restoration_fast(
@@ -448,6 +463,7 @@ def schedule(req: ScheduleRequest) -> ScheduleResponse:
         crew_specialization=req.crew_specialization,
         tree_blocked_rate=req.tree_blocked_rate,
         tree_crew_share=req.tree_crew_share,
+        hierarchical=req.hierarchical,
     )
     return ScheduleResponse(total_time_h=total, crews=crews)
 

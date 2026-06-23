@@ -665,20 +665,28 @@ def plan_restoration_numba(outages, m_crews, realistic=True, seed=42,
                            travel_mph=DEFAULT_TRAVEL_MPH,
                            assessment_delay=DEFAULT_ASSESSMENT_DELAY,
                            workday_hours=DEFAULT_WORKDAY_HOURS,
-                           road_multiplier=DEFAULT_ROAD_MULTIPLIER):
+                           road_multiplier=DEFAULT_ROAD_MULTIPLIER,
+                           feeder_id=None, is_feeder=None, hierarchical=False):
     """Public wrapper that returns the same shape as plan_restoration_fast.
 
     customers: optional list of per-outage customer counts. If None, treated
         as zeros and customer-weighted scoring becomes pure-nearest anyway.
     customer_weight: float >= 0. When > 0, dispatch maximises
-        (customers - customer_weight * d²) instead of minimising d². Routes
-        through the dense scheduler regardless of N because the grid hash's
-        ring-expansion termination doesn't generalise to weighted scoring.
+        (customers - customer_weight * d²) instead of minimising d².
     travel_mph / assessment_delay / workday_hours / road_multiplier:
-        the four most-tunable realism factors. Defaults match the previously-
-        hardcoded constants so callers that don't pass them get the existing
-        realistic-mode behaviour. The calibration endpoint passes scipy's
-        candidate values here.
+        the four most-tunable realism factors. The calibration endpoint
+        passes scipy's candidate values here.
+    feeder_id / is_feeder / hierarchical: The Realism Fix — hierarchical
+        restoration, modelled as a *post-process on restoration times* rather
+        than a dispatch constraint. Crews repair geographically (fast), but a
+        lateral's customers are not ENERGIZED until its parent feeder's
+        backbone faults are all repaired. So each lateral's effective customer-
+        restoration time = max(its own repair time, its feeder's clear time).
+        This is both faster (dispatch stays grid-hash-local) and arguably more
+        accurate than hard dispatch-blocking — real crews still repair downed
+        laterals while the feeder is out; the customers just aren't powered
+        until the feeder is back. feeder_id[i] is outage i's parent feeder;
+        is_feeder[i] is 1 for backbone faults, 0 for laterals.
     """
     N = len(outages)
     if N == 0 or m_crews == 0:
@@ -718,6 +726,33 @@ def plan_restoration_numba(outages, m_crews, realistic=True, seed=42,
          "jobs": []}
         for c in range(m_crews)
     ]
+    # Raw per-outage repair-completion time from the dispatch log.
+    raw_eta = np.full(N, 0.0, dtype=np.float64)
+    for k in range(log_crew.shape[0]):
+        raw_eta[int(log_outage[k])] = float(log_eta[k])
+
+    # The Realism Fix (post-process): gate lateral customer-restoration times
+    # by their feeder's clear time. Effective eta = max(own repair, feeder
+    # backbone clear). Does not change dispatch order — only when downstream
+    # customers count as energized.
+    eff_eta = raw_eta
+    if hierarchical and feeder_id is not None and is_feeder is not None \
+            and len(feeder_id) == N and len(is_feeder) == N:
+        fid = np.asarray(feeder_id, dtype=np.int64)
+        isf = np.asarray(is_feeder, dtype=np.int64)
+        n_feeders = int(fid.max()) + 1 if N > 0 else 0
+        feeder_clear = np.zeros(n_feeders if n_feeders > 0 else 1, dtype=np.float64)
+        # Feeder clear time = latest backbone-fault repair on that feeder.
+        for i in range(N):
+            if isf[i] == 1 and raw_eta[i] > feeder_clear[fid[i]]:
+                feeder_clear[fid[i]] = raw_eta[i]
+        eff_eta = raw_eta.copy()
+        for i in range(N):
+            if isf[i] == 0:  # lateral: gate on feeder energization
+                fc = feeder_clear[fid[i]]
+                if fc > eff_eta[i]:
+                    eff_eta[i] = fc
+
     for k in range(log_crew.shape[0]):
         ci = int(log_crew[k])
         oi = int(log_outage[k])
@@ -725,6 +760,14 @@ def plan_restoration_numba(outages, m_crews, realistic=True, seed=42,
             "outage_idx": oi,
             "lat": float(lat[oi]),
             "lon": float(lon[oi]),
-            "eta": float(log_eta[k]),
+            "eta": float(eff_eta[oi]),
         })
-    return crews, float(total), [(0.0, N), (float(total), 0)]
+
+    # Total restoration = when the last customer is energized = max effective
+    # eta (>= the raw labour-finish total under hierarchy).
+    eff_total = float(total)
+    if hierarchical:
+        m = float(eff_eta.max()) if N > 0 else 0.0
+        if m > eff_total:
+            eff_total = m
+    return crews, eff_total, [(0.0, N), (eff_total, 0)]
