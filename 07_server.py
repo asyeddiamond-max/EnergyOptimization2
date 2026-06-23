@@ -172,6 +172,10 @@ class ScheduleRequest(BaseModel):
     # Implemented by giving higher tiers a large effective-customer bonus so
     # the customer-weighted dispatch serves them first.
     tiered_priority: bool = False
+    # The Realism Fix (Phase 3): weather window. Hours of storm during which
+    # no work happens (bucket trucks grounded). Shifts crew arrivals + outage
+    # discovery to after the storm passes. 0 = no window (back-compat).
+    storm_duration: float = Field(default=0.0, ge=0.0, le=120.0)
 
 
 class JobResult(BaseModel):
@@ -332,7 +336,8 @@ def _split_for_specialization(req_outages: list[Outage], crews: int, seed: int,
 
 def _run_scheduler_specialized(req_outages, crews, seed, realistic,
                                customer_weight, tree_blocked_rate, tree_crew_share,
-                               hierarchical=False, tiered_priority=False):
+                               hierarchical=False, tiered_priority=False,
+                               storm_duration=0.0):
     """Crew specialization model: split outages by type, split crews by type,
     run two independent scheduler calls IN PARALLEL, merge results. Total
     restoration time = max of the two subsystems' finish times.
@@ -348,7 +353,8 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
     if not tree_idx or not line_idx:
         return _run_scheduler(req_outages, crews, seed, realistic,
                               customer_weight, hierarchical=hierarchical,
-                              tiered_priority=tiered_priority)
+                              tiered_priority=tiered_priority,
+                              storm_duration=storm_duration)
 
     tree_outages = [req_outages[i] for i in tree_idx]
     line_outages = [req_outages[i] for i in line_idx]
@@ -357,11 +363,11 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
         fut_tree = ex.submit(_run_scheduler, tree_outages, n_tree,
                              seed + 1, realistic, customer_weight,
                              False, tree_blocked_rate, tree_crew_share,
-                             hierarchical, tiered_priority)
+                             hierarchical, tiered_priority, storm_duration)
         fut_line = ex.submit(_run_scheduler, line_outages, n_line,
                              seed + 2, realistic, customer_weight,
                              False, tree_blocked_rate, tree_crew_share,
-                             hierarchical, tiered_priority)
+                             hierarchical, tiered_priority, storm_duration)
         t_tree, crews_tree = fut_tree.result()
         t_line, crews_line = fut_line.result()
 
@@ -395,12 +401,14 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
                    tree_crew_share: float = 0.20,
                    hierarchical: bool = False,
                    tiered_priority: bool = False,
+                   storm_duration: float = 0.0,
                    ) -> tuple[float, list[CrewResult]]:
     """Call the shared scheduler and convert the result into our response shape."""
     if crew_specialization and len(req_outages) >= 10:
         return _run_scheduler_specialized(
             req_outages, crews, seed, realistic, customer_weight,
             tree_blocked_rate, tree_crew_share, hierarchical, tiered_priority,
+            storm_duration,
         )
     outage_tuples = [(o.lat, o.lon) for o in req_outages]
     customers = [o.customers for o in req_outages]
@@ -421,6 +429,7 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
             feeder_id=[o.feeder_id for o in req_outages] if hierarchical else None,
             is_feeder=[o.is_feeder for o in req_outages] if hierarchical else None,
             hierarchical=hierarchical,
+            storm_duration=storm_duration,
         )
     elif _FAST:
         crews_out, total_time, _timeline = plan_restoration_fast(
@@ -491,6 +500,7 @@ def schedule(req: ScheduleRequest) -> ScheduleResponse:
         tree_crew_share=req.tree_crew_share,
         hierarchical=req.hierarchical,
         tiered_priority=req.tiered_priority,
+        storm_duration=req.storm_duration,
     )
     return ScheduleResponse(total_time_h=total, crews=crews)
 
