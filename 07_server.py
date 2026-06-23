@@ -139,6 +139,8 @@ class Outage(BaseModel):
     customers: float = 0.0  # number of customers served by this outage point
     feeder_id: int = -1     # parent feeder index (for hierarchical restoration)
     is_feeder: int = 0      # 1 if this is a backbone fault, 0 if a lateral fault
+    priority: int = 0       # dispatch tier: 0 normal, 1 critical facility,
+                            # 2 make-safe / public-safety hazard (highest)
 
 
 class ScheduleRequest(BaseModel):
@@ -164,6 +166,12 @@ class ScheduleRequest(BaseModel):
     # customers are not energized until its parent feeder's backbone faults
     # are repaired (post-process gating of restoration times).
     hierarchical: bool = False
+    # The Realism Fix (Phase 2): tiered priority dispatch. When True, outages
+    # are served in priority order — make-safe / public-safety hazards first,
+    # then critical facilities (hospitals, water, 911), then general load.
+    # Implemented by giving higher tiers a large effective-customer bonus so
+    # the customer-weighted dispatch serves them first.
+    tiered_priority: bool = False
 
 
 class JobResult(BaseModel):
@@ -324,7 +332,7 @@ def _split_for_specialization(req_outages: list[Outage], crews: int, seed: int,
 
 def _run_scheduler_specialized(req_outages, crews, seed, realistic,
                                customer_weight, tree_blocked_rate, tree_crew_share,
-                               hierarchical=False):
+                               hierarchical=False, tiered_priority=False):
     """Crew specialization model: split outages by type, split crews by type,
     run two independent scheduler calls IN PARALLEL, merge results. Total
     restoration time = max of the two subsystems' finish times.
@@ -339,7 +347,8 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
     # Avoid degenerate sub-systems where a partition is empty.
     if not tree_idx or not line_idx:
         return _run_scheduler(req_outages, crews, seed, realistic,
-                              customer_weight, hierarchical=hierarchical)
+                              customer_weight, hierarchical=hierarchical,
+                              tiered_priority=tiered_priority)
 
     tree_outages = [req_outages[i] for i in tree_idx]
     line_outages = [req_outages[i] for i in line_idx]
@@ -348,11 +357,11 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
         fut_tree = ex.submit(_run_scheduler, tree_outages, n_tree,
                              seed + 1, realistic, customer_weight,
                              False, tree_blocked_rate, tree_crew_share,
-                             hierarchical)
+                             hierarchical, tiered_priority)
         fut_line = ex.submit(_run_scheduler, line_outages, n_line,
                              seed + 2, realistic, customer_weight,
                              False, tree_blocked_rate, tree_crew_share,
-                             hierarchical)
+                             hierarchical, tiered_priority)
         t_tree, crews_tree = fut_tree.result()
         t_line, crews_line = fut_line.result()
 
@@ -373,25 +382,42 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
     return total, merged
 
 
+# Effective-customer bonus per priority tier. Large enough that a higher tier
+# is always preferred over any realistic customer count within a crew's local
+# search window, giving near-hard tiering while reusing the fast weighted path.
+_PRIORITY_BONUS = 1.0e5
+
+
 def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
                    realistic: bool, customer_weight: float = 0.0,
                    crew_specialization: bool = False,
                    tree_blocked_rate: float = 0.30,
                    tree_crew_share: float = 0.20,
                    hierarchical: bool = False,
+                   tiered_priority: bool = False,
                    ) -> tuple[float, list[CrewResult]]:
     """Call the shared scheduler and convert the result into our response shape."""
     if crew_specialization and len(req_outages) >= 10:
         return _run_scheduler_specialized(
             req_outages, crews, seed, realistic, customer_weight,
-            tree_blocked_rate, tree_crew_share, hierarchical,
+            tree_blocked_rate, tree_crew_share, hierarchical, tiered_priority,
         )
     outage_tuples = [(o.lat, o.lon) for o in req_outages]
     customers = [o.customers for o in req_outages]
+    eff_weight = customer_weight
+    if tiered_priority:
+        # Add a per-tier bonus to the dispatch-scoring customer value so the
+        # weighted scheduler serves higher tiers first. Force the weighted
+        # path on (weight>0) even if customer-impact weighting is off. This
+        # only affects dispatch ORDER — the customers-restored curve is built
+        # frontend-side from real customer counts, not these effective values.
+        customers = [o.customers + _PRIORITY_BONUS * o.priority for o in req_outages]
+        if eff_weight <= 0.0:
+            eff_weight = 5000.0
     if _NUMBA:
         crews_out, total_time, _timeline = plan_restoration_numba(
             outage_tuples, crews, realistic=realistic, seed=seed,
-            customers=customers, customer_weight=customer_weight,
+            customers=customers, customer_weight=eff_weight,
             feeder_id=[o.feeder_id for o in req_outages] if hierarchical else None,
             is_feeder=[o.is_feeder for o in req_outages] if hierarchical else None,
             hierarchical=hierarchical,
@@ -464,6 +490,7 @@ def schedule(req: ScheduleRequest) -> ScheduleResponse:
         tree_blocked_rate=req.tree_blocked_rate,
         tree_crew_share=req.tree_crew_share,
         hierarchical=req.hierarchical,
+        tiered_priority=req.tiered_priority,
     )
     return ScheduleResponse(total_time_h=total, crews=crews)
 

@@ -158,6 +158,13 @@
       </label>
     </div>
 
+    <div class="ctrl" style="background:#fff1f2;border-color:#fda4af;">
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#881337;line-height:1.4;">
+        <input type="checkbox" id="tieredPriority" style="margin-top:2px;flex-shrink:0;" />
+        <span><b style="color:#9f1239">Tiered priority dispatch</b> — real utilities restore in priority order: <b>make-safe / public-safety hazards</b> (downed live wires, ~3% of tickets) first, then <b>critical facilities</b> (hospitals, water, 911, ~2%), then general load. Crews favour higher-priority outages over nearby low-priority ones. Server-routed only. (Note: the in-browser scheduler already honoured critical facilities; this brings the same tiering to the server path and adds the make-safe tier.)</span>
+      </label>
+    </div>
+
     <div class="section-label">1 · Distribution grid</div>
 
     <div class="ctrl">
@@ -1787,8 +1794,9 @@ function buildServerPayload(){
   const customerWeight = priorityOn ? 5000.0 : 0.0;
   const specializationOn = document.getElementById('crewSpecialization').checked;
   const hierarchicalOn = document.getElementById('hierarchicalMode').checked;
+  const tieredOn = document.getElementById('tieredPriority').checked;
   return {
-    outages: storm.outages.map(o => ({
+    outages: storm.outages.map((o, idx) => ({
       lat: o.lat, lon: o.lon,
       critical: !!o.critical,
       customers: +(o.popLoss || 0),
@@ -1798,6 +1806,11 @@ function buildServerPayload(){
       feeder_id: o.kind === 'f' ? (o.fi | 0)
                  : (laterals[o.li] ? (laterals[o.li].feederIdx | 0) : -1),
       is_feeder: o.kind === 'f' ? 1 : 0,
+      // Priority tier: 2 = make-safe / public-safety hazard (deterministic
+      // ~3% of outages — downed live wires), 1 = critical facility, 0 normal.
+      // The make-safe selection is deterministic in outage order so it's
+      // reproducible from the seed.
+      priority: (idx % 33 === 0) ? 2 : (o.critical ? 1 : 0),
     })),
     crews: +cS.value,
     seed: +seedI.value | 0,
@@ -1807,6 +1820,7 @@ function buildServerPayload(){
     tree_blocked_rate: 0.30,
     tree_crew_share: 0.20,
     hierarchical: hierarchicalOn,
+    tiered_priority: tieredOn,
   };
 }
 // Fake-progress timer used while waiting on a server response. The server
