@@ -170,6 +170,7 @@ Three documents in the repo capture the project's full development arc and resea
 - **`Hartford_Grid_Dev_Journal.docx`** — same content as a Word document for upload to Google Docs (drag into `drive.google.com` → right-click → Open with Google Docs → auto-converts). Regenerate with `python build_docx.py`.
 - **`Hartford_Grid_Research_Context.docx`** — 19 cited research papers across 6 themes (each with author/title/venue + "Why it matters" + "What it does" + "Key terms" vocab), niche analysis, sketch of paper introduction, open research questions, and PURA / Eversource data sources to pursue.
 - **`ROADMAP.md`** — advisor-feedback incorporation plan: the feedback organized by theme, a prioritized track-by-track implementation plan, and the data/links to collect.
+- **`DATA_SOURCES.md`** — provenance file for every real-world dataset the simulation uses (Hartford County boundary, towns, real HIFLD substations) plus planned sources (ISO-NE, DW crew curves, Eversource outage data, weather forcing). Source URLs, fetch scripts, licenses, refresh commands, and honest coverage notes for each.
 
 ---
 
