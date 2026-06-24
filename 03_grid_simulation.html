@@ -179,6 +179,20 @@
       </label>
     </div>
 
+    <div class="ctrl" style="background:#eef2ff;border-color:#a5b4fc;">
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#3730a3;line-height:1.4;">
+        <input type="checkbox" id="soilSaturation" style="margin-top:2px;flex-shrink:0;" />
+        <span><b style="color:#4338ca">Soil saturation</b> (environmental) — heavy preceding rainfall + wet ground pulls roots out more easily (more tree damage to power lines) and slows pole-setting and equipment moves (mud, equipment getting stuck). Bumps the road-impedance multiplier 25% and raises the effective tree-blocked rate 30%. Server-routed only.</span>
+      </label>
+    </div>
+
+    <div class="ctrl" style="background:#f5f3ff;border-color:#c4b5fd;">
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#4c1d95;line-height:1.4;">
+        <input type="checkbox" id="preStormStaging" style="margin-top:2px;flex-shrink:0;" />
+        <span><b style="color:#5b21b6">Pre-storm staging</b> (logistical) — utility pre-positioned crews and materials before the storm hit, so the standard 12-hour post-storm <i>assessment delay</i> is essentially zero — work begins as soon as winds drop below the safety threshold. Real Eversource practice for forecastable events. Composes with the weather-window toggle (the weather window still applies; staging cuts the assessment phase, not the storm itself). Server-routed only.</span>
+      </label>
+    </div>
+
     <div class="ctrl" style="background:#f0f9ff;border-color:#7dd3fc;">
       <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#075985;line-height:1.4;">
         <input type="checkbox" id="weatherWindow" style="margin-top:2px;flex-shrink:0;" />
@@ -937,11 +951,38 @@ function generateGrid(){
     status.textContent=`Real substation data missing — using synthetic placement…`;
   }
 
-  substations=centers.map((c,i)=>({
-    lat:c.lat, lon:c.lon, color:PALETTE[i%PALETTE.length], popServed:0,
-    name: useReal ? window.HARTFORD_SUBSTATIONS[i].name : null,
-    voltage: useReal ? (window.HARTFORD_SUBSTATIONS[i].voltage||'') : '',
-  }));
+  // Per-substation TREE-DENSITY factor (environmental realism). Connecticut's
+  // urban-rural gradient is sharp: downtown Hartford has scant tree canopy
+  // along feeders, while perimeter towns (Granby, Hartland, Canton, Burlington)
+  // have heavy tree cover that drives most of the storm-outage rate. We
+  // approximate this by distance from the Hartford-city centroid; substations
+  // close to downtown get a lower tree-blocked rate, far-out substations get
+  // a higher rate. Future improvement: swap for USDA Forest Service canopy %.
+  const HARTFORD_CENTER = {lat: 41.7637, lon: -72.6851};
+  function treeFactor(s){
+    const dx = (s.lat - HARTFORD_CENTER.lat) * 69;        // miles per ° lat
+    const dy = (s.lon - HARTFORD_CENTER.lon) * 51;        // miles per ° lon at 42°
+    const km = Math.hypot(dx, dy) * 1.609;
+    if (km < 5)  return 0.40;   // urban core
+    if (km < 12) return 1.00;   // suburban
+    return 1.50;                 // rural perimeter
+  }
+  // Per-feeder VEGETATION-MANAGEMENT TRIM AGE (years since last trim). Real
+  // utilities trim each feeder on a ~4-year rotation; lines that haven't
+  // been trimmed recently have a much higher tree-blocked rate. Assigned
+  // deterministically from seed so the same scenario is reproducible.
+  const TRIM_CYCLE_YEARS = 4;
+  function trimAgeMult(age){ return 0.6 + 0.25 * age; }  // age 0->0.6x, age 4->1.6x
+
+  substations=centers.map((c,i)=>{
+    const s = {
+      lat:c.lat, lon:c.lon, color:PALETTE[i%PALETTE.length], popServed:0,
+      name: useReal ? window.HARTFORD_SUBSTATIONS[i].name : null,
+      voltage: useReal ? (window.HARTFORD_SUBSTATIONS[i].voltage||'') : '',
+    };
+    s.treeFactor = treeFactor(s);
+    return s;
+  });
 
   // Assign each demand point to nearest substation → estimate popServed
   demand.forEach(d=>{
@@ -970,7 +1011,11 @@ function generateGrid(){
       }
       if (pts.length<2) continue;
       const fIdx=feeders.length;
-      feeders.push({subIdx:si,pts,popServed:popPerFeeder,color:s.color});
+      // Vegetation-management age (years since last trim) drawn uniformly
+      // over the 4-year trim cycle. Per-feeder so older trim ages can cause
+      // more tree-blocked outages on those feeders.
+      const trimAge = rnd() * TRIM_CYCLE_YEARS;
+      feeders.push({subIdx:si,pts,popServed:popPerFeeder,color:s.color,trimAge});
 
       // Laterals: branch from each midpoint of the feeder
       const lateralsPerFeeder=4+Math.floor(rnd()*5);
@@ -1057,11 +1102,28 @@ function simulateStorm(){
       const d2 = dx*dx + dy*dy;
       if (d2 < bestSubD){ bestSubD = d2; bestSub = si; }
     }
+    // Per-outage tree-blocked flag (environmental realism). Combines:
+    //   (a) per-substation TREE FACTOR — Hartford-center urban = 0.4×,
+    //       suburban = 1.0×, rural perimeter = 1.5×.
+    //   (b) per-feeder VEGETATION TRIM AGE — feeders trimmed recently are
+    //       less tree-blocked; older trims more so. trimAgeMult(age):
+    //       age 0 -> 0.6×, age 4 -> 1.6×.
+    // Multiplied against a base ~0.30 rate to produce a per-outage probability.
+    const baseTreeRate = 0.30;
+    const parentFeederIdx = seg.kind === 'f' ? seg.fi :
+                            (laterals[seg.li] ? laterals[seg.li].feederIdx : -1);
+    const feederTrim = (parentFeederIdx >= 0 && feeders[parentFeederIdx])
+                       ? feeders[parentFeederIdx].trimAge : 2;
+    const subTF = (bestSub >= 0) ? substations[bestSub].treeFactor : 1.0;
+    const pTree = Math.max(0, Math.min(1,
+      baseTreeRate * subTF * trimAgeMult(feederTrim)));
+    const isTreeBlocked = rnd() < pTree ? 1 : 0;
     outages.push({
       lat, lon, kind:seg.kind, fi:seg.fi, li:seg.li,
       popLoss: seg.popServed * popMultiplier,
       critical: rnd() < critRate,
       sub_id: bestSub,
+      tree_blocked: isTreeBlocked,
     });
   }
 
@@ -1717,6 +1779,16 @@ loadPresetList();
   const n = (window.HARTFORD_SUBSTATIONS||[]).length;
   if (el) el.textContent = n ? `${n} real substations loaded` : 'no real substation data found — run 08_fetch_substations.py';
 })();
+// Auto-build the grid on page load using the real HIFLD substations so the
+// map shows real names + locations immediately — no need to click anything
+// first. Without this, the user can see "Substation 71" tooltips if they
+// click Plan/Storm before clicking Generate.
+window.addEventListener('load', () => {
+  if (window.HARTFORD_SUBSTATIONS && window.HARTFORD_SUBSTATIONS.length){
+    try { generateGrid(); }
+    catch(e){ console.error('Initial grid generation failed:', e); }
+  }
+});
 // Auto-detect server availability: ping /health and /version on load,
 // update the dot + version label, and decide whether to auto-route Plan
 // restoration through the server. Re-checks every 60s.
@@ -1857,6 +1929,8 @@ function buildServerPayload(){
   const stormDur = weatherOn ? Math.max(0, +document.getElementById('stormDurationH').value || 0) : 0;
   const stickyOn = document.getElementById('crewStickiness').checked;
   const dragOn = document.getElementById('stormDrag').checked;
+  const soilOn = document.getElementById('soilSaturation').checked;
+  const stagingOn = document.getElementById('preStormStaging').checked;
   return {
     outages: storm.outages.map((o, idx) => ({
       lat: o.lat, lon: o.lon,
@@ -1876,6 +1950,10 @@ function buildServerPayload(){
       // Substation territory (nearest substation index, precomputed during storm).
       // Used by crew-stickiness to assign crews to service areas.
       sub_id: (o.sub_id != null ? (o.sub_id | 0) : -1),
+      // Per-outage tree-blocked flag, precomputed during storm based on the
+      // substation's tree-density factor and the parent feeder's vegetation
+      // trim age. -1 = let server decide stochastically (legacy fallback).
+      tree_blocked: (o.tree_blocked != null ? (o.tree_blocked | 0) : -1),
     })),
     crews: +cS.value,
     seed: +seedI.value | 0,
@@ -1889,6 +1967,8 @@ function buildServerPayload(){
     storm_duration: stormDur,
     crew_stickiness: stickyOn,
     storm_drag: dragOn,
+    soil_saturation: soilOn,
+    pre_storm_staging: stagingOn,
   };
 }
 // Fake-progress timer used while waiting on a server response. The server

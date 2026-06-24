@@ -145,6 +145,11 @@ class Outage(BaseModel):
                             # Set by the frontend as the nearest real
                             # substation; used by crew_stickiness to partition
                             # outages into service-area groups.
+    tree_blocked: int = -1  # -1 = let server decide stochastically (legacy);
+                            # 0 = line-only outage; 1 = tree-blocked. Set by
+                            # the frontend per-outage so urban vs rural
+                            # substation territories + vegetation-trim age
+                            # can vary the rate spatially.
 
 
 class ScheduleRequest(BaseModel):
@@ -196,6 +201,17 @@ class ScheduleRequest(BaseModel):
     # shorten major-event timelines. Implemented as a road-multiplier and
     # assessment-delay bump at the server-helper level (no scheduler refactor).
     storm_drag: bool = False
+    # Soil saturation (environmental). Wet ground from heavy rainfall pulls
+    # roots out more easily (more tree damage to power lines) and makes
+    # pole-setting / equipment repair slower (mud, equipment getting stuck).
+    # When True: +25% road impedance and +30% effective tree-blocked rate.
+    soil_saturation: bool = False
+    # Pre-storm staging (logistical). When True, the utility had pre-
+    # positioned crews and materials before the storm hit, so the post-
+    # storm assessment delay is essentially zero — work begins as soon as
+    # winds drop below the safety threshold. Real Eversource practice for
+    # forecastable events. Cancels the standard 12-hour assessment delay.
+    pre_storm_staging: bool = False
 
 
 class JobResult(BaseModel):
@@ -340,15 +356,28 @@ class MonteCarloResponse(BaseModel):
 # --- Helpers --------------------------------------------------------------
 
 def _split_for_specialization(req_outages: list[Outage], crews: int, seed: int,
-                              tree_blocked_rate: float, tree_crew_share: float):
-    """Partition outages and crews into tree vs line subsystems. The split
-    is seed-deterministic so the same scenario produces the same partition
-    every run."""
+                              tree_blocked_rate: float, tree_crew_share: float,
+                              tree_blocked_rate_multiplier: float = 1.0):
+    """Partition outages and crews into tree vs line subsystems.
+
+    Per-outage tree_blocked classification (frontend can set tree_blocked
+    explicitly, e.g. higher rate in rural / older-trim territories, lower in
+    urban Hartford). For outages with tree_blocked == -1 we fall back to the
+    legacy stochastic assignment using tree_blocked_rate × multiplier (e.g.
+    multiplier > 1 under soil_saturation = wet, more roots pulled out).
+
+    Seed-deterministic so the same scenario produces the same partition."""
     import random as _rand
     rng = _rand.Random((seed * 7919 + 17) & 0xFFFFFFFF)
+    eff_rate = max(0.0, min(1.0, tree_blocked_rate * tree_blocked_rate_multiplier))
     tree_idx, line_idx = [], []
-    for i in range(len(req_outages)):
-        (tree_idx if rng.random() < tree_blocked_rate else line_idx).append(i)
+    for i, o in enumerate(req_outages):
+        if getattr(o, "tree_blocked", -1) == 1:
+            tree_idx.append(i)
+        elif getattr(o, "tree_blocked", -1) == 0:
+            line_idx.append(i)
+        else:
+            (tree_idx if rng.random() < eff_rate else line_idx).append(i)
     n_tree = max(1, int(round(crews * tree_crew_share)))
     n_line = max(1, crews - n_tree)
     return tree_idx, line_idx, n_tree, n_line
@@ -357,7 +386,8 @@ def _split_for_specialization(req_outages: list[Outage], crews: int, seed: int,
 def _run_scheduler_sticky(req_outages, crews, seed, realistic, customer_weight,
                           crew_specialization, tree_blocked_rate, tree_crew_share,
                           hierarchical, tiered_priority, storm_duration,
-                          road_multiplier=1.5):
+                          road_multiplier=1.5, assessment_delay=12.0,
+                          tree_blocked_rate_multiplier=1.0):
     """Crew stickiness: partition outages by substation territory (sub_id),
     split crews proportionally to each territory's customer count, run one
     independent sub-scheduler per territory in parallel. Total restoration =
@@ -415,6 +445,8 @@ def _run_scheduler_sticky(req_outages, crews, seed, realistic, customer_weight,
             hierarchical=hierarchical, tiered_priority=tiered_priority,
             storm_duration=storm_duration, crew_stickiness=False,  # avoid recursion
             road_multiplier=road_multiplier,
+            assessment_delay=assessment_delay,
+            tree_blocked_rate_multiplier=tree_blocked_rate_multiplier,
         )
 
     futures = []
@@ -438,7 +470,9 @@ def _run_scheduler_sticky(req_outages, crews, seed, realistic, customer_weight,
 def _run_scheduler_specialized(req_outages, crews, seed, realistic,
                                customer_weight, tree_blocked_rate, tree_crew_share,
                                hierarchical=False, tiered_priority=False,
-                               storm_duration=0.0, road_multiplier=1.5):
+                               storm_duration=0.0, road_multiplier=1.5,
+                               assessment_delay=12.0,
+                               tree_blocked_rate_multiplier=1.0):
     """Crew specialization model: split outages by type, split crews by type,
     run two independent scheduler calls IN PARALLEL, merge results. Total
     restoration time = max of the two subsystems' finish times.
@@ -449,6 +483,7 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
     from concurrent.futures import ThreadPoolExecutor
     tree_idx, line_idx, n_tree, n_line = _split_for_specialization(
         req_outages, crews, seed, tree_blocked_rate, tree_crew_share,
+        tree_blocked_rate_multiplier,
     )
     # Avoid degenerate sub-systems where a partition is empty.
     if not tree_idx or not line_idx:
@@ -456,7 +491,8 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
                               customer_weight, hierarchical=hierarchical,
                               tiered_priority=tiered_priority,
                               storm_duration=storm_duration,
-                              road_multiplier=road_multiplier)
+                              road_multiplier=road_multiplier,
+                              assessment_delay=assessment_delay)
 
     tree_outages = [req_outages[i] for i in tree_idx]
     line_outages = [req_outages[i] for i in line_idx]
@@ -466,12 +502,14 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
                              seed + 1, realistic, customer_weight,
                              False, tree_blocked_rate, tree_crew_share,
                              hierarchical, tiered_priority, storm_duration,
-                             False, road_multiplier)
+                             False, road_multiplier, assessment_delay,
+                             tree_blocked_rate_multiplier)
         fut_line = ex.submit(_run_scheduler, line_outages, n_line,
                              seed + 2, realistic, customer_weight,
                              False, tree_blocked_rate, tree_crew_share,
                              hierarchical, tiered_priority, storm_duration,
-                             False, road_multiplier)
+                             False, road_multiplier, assessment_delay,
+                             tree_blocked_rate_multiplier)
         t_tree, crews_tree = fut_tree.result()
         t_line, crews_line = fut_line.result()
 
@@ -508,6 +546,8 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
                    storm_duration: float = 0.0,
                    crew_stickiness: bool = False,
                    road_multiplier: float = 1.5,
+                   assessment_delay: float = 12.0,
+                   tree_blocked_rate_multiplier: float = 1.0,
                    ) -> tuple[float, list[CrewResult]]:
     """Call the shared scheduler and convert the result into our response shape."""
     if crew_stickiness and len(req_outages) >= 10 and \
@@ -516,12 +556,14 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
             req_outages, crews, seed, realistic, customer_weight,
             crew_specialization, tree_blocked_rate, tree_crew_share,
             hierarchical, tiered_priority, storm_duration, road_multiplier,
+            assessment_delay, tree_blocked_rate_multiplier,
         )
     if crew_specialization and len(req_outages) >= 10:
         return _run_scheduler_specialized(
             req_outages, crews, seed, realistic, customer_weight,
             tree_blocked_rate, tree_crew_share, hierarchical, tiered_priority,
             storm_duration, road_multiplier,
+            assessment_delay, tree_blocked_rate_multiplier,
         )
     outage_tuples = [(o.lat, o.lon) for o in req_outages]
     customers = [o.customers for o in req_outages]
@@ -544,6 +586,7 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
             hierarchical=hierarchical,
             storm_duration=storm_duration,
             road_multiplier=road_multiplier,
+            assessment_delay=assessment_delay,
         )
     elif _FAST:
         crews_out, total_time, _timeline = plan_restoration_fast(
@@ -614,11 +657,23 @@ def schedule(req: ScheduleRequest) -> ScheduleResponse:
     # major-event timelines. +6 hours of staging/coordination delay, and a
     # 15% bump on the road multiplier to capture cumulative debris + slower
     # mutual-aid driving + out-of-area routing.
+    # ---- Multi-day storm drag (behavioral / sociotechnical) ----
     eff_storm = req.storm_duration
     eff_road = 1.5
     if req.storm_drag and (req.storm_duration > 12 or len(req.outages) > 5000):
         eff_storm = req.storm_duration + 6.0
         eff_road = 1.5 * 1.15
+    # ---- Soil saturation (environmental) ----
+    # Wet ground pulls roots out more easily (more tree damage), and slows
+    # equipment + repair operations (mud, hydraulic stuck).
+    tree_blocked_mult = 1.0
+    if req.soil_saturation:
+        eff_road *= 1.25
+        tree_blocked_mult = 1.30
+    # ---- Pre-storm staging (logistical) ----
+    # Pre-positioned crews skip the 12 h post-storm assessment; work starts
+    # as soon as winds drop below the safety threshold.
+    eff_assess = 0.0 if req.pre_storm_staging else 12.0
     total, crews = _run_scheduler(
         req.outages, req.crews, req.seed, req.realistic, req.customer_weight,
         crew_specialization=req.crew_specialization,
@@ -629,6 +684,8 @@ def schedule(req: ScheduleRequest) -> ScheduleResponse:
         storm_duration=eff_storm,
         crew_stickiness=req.crew_stickiness,
         road_multiplier=eff_road,
+        assessment_delay=eff_assess,
+        tree_blocked_rate_multiplier=tree_blocked_mult,
     )
     return ScheduleResponse(total_time_h=total, crews=crews)
 
