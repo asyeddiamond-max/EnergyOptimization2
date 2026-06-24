@@ -166,10 +166,10 @@ History of the speedup at 25k × 5000 over the project:
 
 Three documents in the repo capture the project's full development arc and research context:
 
-- **`JOURNAL.html`** — open in any browser. 14 chapters covering everything from foundations through the most recent commits, with verbatim user-question quotes, colored category tags, and a cross-project "Problems Faced" appendix. Browser-viewable and printable.
-- **`Hartford_Grid_Dev_Journal.docx`** — same content as a Word document for upload to Google Docs (drag into `drive.google.com` → right-click → Open with Google Docs → auto-converts).
+- **`JOURNAL.html`** — open in any browser. Chapters covering everything from foundations through The Realism Fix, with verbatim user-question quotes, colored category tags, a cross-project "Problems Faced" appendix, and an addendum on the Realism Fix phases + advisor feedback. Browser-viewable and printable.
+- **`Hartford_Grid_Dev_Journal.docx`** — same content as a Word document for upload to Google Docs (drag into `drive.google.com` → right-click → Open with Google Docs → auto-converts). Regenerate with `python build_docx.py`.
 - **`Hartford_Grid_Research_Context.docx`** — 19 cited research papers across 6 themes (each with author/title/venue + "Why it matters" + "What it does" + "Key terms" vocab), niche analysis, sketch of paper introduction, open research questions, and PURA / Eversource data sources to pursue.
-- **`PROGRESS_REPORT.md`** — focused snapshot of what changed in the most recent reporting period.
+- **`ROADMAP.md`** — advisor-feedback incorporation plan: the feedback organized by theme, a prioritized track-by-track implementation plan, and the data/links to collect.
 
 ---
 
@@ -177,9 +177,28 @@ Three documents in the repo capture the project's full development arc and resea
 
 **Engineering side:** essentially complete for the Hartford County / Connecticut scope. Calibration framework is ready, multi-server batch is ready, all toggles work at max settings.
 
-**Research side:** next milestone is calibration against one real Eversource event (Isaias 2020 PURA filing, May 2018 tornado, etc.). The framework is built; data acquisition is the bottleneck.
+**The Realism Fix (done):** three composable realism phases shipped and tested —
+**Phase 1** hierarchical restoration (laterals can't energize until their feeder is back),
+**Phase 2** tiered priority (make-safe → critical → general load),
+**Phase 3** weather window (no work during the storm itself).
+Revert point for all of it: `git tag before-realism-fix`.
+**Phase 4** (switching / back-feed) is deferred.
 
-**Deferred:** WebGPU (Alternative #5). The Numba server already handles Connecticut scale, so the urgency went away. Could be revisited if multi-state projection becomes the goal.
+**Advisor feedback & next priorities:** detailed advisor feedback reshaped the
+roadmap — see **[`ROADMAP.md`](ROADMAP.md)** for the full plan. Headline next steps:
+flip the restoration curve to "customers without power" (high→zero); add **crew
+stickiness** (a crew stays on its assigned circuit until done rather than greedily
+bouncing — the advisor's main critique); model **crews as a time series** (David Wanik
+CT crews-over-time paper); integrate **real ISO New England substation data**; and
+build toward multi-storm / multi-state storytelling. Crew stickiness and the temporal
+crew model now rank ahead of Phase 4.
+
+**Research side:** calibration against one real Eversource event (Isaias 2020 PURA
+filing, May 2018 tornado, etc.) using the built `/api/calibrate` framework. Data
+acquisition (ISO-NE substations, wind/temp Colabs, crew counts) is the bottleneck and
+is partly on the advisor side.
+
+**Deferred:** WebGPU (Alternative #5). The Numba server already handles Connecticut scale.
 
 ---
 

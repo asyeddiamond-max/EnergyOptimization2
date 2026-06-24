@@ -1653,6 +1653,46 @@
     done; what remains is the research story it can now support.
   </p>
 
+  <hr class="section">
+  <h2 id="realismfix">Addendum — The Realism Fix (Phases 1–3) &amp; Advisor Feedback</h2>
+  <div class="marginalia">A dedicated multi-phase push to add real-world restoration physics, plus the advisor feedback that reshaped the roadmap.</div>
+  <p class="narrative">
+    After the documentation cycle, a focused effort nicknamed <b>"The Realism Fix"</b>
+    added three composable realism phases, each shipped and tested independently
+    (revert point: git tag <code>before-realism-fix</code>):
+  </p>
+  <ul class="takeaways">
+    <li><b>Phase 1 — Hierarchical restoration.</b> A lateral's customers can't be
+      energized until its parent feeder's backbone faults are repaired. First attempt
+      used hard dispatch-blocking (150&nbsp;s at 3 777 outages &mdash; unusable); the
+      pathology led to a better model: gate <em>energization time</em>, not repair labor.
+      Result: 0.01&nbsp;s, and arguably more accurate (real crews still repair a downed
+      lateral while its feeder is out).</li>
+    <li><b>Phase 2 — Tiered priority.</b> Make-safe / public-safety hazards first, then
+      critical facilities, then general load. Reused the customer-weighted dispatch
+      machinery (a high-priority outage scores as if it serves many customers). Also
+      fixed a gap: the server scheduler had been ignoring the critical flag entirely.</li>
+    <li><b>Phase 3 — Weather window.</b> No work during the storm itself; the whole
+      timeline shifts past the storm. One-line anchor shift per scheduler.</li>
+  </ul>
+  <p class="narrative">
+    <b>Phase 4 (switching / back-feed) is deferred</b> &mdash; it's the largest remaining
+    phase and was paused for a fresh session with a full context budget.
+  </p>
+  <p class="narrative">
+    The project then received detailed <b>advisor feedback</b> that reshaped the priority
+    order. Headline items: flip the restoration curve to "customers without power"
+    going high&rarr;zero; add <b>crew "stickiness"</b> (a crew stays on its assigned
+    circuit/substation until done rather than greedily bouncing &mdash; the advisor's main
+    critique); model <b>crews as a time series</b> per David Wanik's CT crews-over-time
+    paper (work rates ~2 outages/crew/day, out-of-town-crew slowdown, big-storm drag);
+    use <b>real ISO New England substation data</b> with real names; drive storms from
+    real <b>wind/temperature data</b>; and build toward <b>multi-storm / multi-state
+    storytelling and comparison</b>. The full structured plan lives in
+    <code>ROADMAP.md</code>. Crew stickiness and the temporal crew model now rank ahead of
+    Phase 4.
+  </p>
+
 </div>
 </body>
 </html>
