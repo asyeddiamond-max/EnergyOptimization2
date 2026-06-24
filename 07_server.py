@@ -187,6 +187,15 @@ class ScheduleRequest(BaseModel):
     # count, and running one independent sub-scheduler per territory in a
     # thread pool. Total restoration time = max across territories.
     crew_stickiness: bool = False
+    # Multi-day storm drag (behavioral / sociotechnical). When True and the
+    # storm is "big" (storm_duration > 12 h or N outages > 5000), apply a
+    # joint slowdown capturing several documented effects: crew fatigue from
+    # multi-day operations, out-of-town mutual-aid crews unfamiliar with the
+    # territory, resource exhaustion (parts/fuel/lodging), and the well-known
+    # paradox that triple-time pay incentives can lengthen rather than
+    # shorten major-event timelines. Implemented as a road-multiplier and
+    # assessment-delay bump at the server-helper level (no scheduler refactor).
+    storm_drag: bool = False
 
 
 class JobResult(BaseModel):
@@ -347,7 +356,8 @@ def _split_for_specialization(req_outages: list[Outage], crews: int, seed: int,
 
 def _run_scheduler_sticky(req_outages, crews, seed, realistic, customer_weight,
                           crew_specialization, tree_blocked_rate, tree_crew_share,
-                          hierarchical, tiered_priority, storm_duration):
+                          hierarchical, tiered_priority, storm_duration,
+                          road_multiplier=1.5):
     """Crew stickiness: partition outages by substation territory (sub_id),
     split crews proportionally to each territory's customer count, run one
     independent sub-scheduler per territory in parallel. Total restoration =
@@ -404,6 +414,7 @@ def _run_scheduler_sticky(req_outages, crews, seed, realistic, customer_weight,
             tree_blocked_rate=tree_blocked_rate, tree_crew_share=tree_crew_share,
             hierarchical=hierarchical, tiered_priority=tiered_priority,
             storm_duration=storm_duration, crew_stickiness=False,  # avoid recursion
+            road_multiplier=road_multiplier,
         )
 
     futures = []
@@ -427,7 +438,7 @@ def _run_scheduler_sticky(req_outages, crews, seed, realistic, customer_weight,
 def _run_scheduler_specialized(req_outages, crews, seed, realistic,
                                customer_weight, tree_blocked_rate, tree_crew_share,
                                hierarchical=False, tiered_priority=False,
-                               storm_duration=0.0):
+                               storm_duration=0.0, road_multiplier=1.5):
     """Crew specialization model: split outages by type, split crews by type,
     run two independent scheduler calls IN PARALLEL, merge results. Total
     restoration time = max of the two subsystems' finish times.
@@ -444,7 +455,8 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
         return _run_scheduler(req_outages, crews, seed, realistic,
                               customer_weight, hierarchical=hierarchical,
                               tiered_priority=tiered_priority,
-                              storm_duration=storm_duration)
+                              storm_duration=storm_duration,
+                              road_multiplier=road_multiplier)
 
     tree_outages = [req_outages[i] for i in tree_idx]
     line_outages = [req_outages[i] for i in line_idx]
@@ -453,11 +465,13 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
         fut_tree = ex.submit(_run_scheduler, tree_outages, n_tree,
                              seed + 1, realistic, customer_weight,
                              False, tree_blocked_rate, tree_crew_share,
-                             hierarchical, tiered_priority, storm_duration)
+                             hierarchical, tiered_priority, storm_duration,
+                             False, road_multiplier)
         fut_line = ex.submit(_run_scheduler, line_outages, n_line,
                              seed + 2, realistic, customer_weight,
                              False, tree_blocked_rate, tree_crew_share,
-                             hierarchical, tiered_priority, storm_duration)
+                             hierarchical, tiered_priority, storm_duration,
+                             False, road_multiplier)
         t_tree, crews_tree = fut_tree.result()
         t_line, crews_line = fut_line.result()
 
@@ -493,6 +507,7 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
                    tiered_priority: bool = False,
                    storm_duration: float = 0.0,
                    crew_stickiness: bool = False,
+                   road_multiplier: float = 1.5,
                    ) -> tuple[float, list[CrewResult]]:
     """Call the shared scheduler and convert the result into our response shape."""
     if crew_stickiness and len(req_outages) >= 10 and \
@@ -500,13 +515,13 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
         return _run_scheduler_sticky(
             req_outages, crews, seed, realistic, customer_weight,
             crew_specialization, tree_blocked_rate, tree_crew_share,
-            hierarchical, tiered_priority, storm_duration,
+            hierarchical, tiered_priority, storm_duration, road_multiplier,
         )
     if crew_specialization and len(req_outages) >= 10:
         return _run_scheduler_specialized(
             req_outages, crews, seed, realistic, customer_weight,
             tree_blocked_rate, tree_crew_share, hierarchical, tiered_priority,
-            storm_duration,
+            storm_duration, road_multiplier,
         )
     outage_tuples = [(o.lat, o.lon) for o in req_outages]
     customers = [o.customers for o in req_outages]
@@ -528,6 +543,7 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
             is_feeder=[o.is_feeder for o in req_outages] if hierarchical else None,
             hierarchical=hierarchical,
             storm_duration=storm_duration,
+            road_multiplier=road_multiplier,
         )
     elif _FAST:
         crews_out, total_time, _timeline = plan_restoration_fast(
@@ -591,6 +607,18 @@ def version() -> dict[str, Any]:
 
 @app.post("/api/schedule", response_model=ScheduleResponse)
 def schedule(req: ScheduleRequest) -> ScheduleResponse:
+    # Multi-day storm drag: when the storm is "big" (long duration or many
+    # outages), apply joint behavioural/sociotechnical slowdowns capturing
+    # crew fatigue, out-of-town-crew unfamiliarity, resource exhaustion, and
+    # the documented paradox that triple-time pay incentives can lengthen
+    # major-event timelines. +6 hours of staging/coordination delay, and a
+    # 15% bump on the road multiplier to capture cumulative debris + slower
+    # mutual-aid driving + out-of-area routing.
+    eff_storm = req.storm_duration
+    eff_road = 1.5
+    if req.storm_drag and (req.storm_duration > 12 or len(req.outages) > 5000):
+        eff_storm = req.storm_duration + 6.0
+        eff_road = 1.5 * 1.15
     total, crews = _run_scheduler(
         req.outages, req.crews, req.seed, req.realistic, req.customer_weight,
         crew_specialization=req.crew_specialization,
@@ -598,8 +626,9 @@ def schedule(req: ScheduleRequest) -> ScheduleResponse:
         tree_crew_share=req.tree_crew_share,
         hierarchical=req.hierarchical,
         tiered_priority=req.tiered_priority,
-        storm_duration=req.storm_duration,
+        storm_duration=eff_storm,
         crew_stickiness=req.crew_stickiness,
+        road_multiplier=eff_road,
     )
     return ScheduleResponse(total_time_h=total, crews=crews)
 

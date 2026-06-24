@@ -172,6 +172,13 @@
       </label>
     </div>
 
+    <div class="ctrl" style="background:#fdf2f8;border-color:#f9a8d4;">
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#831843;line-height:1.4;">
+        <input type="checkbox" id="stormDrag" style="margin-top:2px;flex-shrink:0;" />
+        <span><b style="color:#9d174d">Multi-day storm drag</b> (behavioural / sociotechnical) — when the storm is big (long duration <i>or</i> 5,000+ outages), apply the documented joint slowdown: crew fatigue from multi-day operations, out-of-town mutual-aid crews unfamiliar with the territory, resource exhaustion (parts/fuel/lodging), and the paradox that triple-time pay incentives can lengthen major-event timelines (per the advisor's behavioural-science note). Adds 6 h of staging/coordination delay and a 15% bump on travel/road impedance. Server-routed only.</span>
+      </label>
+    </div>
+
     <div class="ctrl" style="background:#f0f9ff;border-color:#7dd3fc;">
       <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#075985;line-height:1.4;">
         <input type="checkbox" id="weatherWindow" style="margin-top:2px;flex-shrink:0;" />
@@ -1849,6 +1856,7 @@ function buildServerPayload(){
   const weatherOn = document.getElementById('weatherWindow').checked;
   const stormDur = weatherOn ? Math.max(0, +document.getElementById('stormDurationH').value || 0) : 0;
   const stickyOn = document.getElementById('crewStickiness').checked;
+  const dragOn = document.getElementById('stormDrag').checked;
   return {
     outages: storm.outages.map((o, idx) => ({
       lat: o.lat, lon: o.lon,
@@ -1880,6 +1888,7 @@ function buildServerPayload(){
     tiered_priority: tieredOn,
     storm_duration: stormDur,
     crew_stickiness: stickyOn,
+    storm_drag: dragOn,
   };
 }
 // Fake-progress timer used while waiting on a server response. The server
