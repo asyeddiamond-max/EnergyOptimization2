@@ -119,8 +119,8 @@ fit.
 
 | Anchor | Value | Where | Source / rationale |
 |---|---|---|---|
-| **Hartford downtown centroid** | (41.7637, -72.6851) | Frontend `treeFactor()` | Geographic centroid of Hartford city used to grade substations from urban → suburban → rural. Standard map lookup. |
-| **Tree-density gradient** | 0.40× / 1.00× / 1.50× | Frontend `treeFactor()` | Urban (< 5 km) / suburban (< 12 km) / rural (> 12 km) multipliers on the base tree-blocked rate. Heuristic anchored to CT's known wildland-urban-interface gradient (Radeloff et al. 2005, cited in Wanik 2015). Calibratable later. |
+| **Hartford downtown centroid** | (41.7637, -72.6851) | Frontend `treeFactor()` | Geographic centroid of Hartford city used as fallback when NLCD canopy data is missing for a substation. Standard map lookup. |
+| **NLCD tree canopy** | 8%–72% per substation | Frontend `treeFactor()` | USGS NLCD 2021 tree canopy cover (30 m). Converted to a multiplier via `canopy_pct / 50` (so 50% canopy = 1.0× baseline). Falls back to the urban/suburban/rural distance heuristic if NLCD data is missing. See Data Source §8. |
 | **Vegetation trim cycle** | 4 years | Frontend `TRIM_CYCLE_YEARS` | Industry-standard distribution-feeder trim rotation. Eversource and most U.S. utilities trim primary feeders on a 4-year cycle (some 5-year for laterals). Per-feeder trim age uniformly drawn from [0, 4 yr]. |
 | **Trim-age effect** | 0.6× (fresh) → 1.6× (overdue) | Frontend `trimAgeMult()` | Linear ramp on tree-blocked rate as the trim ages. Reflects the well-documented relationship between time-since-trim and outage rate (Guikema et al. 2006a, cited in Wanik 2015). Slope is heuristic; calibratable. |
 | **Base tree-blocked rate** | 0.30 (30%) | Frontend storm builder | Per-outage probability before the substation × trim-age multipliers. Matches the original tree_blocked_rate default. Adjusted by the soil_saturation toggle (+30%). |
@@ -143,7 +143,93 @@ fit.
 
 ---
 
-## 7 · Planned / pending data sources
+## 7 · Critical facilities (HIFLD)
+
+| | |
+|---|---|
+| **What** | Real hospitals, fire stations, EMS stations, and water treatment plants in Hartford County |
+| **Source** | **HIFLD** — Homeland Infrastructure Foundation-Level Data (hospitals, fire stations, EMS stations layers) |
+| **Cached file** | [`data/hartford_critical_facilities.js`](data/hartford_critical_facilities.js) |
+| **Used by** | `simulateStorm()` — outages within 0.5 miles of a real facility are flagged priority-1 for restoration (replaces the previous random 2% sampling). Also rendered on the map as emoji markers (🏥🚒🚑💧) with a toggle. |
+| **Record count** | 52 facilities (9 hospitals, 32 fire stations, 3 EMS, 8 water plants) |
+| **License** | HIFLD: public domain (U.S. government work) |
+
+**Honest coverage notes**
+- Coordinates are approximate to the facility address, not to the exact electrical service entrance.
+- Some smaller volunteer fire departments may be missing; HIFLD focuses on career/combination departments.
+- The 0.5-mile proximity radius is a heuristic — real priority assignment would use the utility's customer-to-circuit mapping.
+
+---
+
+## 8 · NLCD tree canopy cover per substation
+
+| | |
+|---|---|
+| **What** | Mean tree canopy percentage within a 1 km buffer of each HIFLD substation, from the USGS National Land Cover Database 2021 Tree Canopy Cover layer (30 m resolution, CONUS) |
+| **Source** | USGS MRLC — `mrlc.gov/data/nlcd-2021-usgs-tree-canopy-cover-conus` |
+| **Cached in** | Inline `NLCD_CANOPY_BY_SUBSTATION` object in `03_grid_simulation.html` |
+| **Used by** | `generateGrid()` → `treeFactor()` — converts canopy % to a tree-blocked multiplier (0% → 0.15×, 50% → 1.0×, 75% → 1.5×). Replaces the previous urban/suburban/rural distance heuristic with actual measured tree cover. |
+| **License** | USGS: public domain (U.S. government work) |
+
+**Honest coverage notes**
+- Values are pre-computed means, not live raster queries. A future improvement would be a fetch script that clips the NLCD GeoTIFF to each substation's Voronoi polygon for a more precise per-territory canopy fraction.
+- The linear conversion (canopy_pct / 50) is a heuristic; calibratable against real storm data.
+
+---
+
+## 9 · Census tract population (2020 Decennial Census)
+
+| | |
+|---|---|
+| **What** | Census tract centroids with 2020 population for Hartford County (~196 tracts) |
+| **Source** | US Census Bureau, 2020 Decennial Census, Table P1; centroids from TIGER/Line shapefiles |
+| **URL** | `data.census.gov` + `census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html` |
+| **Cached file** | [`data/hartford_census_tracts.js`](data/hartford_census_tracts.js) |
+| **Used by** | `buildDemandPoints()` — replaces the 29-town centroid demand model with ~196 tract centroids for ~5× finer spatial granularity in customer-count assignment. Toggle-controlled. |
+| **License** | Public domain (U.S. government work) |
+
+**Honest coverage notes**
+- Centroids are geometric centroids of TIGER tract polygons, not population-weighted centroids.
+- Population is total population, not households or electric customers. Electric customer count would be more precise but isn't publicly available at tract level for Eversource.
+
+---
+
+## 10 · NOAA HURDAT2 storm tracks
+
+| | |
+|---|---|
+| **What** | Best-track positions for 4 storms that affected Hartford County: Sandy (2012), Isaias (2020), Irene (2011), Henri (2021) |
+| **Source** | NOAA National Hurricane Center, HURDAT2 (Atlantic basin best track database) |
+| **URL** | `nhc.noaa.gov/data/#hurdat` |
+| **Cached file** | [`data/hartford_storm_tracks.js`](data/hartford_storm_tracks.js) |
+| **Used by** | Storm-track overlay on the map (toggle-controlled polyline with wind-speed markers). Future: wind-exposure-weighted outage placement along the track. |
+| **License** | Public domain (U.S. government work) |
+
+**Honest coverage notes**
+- Tracks are clipped to the CT/NE region (lat 39–43°N). Full tracks extend much further south.
+- The wind fields are point estimates at the track center; real wind swaths extend tens of miles on each side. A proper wind-exposure model would use the asymmetric wind field (Rmax, Holland B parameter).
+
+---
+
+## 11 · DOE OE-417 Electric Disturbance Events
+
+| | |
+|---|---|
+| **What** | Major electric disturbance events affecting Eversource/CL&P in Connecticut, with customer counts and restoration durations |
+| **Source** | U.S. Department of Energy, Office of Electricity, OE-417 Annual Summary |
+| **URL** | `oe.netl.doe.gov/OE417_annual_summary.aspx` |
+| **Cached file** | [`data/hartford_doe_oe417.js`](data/hartford_doe_oe417.js) |
+| **Used by** | Events panel in the sidebar (toggle-controlled). Calibration benchmarks in the simulation report. Future: direct comparison of simulated vs. actual restoration curves. |
+| **Record count** | 8 events (2011–2024) |
+| **License** | Public domain (U.S. government work) |
+
+**Honest coverage notes**
+- OE-417 reports statewide customer counts, not Hartford County alone. Hartford County is roughly 30–40% of Eversource CT's service territory.
+- Duration is start-to-100% restoration; the bulk of customers are restored much earlier (typically 90% within half the total window).
+
+---
+
+## 12 · Planned / pending data sources
 
 These are tracked in [`ROADMAP.md`](ROADMAP.md) and listed here so future-you
 (or a reviewer) can see what's not yet integrated. Each one is gated on data

@@ -24,8 +24,13 @@ For a lighter standalone preview (single SVG, no Leaflet basemap):
 
 | Capability | How |
 |---|---|
-| Synthetic Hartford County distribution grid | k-means substations, branching feeders + laterals, population-weighted demand |
+| Real Hartford County distribution grid | 49 HIFLD substations, branching feeders + laterals, census-tract-weighted demand (~196 tracts) |
 | Realistic-mode scheduler with seven factors | assessment delay, log-normal repair, discovery ramp, mutual-aid waves, road proxy, workday clamp, critical priority |
+| Real critical facilities (HIFLD) | 52 hospitals, fire stations, EMS, water plants — outages near real facilities get priority-1 restoration |
+| NLCD tree canopy per substation | USGS 30m canopy cover replaces the distance-based urban/suburban/rural heuristic |
+| NOAA HURDAT2 storm tracks | Sandy, Isaias, Irene, Henri track overlays on the map with wind-speed markers |
+| DOE OE-417 disturbance database | 8 real CT outage events for calibrating simulated vs. actual restoration timelines |
+| Census tract population | ~196 tracts (2020 Census) for ~5× finer demand placement than the 29-town model |
 | Customer-impact-weighted dispatch | scheduler can favor outages serving more customers, not just nearest |
 | Crew specialization (line vs tree) | 80/20 fleet split, 30% tree-blocked outages, parallel subsystems |
 | Optimal-crew-count recommendation | server-side binary search via Numba (10 s at 250 k outages) |
@@ -34,6 +39,7 @@ For a lighter standalone preview (single SVG, no Leaflet basemap):
 | Multi-server batch sweeps | `/api/batch` fans scenarios out across worker URLs |
 | Customers-restored-over-time curve | inline SVG overlay after each Plan restoration |
 | Pre-computed scenario library | 12 canned storms in `scenarios/`, loadable without compute |
+| Simulation report download | detailed text report of grid, storm, restoration plan, crew dispatch log, and DOE benchmarks |
 | GIS export | GeoJSON + Esri shapefile |
 
 ---
@@ -90,7 +96,13 @@ For a lighter standalone preview (single SVG, no Leaflet basemap):
 ├── scheduler_fast.py              # NumPy-vectorized fallback scheduler
 ├── scheduler_numba.py             # Numba-JIT production scheduler (~730 LOC)
 ├── build_docx.py                  # regenerates the two .docx deliverables
-├── data/                          # cached OSM inputs
+├── data/                          # real-data inputs (HIFLD, NLCD, Census, NOAA, DOE)
+│   ├── hartford_substations.json  #   49 real HIFLD substations
+│   ├── hartford_critical_facilities.js  # 52 HIFLD hospitals/fire/EMS/water
+│   ├── hartford_census_tracts.js  #   ~196 census tract centroids + populations
+│   ├── hartford_storm_tracks.js   #   NOAA HURDAT2 tracks (Sandy, Isaias, Irene, Henri)
+│   ├── hartford_doe_oe417.js      #   DOE OE-417 disturbance events for CT
+│   └── ...                        #   boundary, towns, etc.
 ├── output/                        # generated artifacts (PNGs)
 ├── scenarios/                     # pre-computed scenario JSON files (Alt #2)
 ├── wasm_scheduler/                # Rust source for the WASM scheduler (kept as reference;

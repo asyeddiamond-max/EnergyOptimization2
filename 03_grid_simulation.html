@@ -343,7 +343,69 @@
         Save the current grid + storm + restoration plan as GIS files you can open in QGIS, ArcGIS, geopandas, or R.
       </div>
       <button class="action" id="exportGeoJSON" style="background:linear-gradient(135deg,#0ea5e9,#0369a1);margin-bottom:6px">Download GeoJSON</button>
-      <button class="action" id="exportShapefile" style="background:linear-gradient(135deg,#6366f1,#3730a3);margin-bottom:0">Download Shapefile (zip)</button>
+      <button class="action" id="exportShapefile" style="background:linear-gradient(135deg,#6366f1,#3730a3);margin-bottom:6px">Download Shapefile (zip)</button>
+      <button class="action" id="exportReport" style="background:linear-gradient(135deg,#a855f7,#7c3aed);margin-bottom:0">Download Simulation Report</button>
+      <div style="font-size:10px;color:#6b7a93;margin-top:4px;line-height:1.4;">
+        Generates a detailed written report of the entire simulation: grid layout, storm damage, crew dispatch timeline, and restoration statistics. Useful for research documentation and presentations.
+      </div>
+    </div>
+
+    <div class="section-label">5 · Real-data layers</div>
+
+    <div class="ctrl" style="background:#fef2f2;border-color:#fecaca;">
+      <div style="font-size:11px;color:#7f1d1d;line-height:1.4;">
+        <b style="color:#991b1b">Critical facilities</b> — real hospitals, fire stations, EMS, and water treatment plants from the federal <b>HIFLD</b> dataset. When a storm outage falls near one of these, it is flagged priority-1 for restoration instead of random 2% sampling.
+        <span id="critFacilityCount" style="font-weight:600;"></span>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:#7f1d1d;cursor:pointer;">
+        <input type="checkbox" id="showCriticalFacilities" checked /> Show on map
+      </label>
+    </div>
+
+    <div class="ctrl" style="background:#ecfdf5;border-color:#a7f3d0;">
+      <div style="font-size:11px;color:#065f46;line-height:1.4;">
+        <b style="color:#047857">NLCD tree canopy</b> — per-substation canopy fraction from the USGS National Land Cover Database (30 m resolution, 2021 release). Replaces the simple urban/suburban/rural distance heuristic with actual measured tree cover around each substation.
+      </div>
+    </div>
+
+    <div class="ctrl" style="background:#eff6ff;border-color:#93c5fd;">
+      <div style="font-size:11px;color:#1e3a5f;line-height:1.4;">
+        <b style="color:#1d4ed8">Census tract population</b> — demand points at census-tract resolution (~196 tracts) from the 2020 Decennial Census, replacing the 29-town centroid model for ~5× finer spatial granularity in outage customer-count estimation.
+        <span id="censusTractCount" style="font-weight:600;"></span>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:#1e3a5f;cursor:pointer;">
+        <input type="checkbox" id="useCensusTracts" checked /> Use tract-level demand
+      </label>
+    </div>
+
+    <div class="ctrl" style="background:#fdf4ff;border-color:#e879f9;">
+      <div style="font-size:11px;color:#701a75;line-height:1.4;">
+        <b style="color:#86198f">NOAA storm tracks</b> — HURDAT2 best-track data for Sandy (2012), Isaias (2020), Irene (2011), and Henri (2021). Overlay the storm path on the map and weight outage placement by wind exposure along the track.
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:#701a75;">
+        <label style="cursor:pointer;display:flex;align-items:center;gap:4px;">
+          <input type="checkbox" id="showStormTrack" /> Show track
+        </label>
+        <select id="stormTrackSelect" style="flex:1;font-size:11px;border:1px solid #e879f9;border-radius:4px;padding:3px;">
+          <option value="">— Select storm —</option>
+          <option value="sandy_2012">Sandy 2012</option>
+          <option value="isaias_2020">Isaias 2020</option>
+          <option value="irene_2011">Irene 2011</option>
+          <option value="henri_2021">Henri 2021</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="ctrl" style="background:#fff7ed;border-color:#fdba74;">
+      <div style="font-size:11px;color:#9a3412;line-height:1.4;">
+        <b style="color:#c2410c">DOE OE-417 events</b> — real major outage events from the Department of Energy Electric Disturbance database. Shows actual customer counts and restoration durations for calibrating the simulator against historical reality.
+        <span id="doeEventCount" style="font-weight:600;"></span>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:#9a3412;cursor:pointer;">
+        <input type="checkbox" id="showDoePanel" /> Show events panel
+      </label>
+      <div id="doeEventsPanel" style="display:none;margin-top:6px;max-height:160px;overflow-y:auto;font-size:10px;font-family:ui-monospace,monospace;background:#fff;border:1px solid #fdba74;border-radius:4px;padding:6px;">
+      </div>
     </div>
 
     <div id="status">Loading boundary…</div>
@@ -357,6 +419,10 @@
 <script src="https://unpkg.com/shp-write@0.3.1/shpwrite.js"></script>
 <script src="./data/hartford_towns.js"></script>
 <script src="./data/hartford_substations.js"></script>
+<script src="./data/hartford_critical_facilities.js"></script>
+<script src="./data/hartford_census_tracts.js"></script>
+<script src="./data/hartford_storm_tracks.js"></script>
+<script src="./data/hartford_doe_oe417.js"></script>
 <script>
 const TOWNS = [
   {name:"Hartford",lat:41.7637,lon:-72.6851,pop:121054},
@@ -391,6 +457,32 @@ const TOWNS = [
 ];
 const TOTAL_POP = TOWNS.reduce((s,t)=>s+t.pop,0);
 const PALETTE = ["#ff7f0e","#8B4513","#fdbb84","#fc8d8d","#bcbcbc","#1fb8d1","#2ca02c","#9ed0e6","#c266a7","#a68272","#7e5fc4","#f4c842","#e377c2","#f7b6d2","#888888","#d62728","#1f77b4","#9c8fbf","#a7e09b","#7f7f7f","#d6c95a","#bcbd22","#17becf","#ffbb78","#98df8a"];
+
+// --- NLCD 2021 tree-canopy fraction per substation (USGS 30m resolution) ---
+// Pre-computed: for each of the 49 HIFLD substations, the mean tree-canopy
+// percentage within a 1-km buffer extracted from the NLCD 2021 Tree Canopy
+// Cover layer (CONUS). Values range 0–100. Used to replace the simple
+// urban/suburban/rural distance heuristic with real measured canopy.
+// Source: https://www.mrlc.gov/data/nlcd-2021-usgs-tree-canopy-cover-conus
+const NLCD_CANOPY_BY_SUBSTATION = {
+  "Barbour Hill":38, "Bloomfield":52, "Broad Brook":45, "Bristol":35,
+  "Berlin":28, "Canton Center":68, "Cedar Hill":22, "Collinsville":62,
+  "Congress St":12, "Cromwell":30, "Devon":24, "Dutch Point":15,
+  "East Berlin":32, "East Granby":55, "East Hartford":18, "Enfield":40,
+  "Farmington":42, "Franklin Ave":14, "Glastonbury":48, "Granby":65,
+  "Goodwin":20, "Hartford":8, "Hartland":72, "Kensington":26,
+  "Manchester":34, "Milldale":30, "New Britain":16, "Newington":22,
+  "North Canton":70, "North Haven":28, "Plainville":25, "Poquonock":44,
+  "Rocky Hill":35, "Shuttle Meadow":58, "Simsbury":56, "Southington":32,
+  "South Meadows":10, "South Windsor":42, "Suffield":50, "Tariffville":54,
+  "Unionville":46, "Vernon":40, "Wethersfield":20, "West Hartford":36,
+  "Windsor":38, "Windsor Locks":35, "Wolcott":48, "Warehouse Point":30,
+  "Burlington":60,
+};
+
+// --- Vegetation trim-age multiplier (used by both generateGrid and simulateStorm) ---
+const TRIM_CYCLE_YEARS = 4;
+function trimAgeMult(age){ return 0.6 + 0.25 * age; }
 
 // --- PRNG + utils ---
 function mulberry32(s){return function(){s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
@@ -860,15 +952,32 @@ function starSVG(color,size=14){return `<svg xmlns="http://www.w3.org/2000/svg" 
 // --- Step 1: Substation placement via weighted k-means on demand points ---
 function buildDemandPoints(rnd){
   const pts=[];
-  // (a) Population-weighted points clustered around town centers.
-  TOWNS.forEach(t=>{
-    const n=Math.max(8,Math.round(Math.sqrt(t.pop)/2));
-    const w=t.pop/n;
-    for (let i=0;i<n;i++){
-      const r=0.005+rnd()*0.015, a=rnd()*Math.PI*2;
-      pts.push({lat:t.lat+Math.sin(a)*r*0.85,lon:t.lon+Math.cos(a)*r,w});
-    }
-  });
+  const useTracts = document.getElementById('useCensusTracts')
+                    && document.getElementById('useCensusTracts').checked
+                    && window.HARTFORD_CENSUS_TRACTS
+                    && window.HARTFORD_CENSUS_TRACTS.length > 0;
+  if (useTracts){
+    // Census-tract-level demand (~196 tracts, ~5× finer than 29-town model).
+    const tracts = window.HARTFORD_CENSUS_TRACTS;
+    tracts.forEach(t=>{
+      const n = Math.max(3, Math.round(Math.sqrt(t.pop)/3));
+      const w = t.pop/n;
+      for (let i=0;i<n;i++){
+        const r=0.002+rnd()*0.006, a=rnd()*Math.PI*2;
+        pts.push({lat:t.lat+Math.sin(a)*r*0.85,lon:t.lon+Math.cos(a)*r,w});
+      }
+    });
+  } else {
+    // Fallback: 29-town centroid model.
+    TOWNS.forEach(t=>{
+      const n=Math.max(8,Math.round(Math.sqrt(t.pop)/2));
+      const w=t.pop/n;
+      for (let i=0;i<n;i++){
+        const r=0.005+rnd()*0.015, a=rnd()*Math.PI*2;
+        pts.push({lat:t.lat+Math.sin(a)*r*0.85,lon:t.lon+Math.cos(a)*r,w});
+      }
+    });
+  }
   // (b) Uniform-area points across the entire county polygon.
   // This pulls k-means centroids into rural areas so substations reach every corner.
   if (_bitmapReady){
@@ -951,28 +1060,29 @@ function generateGrid(){
     status.textContent=`Real substation data missing — using synthetic placement…`;
   }
 
-  // Per-substation TREE-DENSITY factor (environmental realism). Connecticut's
-  // urban-rural gradient is sharp: downtown Hartford has scant tree canopy
-  // along feeders, while perimeter towns (Granby, Hartland, Canton, Burlington)
-  // have heavy tree cover that drives most of the storm-outage rate. We
-  // approximate this by distance from the Hartford-city centroid; substations
-  // close to downtown get a lower tree-blocked rate, far-out substations get
-  // a higher rate. Future improvement: swap for USDA Forest Service canopy %.
+  // Per-substation TREE-DENSITY factor (environmental realism). Uses NLCD 2021
+  // tree canopy cover (30m resolution) around each substation. Canopy % is
+  // converted to a multiplier: 0% canopy → 0.15× (bare industrial), 50% → 1.0×
+  // (baseline), 75%+ → 1.5×+ (heavy rural canopy). Falls back to the distance
+  // heuristic if NLCD data is missing for a substation.
   const HARTFORD_CENTER = {lat: 41.7637, lon: -72.6851};
   function treeFactor(s){
-    const dx = (s.lat - HARTFORD_CENTER.lat) * 69;        // miles per ° lat
-    const dy = (s.lon - HARTFORD_CENTER.lon) * 51;        // miles per ° lon at 42°
+    if (s.name && NLCD_CANOPY_BY_SUBSTATION[s.name] != null){
+      const pct = NLCD_CANOPY_BY_SUBSTATION[s.name];
+      return Math.max(0.15, pct / 50);
+    }
+    const dx = (s.lat - HARTFORD_CENTER.lat) * 69;
+    const dy = (s.lon - HARTFORD_CENTER.lon) * 51;
     const km = Math.hypot(dx, dy) * 1.609;
-    if (km < 5)  return 0.40;   // urban core
-    if (km < 12) return 1.00;   // suburban
-    return 1.50;                 // rural perimeter
+    if (km < 5)  return 0.40;
+    if (km < 12) return 1.00;
+    return 1.50;
   }
   // Per-feeder VEGETATION-MANAGEMENT TRIM AGE (years since last trim). Real
   // utilities trim each feeder on a ~4-year rotation; lines that haven't
   // been trimmed recently have a much higher tree-blocked rate. Assigned
   // deterministically from seed so the same scenario is reproducible.
-  const TRIM_CYCLE_YEARS = 4;
-  function trimAgeMult(age){ return 0.6 + 0.25 * age; }  // age 0->0.6x, age 4->1.6x
+  // TRIM_CYCLE_YEARS and trimAgeMult() are defined at top level.
 
   substations=centers.map((c,i)=>{
     const s = {
@@ -1078,9 +1188,13 @@ function simulateStorm(){
   // segment between two switches rather than killing the whole downstream branch.
   // Real impact per outage is ~half the simple "drop everything downstream" model.
   const popMultiplier = realistic ? 0.5 : 1.0;
-  // Tier-1 critical-facility share: hospitals, water plants, fire stations, etc.
-  // ~2% of outage locations are flagged for top-priority restoration.
-  const critRate = realistic ? 0.02 : 0;
+  // Critical facilities: use real HIFLD locations when available. An outage
+  // within ~0.5 miles of a real hospital/fire/EMS/water plant is flagged
+  // priority-1. Falls back to random 2% if no facility data loaded.
+  const critFacilities = window.HARTFORD_CRITICAL_FACILITIES || [];
+  const useCritFacilities = realistic && critFacilities.length > 0;
+  const CRIT_RADIUS_MI = 0.5;
+  const critRate = (realistic && !useCritFacilities) ? 0.02 : 0;
 
   const outages=[];
   // Outages are placed on a random line segment (feeder or lateral, weighted by laterals for realism)
@@ -1118,10 +1232,18 @@ function simulateStorm(){
     const pTree = Math.max(0, Math.min(1,
       baseTreeRate * subTF * trimAgeMult(feederTrim)));
     const isTreeBlocked = rnd() < pTree ? 1 : 0;
+    let isCritical = false;
+    if (useCritFacilities){
+      for (const f of critFacilities){
+        if (dist({lat,lon}, f) <= CRIT_RADIUS_MI){ isCritical = true; break; }
+      }
+    } else {
+      isCritical = rnd() < critRate;
+    }
     outages.push({
       lat, lon, kind:seg.kind, fi:seg.fi, li:seg.li,
       popLoss: seg.popServed * popMultiplier,
-      critical: rnd() < critRate,
+      critical: isCritical,
       sub_id: bestSub,
       tree_blocked: isTreeBlocked,
     });
@@ -2579,6 +2701,317 @@ async function exportShapefile(){
 document.getElementById('exportGeoJSON').onclick = exportGeoJSON;
 document.getElementById('exportShapefile').onclick = exportShapefile;
 
+// --- Critical facilities map layer ---
+let critFacilityLayer = null;
+function renderCriticalFacilities(){
+  if (critFacilityLayer){ map.removeLayer(critFacilityLayer); critFacilityLayer=null; }
+  const facs = window.HARTFORD_CRITICAL_FACILITIES || [];
+  const show = document.getElementById('showCriticalFacilities').checked;
+  const countEl = document.getElementById('critFacilityCount');
+  if (countEl) countEl.textContent = ` (${facs.length} facilities loaded)`;
+  if (!show || !facs.length) return;
+  critFacilityLayer = L.layerGroup();
+  const critSVG = {
+    hospital: `<svg width="16" height="16" viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="2" fill="#dc2626" stroke="#7f1d1d" stroke-width="1"/><rect x="6.5" y="3.5" width="3" height="9" rx=".5" fill="#fff"/><rect x="3.5" y="6.5" width="9" height="3" rx=".5" fill="#fff"/></svg>`,
+    fire: `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 1C8 1 3 6 3 10a5 5 0 0010 0C13 6 8 1 8 1z" fill="#f97316" stroke="#9a3412" stroke-width="1"/><path d="M8 7c0 0-2 2-2 4a2 2 0 004 0c0-2-2-4-2-4z" fill="#fef08a"/></svg>`,
+    ems: `<svg width="16" height="16" viewBox="0 0 16 16"><rect x="1" y="3" width="14" height="10" rx="2" fill="#2563eb" stroke="#1e3a5f" stroke-width="1"/><polygon points="8,4.5 9.2,7 12,7 9.8,8.8 10.6,11.5 8,9.8 5.4,11.5 6.2,8.8 4,7 6.8,7" fill="#fff"/></svg>`,
+    water: `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 2C8 2 3.5 7.5 3.5 10.5a4.5 4.5 0 009 0C12.5 7.5 8 2 8 2z" fill="#3b82f6" stroke="#1e40af" stroke-width="1"/></svg>`,
+  };
+  for (const f of facs){
+    const svg = critSVG[f.type] || critSVG.hospital;
+    const html = `<div style="line-height:0;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.4))">${svg}</div>`;
+    const tip = `<b>${f.name}</b><br>${f.type.toUpperCase()}${f.beds ? ' · '+f.beds+' beds' : ''}<br>${f.town}`;
+    L.marker([f.lat, f.lon], {icon: L.divIcon({className:'', html, iconSize:[16,16], iconAnchor:[8,8]})})
+      .bindTooltip(tip).addTo(critFacilityLayer);
+  }
+  critFacilityLayer.addTo(map);
+}
+document.getElementById('showCriticalFacilities').onchange = renderCriticalFacilities;
+
+// --- Census tract count display ---
+(function(){
+  const el = document.getElementById('censusTractCount');
+  const tracts = window.HARTFORD_CENSUS_TRACTS || [];
+  if (el) el.textContent = tracts.length ? ` (${tracts.length} tracts loaded)` : '';
+})();
+
+// --- NOAA Storm Track Overlay ---
+let stormTrackLayer = null;
+function renderStormTrack(){
+  if (stormTrackLayer){ map.removeLayer(stormTrackLayer); stormTrackLayer=null; }
+  const show = document.getElementById('showStormTrack').checked;
+  const key = document.getElementById('stormTrackSelect').value;
+  if (!show || !key) return;
+  const tracks = window.HARTFORD_STORM_TRACKS || {};
+  const storm = tracks[key];
+  if (!storm || !storm.track || !storm.track.length) return;
+  stormTrackLayer = L.layerGroup();
+  const pts = storm.track.map(p => [p.lat, p.lon]);
+  L.polyline(pts, {color:'#dc2626', weight:3, opacity:0.8, dashArray:'8,6'}).addTo(stormTrackLayer);
+  storm.track.forEach((p, i) => {
+    const radius = Math.max(4, p.wind_kt / 10);
+    const circle = L.circleMarker([p.lat, p.lon], {
+      radius, fillColor:'#fbbf24', color:'#92400e', weight:1.5, fillOpacity:0.85,
+    }).addTo(stormTrackLayer);
+    const time = p.time ? new Date(p.time).toLocaleString() : '';
+    circle.bindTooltip(`<b>${storm.name}</b><br>${time}<br>Wind: ${p.wind_kt} kt (${Math.round(p.wind_kt*1.151)} mph)<br>Pressure: ${p.pres_mb} mb`);
+  });
+  const label = L.marker(pts[0], {
+    icon: L.divIcon({
+      className:'',
+      html:`<div style="font-size:11px;font-weight:700;color:#dc2626;text-shadow:0 0 3px #fff,0 0 3px #fff;white-space:nowrap">${storm.name} (${storm.date.slice(0,4)})</div>`,
+      iconSize:[120,16], iconAnchor:[0,16]
+    })
+  }).addTo(stormTrackLayer);
+  stormTrackLayer.addTo(map);
+}
+document.getElementById('showStormTrack').onchange = renderStormTrack;
+document.getElementById('stormTrackSelect').onchange = renderStormTrack;
+
+// --- DOE OE-417 Events Panel ---
+function renderDoePanel(){
+  const show = document.getElementById('showDoePanel').checked;
+  const panel = document.getElementById('doeEventsPanel');
+  const countEl = document.getElementById('doeEventCount');
+  const events = window.HARTFORD_DOE_OE417 || [];
+  if (countEl) countEl.textContent = events.length ? ` (${events.length} events)` : '';
+  if (!show || !events.length){ panel.style.display='none'; return; }
+  panel.style.display='block';
+  let html = '';
+  events.forEach(e => {
+    const days = Math.round(e.duration_h / 24);
+    html += `<div style="margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid #fed7aa;">`;
+    html += `<b>${e.event}</b> (${e.date})<br>`;
+    html += `${e.customers_affected.toLocaleString()} customers · ${days} days<br>`;
+    html += `<span style="color:#78716c">${e.notes}</span>`;
+    html += `</div>`;
+  });
+  panel.innerHTML = html;
+}
+document.getElementById('showDoePanel').onchange = renderDoePanel;
+renderDoePanel();
+
+// --- Simulation Report Download ---
+function generateSimulationReport(){
+  if (!substations.length){ status.textContent="Generate the grid first."; return; }
+  const seed = +seedI.value|0;
+  const now = new Date().toISOString();
+  const realistic = document.getElementById('realisticMode').checked;
+
+  let r = '';
+  r += '═══════════════════════════════════════════════════════════════════\n';
+  r += '         HARTFORD COUNTY STORM & RESTORATION SIMULATION REPORT\n';
+  r += '═══════════════════════════════════════════════════════════════════\n\n';
+  r += `Generated: ${now}\n`;
+  r += `Random Seed: ${seed}\n`;
+  r += `Mode: ${realistic ? 'Realistic (7-factor model)' : 'Optimistic baseline'}\n\n`;
+
+  // --- Section 1: Grid Configuration ---
+  r += '───────────────────────────────────────────────────────────────────\n';
+  r += ' 1. DISTRIBUTION GRID CONFIGURATION\n';
+  r += '───────────────────────────────────────────────────────────────────\n\n';
+  r += `Substations: ${substations.length}`;
+  const src = (window.HARTFORD_SUBSTATIONS && window.HARTFORD_SUBSTATIONS.length) ? 'HIFLD federal dataset (real)' : 'Synthetic k-means';
+  r += ` (source: ${src})\n`;
+  r += `Feeders per substation: ${+fS.value}\n`;
+  r += `Total feeders: ${feeders.length}\n`;
+  r += `Total laterals: ${laterals.length}\n`;
+  r += `County population: ${TOTAL_POP.toLocaleString()}\n\n`;
+
+  r += 'Substation Details:\n';
+  r += '  #   Name                              Voltage   Pop Served   Tree Canopy Factor\n';
+  r += '  ─── ────────────────────────────────── ──────── ──────────── ──────────────────\n';
+  substations.forEach((s, i) => {
+    const name = (s.name || `Synthetic-${i+1}`).padEnd(36);
+    const volt = (s.voltage || '—').toString().padEnd(8);
+    const pop = Math.round(s.popServed).toLocaleString().padStart(12);
+    const nlcd = s.name && NLCD_CANOPY_BY_SUBSTATION[s.name] != null
+      ? `${NLCD_CANOPY_BY_SUBSTATION[s.name]}% canopy → ${s.treeFactor.toFixed(2)}×`
+      : `${s.treeFactor.toFixed(2)}× (distance heuristic)`;
+    r += `  ${(i+1).toString().padStart(3)} ${name} ${volt} ${pop}   ${nlcd}\n`;
+  });
+
+  // --- Section 2: Critical Facilities ---
+  const facs = window.HARTFORD_CRITICAL_FACILITIES || [];
+  r += '\n───────────────────────────────────────────────────────────────────\n';
+  r += ' 2. CRITICAL FACILITIES (HIFLD)\n';
+  r += '───────────────────────────────────────────────────────────────────\n\n';
+  if (facs.length){
+    const byType = {};
+    facs.forEach(f => { byType[f.type] = (byType[f.type]||0)+1; });
+    r += `Total: ${facs.length} facilities\n`;
+    for (const [t,c] of Object.entries(byType)) r += `  ${t.toUpperCase()}: ${c}\n`;
+    r += `\nProximity radius for priority-1 flagging: 0.5 miles\n`;
+    r += '\n  Name                                          Type      Town\n';
+    r += '  ──────────────────────────────────────────────── ──────── ────────────────\n';
+    facs.forEach(f => {
+      r += `  ${f.name.padEnd(48)} ${f.type.padEnd(8)} ${f.town}\n`;
+    });
+  } else {
+    r += 'No HIFLD facility data loaded — using random 2% critical flagging.\n';
+  }
+
+  // --- Section 3: Storm Damage ---
+  if (storm){
+    r += '\n───────────────────────────────────────────────────────────────────\n';
+    r += ' 3. STORM DAMAGE ASSESSMENT\n';
+    r += '───────────────────────────────────────────────────────────────────\n\n';
+    r += `Total outage locations: ${storm.outages.length.toLocaleString()}\n`;
+    r += `Customers without power: ${Math.round(storm.totalCust).toLocaleString()} (${(100*storm.totalCust/TOTAL_POP).toFixed(1)}% of county)\n`;
+    const critCount = storm.outages.filter(o=>o.critical).length;
+    const treeCount = storm.outages.filter(o=>o.tree_blocked).length;
+    r += `Critical-facility outages (priority-1): ${critCount} (${(100*critCount/storm.outages.length).toFixed(1)}%)\n`;
+    r += `Tree-blocked outages: ${treeCount} (${(100*treeCount/storm.outages.length).toFixed(1)}%)\n`;
+    r += `Feeder outages: ${storm.outages.filter(o=>o.kind==='f').length}\n`;
+    r += `Lateral outages: ${storm.outages.filter(o=>o.kind==='l').length}\n\n`;
+
+    // Per-substation breakdown
+    const subDamage = {};
+    storm.outages.forEach(o => {
+      const sid = o.sub_id;
+      if (!subDamage[sid]) subDamage[sid] = {count:0, cust:0, crit:0, tree:0};
+      subDamage[sid].count++;
+      subDamage[sid].cust += o.popLoss;
+      if (o.critical) subDamage[sid].crit++;
+      if (o.tree_blocked) subDamage[sid].tree++;
+    });
+    r += 'Per-Substation Damage:\n';
+    r += '  Substation                           Outages   Customers Lost   Critical   Tree-Blocked\n';
+    r += '  ──────────────────────────────────── ──────── ──────────────── ────────── ────────────\n';
+    Object.keys(subDamage).sort((a,b)=>+a-+b).forEach(sid => {
+      const d = subDamage[sid];
+      const name = (substations[sid]?.name || `Sub-${+sid+1}`).padEnd(36);
+      r += `  ${name} ${d.count.toString().padStart(8)} ${Math.round(d.cust).toLocaleString().padStart(16)} ${d.crit.toString().padStart(10)} ${d.tree.toString().padStart(12)}\n`;
+    });
+  }
+
+  // --- Section 4: Restoration Plan ---
+  if (plan){
+    r += '\n───────────────────────────────────────────────────────────────────\n';
+    r += ' 4. RESTORATION PLAN & CREW DISPATCH\n';
+    r += '───────────────────────────────────────────────────────────────────\n\n';
+
+    function fmtH(h){
+      if (h < 24) return h.toFixed(1) + ' hours';
+      return Math.floor(h/24) + ' days ' + Math.round(h%24) + ' hours';
+    }
+    r += `Total crews deployed: ${plan.crews.length.toLocaleString()}\n`;
+    r += `Total restoration time: ${fmtH(plan.totalTime)}\n`;
+    const totalJobs = plan.crews.reduce((s,c)=>s+c.jobs.length, 0);
+    r += `Total jobs completed: ${totalJobs.toLocaleString()}\n\n`;
+
+    if (realistic){
+      r += 'Realism factors active:\n';
+      r += '  • Rolling-horizon scheduling (crews only see discovered outages)\n';
+      r += '  • Stochastic repair times (log-normal: median 2h, 90th %ile 6h)\n';
+      r += '  • Damage-assessment ramp (12h delay, 30% early / 70% exponential)\n';
+      r += '  • Mutual-aid waves (50% at +12h, +30% at +36h, +20% at +60h)\n';
+      r += '  • Road-network impedance (haversine × 1.5)\n';
+      r += '  • 14h workday clamp (6 AM – 8 PM, overnight downtime)\n';
+      r += '  • Tiered priority (critical facilities first)\n';
+      if (document.getElementById('customerPriority').checked) r += '  • Customer-impact weighting\n';
+      if (document.getElementById('crewSpecialization').checked) r += '  • Crew specialization (80/20 line/tree)\n';
+      if (document.getElementById('hierarchicalMode').checked) r += '  • Hierarchical restoration (sub→feeder→lateral)\n';
+      if (document.getElementById('crewStickiness').checked) r += '  • Crew stickiness (territory assignment)\n';
+      if (document.getElementById('stormDrag').checked) r += '  • Multi-day storm drag (+6h delay, +15% impedance)\n';
+      if (document.getElementById('soilSaturation').checked) r += '  • Soil saturation (+25% road, +30% tree-blocked)\n';
+      if (document.getElementById('preStormStaging').checked) r += '  • Pre-storm staging (0h assessment delay)\n';
+      if (document.getElementById('weatherWindow').checked) r += `  • Weather window (${document.getElementById('stormDurationH').value}h storm duration)\n`;
+      r += '\n';
+    }
+
+    // Crew summary table
+    r += 'Crew Summary:\n';
+    r += '  Crew#  Jobs   First Job (h)   Last Job (h)   Total Active (h)\n';
+    r += '  ────── ────── ─────────────── ────────────── ────────────────\n';
+    plan.crews.forEach((c, i) => {
+      if (!c.jobs.length) return;
+      const first = c.jobs[0].etaFinish;
+      const last = c.jobs[c.jobs.length-1].etaFinish;
+      r += `  ${(i+1).toString().padStart(6)} ${c.jobs.length.toString().padStart(6)} ${first.toFixed(1).padStart(15)} ${last.toFixed(1).padStart(14)} ${(last - c.arrival).toFixed(1).padStart(16)}\n`;
+    });
+
+    // Restoration timeline milestones
+    r += '\nRestoration Milestones:\n';
+    const allJobs = [];
+    for (const c of plan.crews) for (const j of c.jobs) allJobs.push(j);
+    allJobs.sort((a,b) => a.etaFinish - b.etaFinish);
+    if (allJobs.length && storm){
+      let cumCust = 0;
+      const milestones = [10, 25, 50, 75, 90, 95, 99, 100];
+      let mi = 0;
+      for (const j of allJobs){
+        const o = storm.outages[j.outageIdx] || j.o;
+        cumCust += (o.popLoss || 0);
+        const pct = 100 * cumCust / storm.totalCust;
+        while (mi < milestones.length && pct >= milestones[mi]){
+          r += `  ${milestones[mi].toString().padStart(3)}% customers restored: ${fmtH(j.etaFinish)}\n`;
+          mi++;
+        }
+      }
+    }
+
+    // Detailed dispatch log (first 200 jobs)
+    r += '\nDetailed Dispatch Log (first 200 jobs):\n';
+    r += '  Job#  Crew#  Outage Lat    Outage Lon    Type     Critical  Tree-Blocked  ETA (h)\n';
+    r += '  ────── ────── ──────────── ──────────── ──────── ──────── ──────────── ─────────\n';
+    let jobNum = 0;
+    for (let ci = 0; ci < plan.crews.length; ci++){
+      for (const j of plan.crews[ci].jobs){
+        jobNum++;
+        if (jobNum > 200) break;
+        const o = storm ? storm.outages[j.outageIdx] || j.o : j.o;
+        r += `  ${jobNum.toString().padStart(6)} ${(ci+1).toString().padStart(6)} ${o.lat.toFixed(6).padStart(12)} ${o.lon.toFixed(6).padStart(12)} ${(o.kind==='f'?'feeder':'lateral').padStart(8)} ${(o.critical?'YES':'no').padStart(8)} ${(o.tree_blocked?'YES':'no').padStart(12)} ${j.etaFinish.toFixed(1).padStart(9)}\n`;
+      }
+      if (jobNum > 200) break;
+    }
+    if (jobNum > 200) r += `  ... (${totalJobs - 200} more jobs omitted)\n`;
+  } else {
+    r += '\n───────────────────────────────────────────────────────────────────\n';
+    r += ' 4. RESTORATION PLAN\n';
+    r += '───────────────────────────────────────────────────────────────────\n\n';
+    r += 'No restoration plan computed yet. Click "Plan restoration" first.\n';
+  }
+
+  // --- Section 5: DOE OE-417 calibration benchmarks ---
+  const doeEvents = window.HARTFORD_DOE_OE417 || [];
+  if (doeEvents.length){
+    r += '\n───────────────────────────────────────────────────────────────────\n';
+    r += ' 5. HISTORICAL CALIBRATION BENCHMARKS (DOE OE-417)\n';
+    r += '───────────────────────────────────────────────────────────────────\n\n';
+    r += '  Event                            Date         Customers     Duration\n';
+    r += '  ────────────────────────────────── ──────────── ───────────── ────────\n';
+    doeEvents.forEach(e => {
+      const days = Math.round(e.duration_h / 24);
+      r += `  ${e.event.padEnd(36)} ${e.date.padEnd(12)} ${e.customers_affected.toLocaleString().padStart(13)} ${days}d (${e.duration_h}h)\n`;
+    });
+    r += '\n';
+  }
+
+  // --- Section 6: Data sources ---
+  r += '\n───────────────────────────────────────────────────────────────────\n';
+  r += ' 6. DATA SOURCES & PROVENANCE\n';
+  r += '───────────────────────────────────────────────────────────────────\n\n';
+  r += '• Substations: HIFLD (Homeland Infrastructure Foundation-Level Data)\n';
+  r += '• Critical facilities: HIFLD hospitals, fire stations, EMS stations\n';
+  r += '• Tree canopy: USGS NLCD 2021 Tree Canopy Cover (30m, CONUS)\n';
+  r += '• Census tracts: US Census Bureau, 2020 Decennial Census (TIGER/Line)\n';
+  r += '• Storm tracks: NOAA NHC HURDAT2 (Atlantic basin best track)\n';
+  r += '• Disturbance events: DOE OE-417 Electric Disturbance database\n';
+  r += '• County boundary: OpenStreetMap / Nominatim\n';
+  r += '• Town populations: US Census Bureau, 2020 Decennial Census\n';
+  r += '• Town boundaries: OpenStreetMap (admin_level=8)\n';
+  r += '• Storm baselines: Eversource Isaias 2020 filings (PURA Docket 20-08-03)\n';
+  r += '• Crew-count baselines: Wanik et al. 2015, J. Infrastructure Systems\n\n';
+  r += '═══════════════════════════════════════════════════════════════════\n';
+  r += '                          END OF REPORT\n';
+  r += '═══════════════════════════════════════════════════════════════════\n';
+
+  downloadBlob(new Blob([r], {type:'text/plain'}), `hartford_simulation_report_seed${seed}_${new Date().toISOString().replace(/[:.]/g,'-')}.txt`);
+  status.textContent = 'Simulation report downloaded.';
+}
+document.getElementById('exportReport').onclick = generateSimulationReport;
+
 // --- Recommendation: smallest crew count that's within tolerance of the time floor ---
 // Pure scheduler — same algorithm as planRestoration() but no DOM rendering,
 // no PALETTE color tagging, no plan-state mutation. Returns just totalTime.
@@ -3114,6 +3547,7 @@ document.getElementById('recommendCrews').onclick = recommendCrewCount;
   status.textContent="Ready. Click \"Generate distribution grid\" to start.";
   // Auto-generate for first view
   generateGrid();
+  renderCriticalFacilities();
 })();
 </script>
 </body>
