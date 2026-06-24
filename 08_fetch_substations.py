@@ -1,30 +1,28 @@
 """
-08_fetch_substations.py — Cache REAL Hartford County substation locations from
-OpenStreetMap (Overpass API).
+08_fetch_substations.py — Cache REAL Hartford County substation locations.
 
-Replaces the synthetic k-means substation placement with actual substation
-point data, keeping the real substation names and voltages — per advisor
-feedback ("the substations exist as point data; you don't need to simulate;
-keep names of real substations"). Synthetic feeders/laterals are then grown
+Primary source: HIFLD (Homeland Infrastructure Foundation-Level Data) "Electric
+Substations" — the U.S. federal dataset, the most complete and authoritative
+public substation layer. It carries explicit COUNTY attribution (so no polygon
+filtering is needed), plus city, status, line count, and voltage where known.
+
+Per advisor feedback: "the substations exist as point data; you don't need to
+simulate; keep names of real substations." Synthetic feeders/laterals are grown
 FROM these real anchor points in the interactive.
 
-Method:
-    1. Query Overpass for power=substation nodes + ways in the Hartford County
-       bounding box.
-    2. Filter to those whose location falls inside the real county polygon
-       (data/hartford_boundary.json), since the bbox spills into neighbouring
-       counties.
-    3. Write data/hartford_substations.json (array of {name, lat, lon, voltage})
-       and data/hartford_substations.js (window.HARTFORD_SUBSTATIONS = [...])
-       so the interactive can load it without a live API hit.
+Writes:
+    data/hartford_substations.json  — array of {name, lat, lon, voltage, city, lines}
+    data/hartford_substations.js    — window.HARTFORD_SUBSTATIONS = [...]
 
 Usage:
     python 08_fetch_substations.py
 
-Source: OpenStreetMap, power=substation. Note OSM coverage is strongest for
-transmission/sub-transmission substations (115 kV / 345 kV); smaller
-distribution substations may be under-mapped. This is real, named,
-reproducible data and a strict improvement over synthetic placement.
+HIFLD labels some substations "UNKNOWN<id>" when the operator name isn't public;
+we relabel those as "<City> substation" so the map stays readable while the
+location stays exact. Falls back to OpenStreetMap (Overpass) if HIFLD is
+unreachable.
+
+Source: HIFLD Electric Substations (services5.arcgis.com/HDRa0B57OVrv2E1q).
 """
 from __future__ import annotations
 import json
@@ -33,46 +31,65 @@ import urllib.parse
 from pathlib import Path
 
 HERE = Path(__file__).parent
-BOUNDARY = HERE / "data" / "hartford_boundary.json"
 OUT_JSON = HERE / "data" / "hartford_substations.json"
 OUT_JS = HERE / "data" / "hartford_substations.js"
 
-# Hartford County bounding box (south, west, north, east) — generous; we filter
-# to the real polygon afterward.
-BBOX = "41.49,-73.04,42.05,-72.40"
+HIFLD = ("https://services5.arcgis.com/HDRa0B57OVrv2E1q/ArcGIS/rest/services/"
+         "Electric_Substations/FeatureServer/0/query")
 OVERPASS = "https://overpass-api.de/api/interpreter"
+BBOX = "41.49,-73.04,42.05,-72.40"  # Hartford County, for the OSM fallback
 
 
-def point_in_polygon(lon: float, lat: float, ring: list) -> bool:
-    """Ray-casting point-in-polygon. ring is a list of [lon, lat] pairs."""
-    inside = False
-    n = len(ring)
-    j = n - 1
-    for i in range(n):
-        xi, yi = ring[i][0], ring[i][1]
-        xj, yj = ring[j][0], ring[j][1]
-        if ((yi > lat) != (yj > lat)) and \
-                (lon < (xj - xi) * (lat - yi) / (yj - yi + 1e-18) + xi):
-            inside = not inside
-        j = i
-    return inside
+import re
+_PLACEHOLDER = re.compile(r"[A-Za-z]*\d{4,}")  # UNKNOWN133259, Deadend167077, Tap12345…
 
 
-def load_boundary_rings() -> list:
-    """Return list of outer rings ([[lon,lat],...]) from the cached boundary."""
-    data = json.loads(BOUNDARY.read_text())
-    obj = data[0] if isinstance(data, list) else data
-    gj = obj["geojson"]
-    t = gj["type"]
-    coords = gj["coordinates"]
-    if t == "Polygon":
-        return [coords[0]]
-    if t == "MultiPolygon":
-        return [poly[0] for poly in coords]
-    raise SystemExit(f"Unexpected geojson type: {t}")
+def _clean_name(name: str, city: str) -> str:
+    """HIFLD uses ID-style placeholders ('UNKNOWN<id>', 'Deadend<id>', etc.)
+    when the operator name isn't public. Relabel those with the city so the
+    marker is meaningful; keep real names as-is."""
+    n = (name or "").strip()
+    if not n or _PLACEHOLDER.fullmatch(n) or n.upper().startswith("UNKNOWN"):
+        c = (city or "").strip().title()
+        return f"{c} substation" if c else "Unnamed substation"
+    return n.title() if n.isupper() else n
 
 
-def main() -> None:
+def fetch_hifld() -> list:
+    params = {
+        "where": "STATE='CT' AND COUNTY='HARTFORD'",
+        "outFields": "NAME,CITY,STATUS,LINES,MAX_VOLT,LATITUDE,LONGITUDE",
+        "returnGeometry": "true", "outSR": "4326", "f": "json",
+    }
+    url = HIFLD + "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"User-Agent": "hartford-grid-resilience/1.0"})
+    with urllib.request.urlopen(req, timeout=90) as r:
+        d = json.loads(r.read())
+    if "error" in d:
+        raise RuntimeError(f"HIFLD error: {d['error']}")
+    subs = []
+    for f in d.get("features", []):
+        a = f.get("attributes", {})
+        g = f.get("geometry", {})
+        lon = g.get("x", a.get("LONGITUDE"))
+        lat = g.get("y", a.get("LATITUDE"))
+        if lat is None or lon is None:
+            continue
+        mv = a.get("MAX_VOLT")
+        voltage = "" if (mv is None or mv < 0) else f"{int(mv)} kV"
+        subs.append({
+            "name": _clean_name(a.get("NAME", ""), a.get("CITY", "")),
+            "lat": round(float(lat), 6),
+            "lon": round(float(lon), 6),
+            "voltage": voltage,
+            "city": (a.get("CITY") or "").title(),
+            "lines": a.get("LINES", 0) or 0,
+        })
+    return subs
+
+
+def fetch_osm_fallback() -> list:
+    """OpenStreetMap fallback (power=substation in the county bbox)."""
     q = f"""[out:json][timeout:90];
 (
   node["power"="substation"]({BBOX});
@@ -80,57 +97,52 @@ def main() -> None:
 );
 out center tags;"""
     req = urllib.request.Request(
-        OVERPASS,
-        data=("data=" + urllib.parse.quote(q)).encode(),
-        headers={"User-Agent": "hartford-grid-resilience/1.0"},
-    )
-    print("Querying Overpass for power=substation in Hartford County bbox…")
+        OVERPASS, data=("data=" + urllib.parse.quote(q)).encode(),
+        headers={"User-Agent": "hartford-grid-resilience/1.0"})
     with urllib.request.urlopen(req, timeout=120) as r:
         d = json.loads(r.read())
-    elements = d.get("elements", [])
-    print(f"  bbox returned {len(elements)} substations")
-
-    rings = load_boundary_rings()
-
     subs = []
-    for e in elements:
-        tags = e.get("tags", {})
+    for e in d.get("elements", []):
+        t = e.get("tags", {})
         if e["type"] == "node":
             lat, lon = e.get("lat"), e.get("lon")
-        else:  # way → use computed center
-            c = e.get("center", {})
-            lat, lon = c.get("lat"), c.get("lon")
+        else:
+            c = e.get("center", {}); lat, lon = c.get("lat"), c.get("lon")
         if lat is None or lon is None:
             continue
-        # Keep only substations inside the real county polygon.
-        if not any(point_in_polygon(lon, lat, ring) for ring in rings):
-            continue
-        name = tags.get("name") or f"Substation {e['id']}"
         subs.append({
-            "name": name,
-            "lat": round(lat, 6),
-            "lon": round(lon, 6),
-            "voltage": tags.get("voltage", ""),
-            "operator": tags.get("operator", ""),
+            "name": t.get("name") or "Unnamed substation",
+            "lat": round(lat, 6), "lon": round(lon, 6),
+            "voltage": t.get("voltage", ""), "city": "", "lines": 0,
         })
+    return subs
 
-    # De-duplicate by (name, rounded location).
-    seen = set()
-    uniq = []
-    for s in subs:
-        key = (s["name"], round(s["lat"], 4), round(s["lon"], 4))
+
+def main() -> None:
+    try:
+        print("Querying HIFLD Electric Substations (Hartford County, CT)…")
+        subs = fetch_hifld()
+        src = "HIFLD"
+    except Exception as ex:
+        print(f"  HIFLD failed ({ex}); falling back to OpenStreetMap")
+        subs = fetch_osm_fallback()
+        src = "OSM"
+
+    # De-duplicate by rounded location.
+    seen, uniq = set(), []
+    for s in sorted(subs, key=lambda x: x["name"]):
+        key = (round(s["lat"], 4), round(s["lon"], 4))
         if key in seen:
             continue
         seen.add(key)
         uniq.append(s)
-    uniq.sort(key=lambda s: s["name"])
 
     OUT_JSON.write_text(json.dumps(uniq, indent=2))
-    OUT_JS.write_text("window.HARTFORD_SUBSTATIONS = " +
-                      json.dumps(uniq) + ";\n")
-    named = sum(1 for s in uniq if not s["name"].startswith("Substation "))
-    print(f"Wrote {len(uniq)} substations inside Hartford County "
-          f"({named} with real names)")
+    OUT_JS.write_text("window.HARTFORD_SUBSTATIONS = " + json.dumps(uniq) + ";\n")
+    named = sum(1 for s in uniq if "substation" not in s["name"].lower()
+                or not s["name"].lower().endswith("substation")
+                and "unnamed" not in s["name"].lower())
+    print(f"Wrote {len(uniq)} substations from {src}")
     print(f"  {OUT_JSON}")
     print(f"  {OUT_JS}")
 

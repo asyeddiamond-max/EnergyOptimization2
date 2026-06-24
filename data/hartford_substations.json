@@ -1,338 +1,394 @@
 [
   {
-    "name": "Albany Substation",
-    "lat": 41.786533,
-    "lon": -72.745054,
-    "voltage": "",
-    "operator": ""
+    "name": "Barbour Hill",
+    "lat": 41.85446,
+    "lon": -72.528573,
+    "voltage": "345 kV",
+    "city": "South Windsor",
+    "lines": 7
   },
   {
-    "name": "Barbour Hill Substation",
-    "lat": 41.85448,
-    "lon": -72.528611,
-    "voltage": "345000;115000",
-    "operator": "Eversource"
+    "name": "Berlin",
+    "lat": 41.631826,
+    "lon": -72.72311,
+    "voltage": "115 kV",
+    "city": "Berlin Town Of",
+    "lines": 6
   },
   {
-    "name": "Berlin Substation",
-    "lat": 41.63188,
-    "lon": -72.723033,
-    "voltage": "115000",
-    "operator": "Eversource"
+    "name": "Black Rock",
+    "lat": 41.661783,
+    "lon": -72.805579,
+    "voltage": "115 kV",
+    "city": "New Britain",
+    "lines": 3
   },
   {
-    "name": "Black Rock Substation",
-    "lat": 41.661822,
-    "lon": -72.80559,
-    "voltage": "115000;69000",
-    "operator": "Eversource"
+    "name": "Bloomfield",
+    "lat": 41.828721,
+    "lon": -72.728601,
+    "voltage": "115 kV",
+    "city": "Bloomfield Town Of",
+    "lines": 3
   },
   {
-    "name": "Bloomfield Substation",
-    "lat": 41.828672,
-    "lon": -72.728603,
-    "voltage": "115000",
-    "operator": "Eversource"
+    "name": "Bloomfield Town Of substation",
+    "lat": 41.844662,
+    "lon": -72.70571,
+    "voltage": "115 kV",
+    "city": "Bloomfield Town Of",
+    "lines": 3
   },
   {
-    "name": "Bristol Substation",
-    "lat": 41.671192,
-    "lon": -72.94037,
-    "voltage": "115000",
-    "operator": "Eversource"
+    "name": "Bristol",
+    "lat": 41.671188,
+    "lon": -72.940365,
+    "voltage": "115 kV",
+    "city": "Bristol",
+    "lines": 2
   },
   {
-    "name": "Burrit Street Substation",
-    "lat": 41.66929,
-    "lon": -72.798237,
-    "voltage": "69000",
-    "operator": "Eversource"
+    "name": "Bristol substation",
+    "lat": 41.656778,
+    "lon": -72.927474,
+    "voltage": "115 kV",
+    "city": "Bristol",
+    "lines": 3
   },
   {
-    "name": "Canal Substation",
-    "lat": 41.573535,
-    "lon": -72.901957,
-    "voltage": "115000",
-    "operator": "Eversource"
+    "name": "C.H. Dexter",
+    "lat": 41.936323,
+    "lon": -72.614849,
+    "voltage": "115 kV",
+    "city": "Enfield",
+    "lines": 2
   },
   {
-    "name": "Canton Substation",
-    "lat": 41.838499,
-    "lon": -72.92661,
-    "voltage": "115000",
-    "operator": "Eversource"
+    "name": "Canal St",
+    "lat": 41.573542,
+    "lon": -72.901951,
+    "voltage": "115 kV",
+    "city": "Plantsville",
+    "lines": 2
   },
   {
-    "name": "Chippen Hill Substation",
-    "lat": 41.682043,
-    "lon": -72.986879,
-    "voltage": "115000",
-    "operator": "Eversource"
+    "name": "Canton",
+    "lat": 41.838566,
+    "lon": -72.926631,
+    "voltage": "115 kV",
+    "city": "Canton Town Of",
+    "lines": 2
   },
   {
-    "name": "Collector Substation",
-    "lat": 41.977869,
-    "lon": -72.510155,
-    "voltage": "115000",
-    "operator": "Nutmeg Solar, LLC"
+    "name": "Chippen Hill",
+    "lat": 41.682036,
+    "lon": -72.986871,
+    "voltage": "115 kV",
+    "city": "Bristol",
+    "lines": 2
   },
   {
-    "name": "Dexter Substation",
-    "lat": 41.922338,
-    "lon": -72.62544,
-    "voltage": "115000",
-    "operator": "Algonquin Power"
+    "name": "East Hartford",
+    "lat": 41.769606,
+    "lon": -72.616391,
+    "voltage": "115 kV",
+    "city": "East Hartford",
+    "lines": 2
   },
   {
-    "name": "East Hartford Substation",
-    "lat": 41.769619,
-    "lon": -72.616406,
-    "voltage": "115000",
-    "operator": "Eversource"
+    "name": "East Hartford substation",
+    "lat": 41.754622,
+    "lon": -72.650775,
+    "voltage": "115 kV",
+    "city": "East Hartford",
+    "lines": 3
   },
   {
-    "name": "East New Britain Substation",
-    "lat": 41.670046,
-    "lon": -72.75367,
-    "voltage": "115000",
-    "operator": "Eversource"
+    "name": "East Hartford substation",
+    "lat": 41.754758,
+    "lon": -72.650781,
+    "voltage": "115 kV",
+    "city": "East Hartford",
+    "lines": 3
   },
   {
-    "name": "Enfield Substation",
-    "lat": 41.936327,
-    "lon": -72.614858,
-    "voltage": "115000",
-    "operator": "Eversource"
+    "name": "East New Britain",
+    "lat": 41.670154,
+    "lon": -72.753709,
+    "voltage": "115 kV",
+    "city": "New Britain",
+    "lines": 2
   },
   {
-    "name": "Farmington Substation",
-    "lat": 41.741837,
-    "lon": -72.793656,
-    "voltage": "115000",
-    "operator": "Eversource"
+    "name": "East Windsor Town Of substation",
+    "lat": 41.918256,
+    "lon": -72.612619,
+    "voltage": "115 kV",
+    "city": "East Windsor Town Of",
+    "lines": 3
   },
   {
-    "name": "Forestville Substation",
-    "lat": 41.663318,
-    "lon": -72.896025,
-    "voltage": "115000",
-    "operator": "Eversource"
+    "name": "East Windsor Town Of substation",
+    "lat": 41.918291,
+    "lon": -72.612697,
+    "voltage": "115 kV",
+    "city": "East Windsor Town Of",
+    "lines": 3
   },
   {
-    "name": "Gravel Pit Substation",
-    "lat": 41.889664,
-    "lon": -72.55059,
-    "voltage": "115000",
-    "operator": "D.E. Shaw Renewable Energy Investments"
+    "name": "Farmington",
+    "lat": 41.741843,
+    "lon": -72.793636,
+    "voltage": "115 kV",
+    "city": "Farmington",
+    "lines": 2
   },
   {
-    "name": "Hopewell Substation",
-    "lat": 41.680956,
-    "lon": -72.554982,
-    "voltage": "115000",
-    "operator": "Eversource"
-  },
-  {
-    "name": "Manchester Substation",
-    "lat": 41.77043,
-    "lon": -72.557496,
-    "voltage": "345000;115000",
-    "operator": "Eversource"
-  },
-  {
-    "name": "Newington Substation",
-    "lat": 41.717785,
-    "lon": -72.750973,
-    "voltage": "115000",
-    "operator": "Eversource"
-  },
-  {
-    "name": "North Bloomfield Substation",
-    "lat": 41.890907,
-    "lon": -72.758107,
-    "voltage": "345000;115000",
-    "operator": "Eversource"
-  },
-  {
-    "name": "Northeast Simsbury Substation",
-    "lat": 41.908712,
-    "lon": -72.792666,
-    "voltage": "115000",
-    "operator": "Eversource"
-  },
-  {
-    "name": "Northwest Hartford Substation",
-    "lat": 41.782906,
-    "lon": -72.704731,
-    "voltage": "115000",
-    "operator": "Eversource"
-  },
-  {
-    "name": "Praxair Substation",
-    "lat": 41.948207,
-    "lon": -72.626824,
-    "voltage": "",
-    "operator": ""
-  },
-  {
-    "name": "Rainbow Substation",
-    "lat": 41.915633,
-    "lon": -72.69281,
-    "voltage": "",
-    "operator": "Eversource"
-  },
-  {
-    "name": "Riverside Drive Substation",
-    "lat": 41.747491,
-    "lon": -72.642821,
-    "voltage": "115000",
-    "operator": "Eversource"
-  },
-  {
-    "name": "Rocky Hill Substation",
-    "lat": 41.652752,
-    "lon": -72.668914,
-    "voltage": "115000",
-    "operator": "Eversource"
-  },
-  {
-    "name": "Rood Avenue Substation",
-    "lat": 41.828744,
-    "lon": -72.668938,
-    "voltage": "115000",
-    "operator": "Eversource"
-  },
-  {
-    "name": "Scitico Substation",
-    "lat": 41.97868,
-    "lon": -72.510503,
-    "voltage": "115000",
-    "operator": "Eversource"
-  },
-  {
-    "name": "South Windsor Substation",
-    "lat": 41.840219,
-    "lon": -72.600441,
-    "voltage": "115000",
-    "operator": "Eversource"
-  },
-  {
-    "name": "Southington Substation",
-    "lat": 41.588502,
-    "lon": -72.866574,
-    "voltage": "345000;115000",
-    "operator": "Eversource"
-  },
-  {
-    "name": "Southwest Hartford Substation",
-    "lat": 41.750733,
-    "lon": -72.712553,
-    "voltage": "115000",
-    "operator": "Eversource"
-  },
-  {
-    "name": "Substation 1018609988",
-    "lat": 41.699775,
-    "lon": -72.689411,
-    "voltage": "",
-    "operator": "Eversource"
-  },
-  {
-    "name": "Substation 1105661976",
-    "lat": 41.88441,
-    "lon": -72.737429,
-    "voltage": "",
-    "operator": ""
-  },
-  {
-    "name": "Substation 1146128918",
-    "lat": 41.794834,
-    "lon": -72.706762,
-    "voltage": "",
-    "operator": ""
-  },
-  {
-    "name": "Substation 1381678757",
-    "lat": 41.725343,
-    "lon": -72.666751,
-    "voltage": "",
-    "operator": ""
-  },
-  {
-    "name": "Substation 1413824877",
-    "lat": 41.931823,
-    "lon": -72.593691,
-    "voltage": "",
-    "operator": ""
-  },
-  {
-    "name": "Substation 1460186448",
-    "lat": 41.71923,
-    "lon": -72.733443,
-    "voltage": "",
-    "operator": "Eversource"
-  },
-  {
-    "name": "Substation 1485093425",
-    "lat": 41.988514,
-    "lon": -73.022696,
-    "voltage": "",
-    "operator": ""
-  },
-  {
-    "name": "Substation 5368533444",
-    "lat": 41.807518,
-    "lon": -72.754591,
-    "voltage": "",
-    "operator": ""
-  },
-  {
-    "name": "Substation 552955659",
-    "lat": 41.689603,
-    "lon": -72.912927,
-    "voltage": "",
-    "operator": "Eversource"
-  },
-  {
-    "name": "Substation 58265214",
-    "lat": 41.717979,
-    "lon": -72.769205,
-    "voltage": "",
-    "operator": ""
-  },
-  {
-    "name": "Substation 731227380",
-    "lat": 41.768865,
-    "lon": -72.892491,
-    "voltage": "",
-    "operator": ""
-  },
-  {
-    "name": "Substation 734348619",
-    "lat": 41.92642,
-    "lon": -72.691024,
-    "voltage": "",
-    "operator": ""
-  },
-  {
-    "name": "Substation 76737173",
+    "name": "Farmington substation",
     "lat": 41.746875,
     "lon": -72.820315,
     "voltage": "",
-    "operator": ""
+    "city": "Farmington",
+    "lines": 0
   },
   {
-    "name": "Suffield Substation",
-    "lat": 41.958139,
-    "lon": -72.645439,
+    "name": "Forestville",
+    "lat": 41.663312,
+    "lon": -72.895993,
+    "voltage": "115 kV",
+    "city": "Bristol",
+    "lines": 2
+  },
+  {
+    "name": "Hartford substation",
+    "lat": 41.78295,
+    "lon": -72.704634,
+    "voltage": "115 kV",
+    "city": "Hartford",
+    "lines": 2
+  },
+  {
+    "name": "Hopewell",
+    "lat": 41.681009,
+    "lon": -72.554995,
+    "voltage": "115 kV",
+    "city": "Glastonbury Town Of",
+    "lines": 2
+  },
+  {
+    "name": "Manchester",
+    "lat": 41.770212,
+    "lon": -72.557557,
+    "voltage": "345 kV",
+    "city": "Manchester Town Of",
+    "lines": 10
+  },
+  {
+    "name": "Manchester Town Of substation",
+    "lat": 41.798472,
+    "lon": -72.568386,
+    "voltage": "345 kV",
+    "city": "Manchester Town Of",
+    "lines": 2
+  },
+  {
+    "name": "Manchester Town Of substation",
+    "lat": 41.798418,
+    "lon": -72.568274,
+    "voltage": "115 kV",
+    "city": "Manchester Town Of",
+    "lines": 1
+  },
+  {
+    "name": "Newington",
+    "lat": 41.717815,
+    "lon": -72.751019,
+    "voltage": "115 kV",
+    "city": "Newington",
+    "lines": 3
+  },
+  {
+    "name": "Newington substation",
+    "lat": 41.717556,
+    "lon": -72.75175,
+    "voltage": "115 kV",
+    "city": "Newington",
+    "lines": 3
+  },
+  {
+    "name": "North Bloomfield",
+    "lat": 41.891237,
+    "lon": -72.758114,
+    "voltage": "345 kV",
+    "city": "Bloomfield Town Of",
+    "lines": 9
+  },
+  {
+    "name": "Northeast Simsbury",
+    "lat": 41.90873,
+    "lon": -72.792351,
+    "voltage": "115 kV",
+    "city": "Simsbury",
+    "lines": 2
+  },
+  {
+    "name": "Rainbow",
+    "lat": 41.915625,
+    "lon": -72.69281,
     "voltage": "",
-    "operator": "Eversource"
+    "city": "Windsor",
+    "lines": 0
   },
   {
-    "name": "Windsor Locks Substation",
-    "lat": 41.918999,
-    "lon": -72.626205,
-    "voltage": "115000",
-    "operator": "Eversource"
+    "name": "Riverside Dr",
+    "lat": 41.74749,
+    "lon": -72.642825,
+    "voltage": "115 kV",
+    "city": "East Hartford",
+    "lines": 2
+  },
+  {
+    "name": "Riverton substation",
+    "lat": 41.988513,
+    "lon": -73.022681,
+    "voltage": "",
+    "city": "Riverton",
+    "lines": 0
+  },
+  {
+    "name": "Rocky Hill",
+    "lat": 41.652759,
+    "lon": -72.668916,
+    "voltage": "115 kV",
+    "city": "Rocky Hill",
+    "lines": 2
+  },
+  {
+    "name": "Scitico",
+    "lat": 41.978705,
+    "lon": -72.510482,
+    "voltage": "115 kV",
+    "city": "Enfield",
+    "lines": 2
+  },
+  {
+    "name": "South Meadow",
+    "lat": 41.749763,
+    "lon": -72.653382,
+    "voltage": "115 kV",
+    "city": "Hartford",
+    "lines": 6
+  },
+  {
+    "name": "South Meadow 2",
+    "lat": 41.750332,
+    "lon": -72.65425,
+    "voltage": "115 kV",
+    "city": "Hartford",
+    "lines": 1
+  },
+  {
+    "name": "South Windsor",
+    "lat": 41.840219,
+    "lon": -72.60044,
+    "voltage": "115 kV",
+    "city": "South Windsor",
+    "lines": 2
+  },
+  {
+    "name": "South Windsor substation",
+    "lat": 41.830146,
+    "lon": -72.561907,
+    "voltage": "115 kV",
+    "city": "South Windsor",
+    "lines": 3
+  },
+  {
+    "name": "South Windsor substation",
+    "lat": 41.830153,
+    "lon": -72.561694,
+    "voltage": "115 kV",
+    "city": "South Windsor",
+    "lines": 3
+  },
+  {
+    "name": "South Windsor substation",
+    "lat": 41.853924,
+    "lon": -72.529753,
+    "voltage": "115 kV",
+    "city": "South Windsor",
+    "lines": 2
+  },
+  {
+    "name": "South Windsor substation",
+    "lat": 41.853828,
+    "lon": -72.529742,
+    "voltage": "115 kV",
+    "city": "South Windsor",
+    "lines": 2
+  },
+  {
+    "name": "Southington",
+    "lat": 41.588439,
+    "lon": -72.866415,
+    "voltage": "345 kV",
+    "city": "Southington Town Of",
+    "lines": 14
+  },
+  {
+    "name": "Southwest Hartford",
+    "lat": 41.750793,
+    "lon": -72.712435,
+    "voltage": "115 kV",
+    "city": "Hartford",
+    "lines": 1
+  },
+  {
+    "name": "Stanley",
+    "lat": 41.669279,
+    "lon": -72.798224,
+    "voltage": "",
+    "city": "New Britain",
+    "lines": 0
+  },
+  {
+    "name": "Suffield Town Of substation",
+    "lat": 41.958156,
+    "lon": -72.645412,
+    "voltage": "",
+    "city": "Suffield Town Of",
+    "lines": 0
+  },
+  {
+    "name": "Suffield Town Of substation",
+    "lat": 41.948239,
+    "lon": -72.626795,
+    "voltage": "",
+    "city": "Suffield Town Of",
+    "lines": 0
+  },
+  {
+    "name": "Windsor Locks",
+    "lat": 41.918962,
+    "lon": -72.626235,
+    "voltage": "115 kV",
+    "city": "Windsor Locks",
+    "lines": 2
+  },
+  {
+    "name": "Windsor Locks substation",
+    "lat": 41.926446,
+    "lon": -72.691036,
+    "voltage": "",
+    "city": "Windsor Locks",
+    "lines": 0
+  },
+  {
+    "name": "Windsor substation",
+    "lat": 41.828859,
+    "lon": -72.668924,
+    "voltage": "115 kV",
+    "city": "Windsor",
+    "lines": 2
   }
 ]

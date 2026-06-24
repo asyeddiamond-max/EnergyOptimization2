@@ -181,16 +181,9 @@
     <div class="section-label">1 · Distribution grid</div>
 
     <div class="ctrl" style="background:#ecfdf5;border-color:#6ee7b7;">
-      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#065f46;line-height:1.4;">
-        <input type="checkbox" id="realSubstations" checked style="margin-top:2px;flex-shrink:0;" />
-        <span><b style="color:#047857">Use real substations</b> — load the actual Hartford County substation locations (and real names) from OpenStreetMap instead of synthetic k-means placement. Synthetic feeders + laterals are then grown from these real anchor points. <span id="realSubCount">48 real substations loaded</span>. Uncheck to use the synthetic slider below.</span>
-      </label>
-    </div>
-
-    <div class="ctrl">
-      <div class="row"><span>Substations: <b id="kVal">100</b></span></div>
-      <input type="range" id="kSlider" min="20" max="300" value="100" />
-      <div class="small">Synthetic placement (used only when "Use real substations" is off): a hybrid of population-weighted and area-weighted k-means so coverage reaches every corner of the county.</div>
+      <div style="font-size:11px;color:#065f46;line-height:1.4;">
+        <b style="color:#047857">Real substations</b> — the model uses the actual Hartford County substations from the federal <b>HIFLD</b> dataset (with real names, locations, and voltages). Synthetic feeders + laterals are grown from these real anchor points. <span id="realSubCount">49 real substations loaded</span>.
+      </div>
     </div>
 
     <div class="ctrl">
@@ -713,7 +706,6 @@ let storm=null;       // {outages:[{lat,lon,feederIdx,lateralIdx,custAffected}],
 let plan=null;        // {crews:[{depot,jobs:[outageIdx,...],time}], totalTime}
 
 // --- UI refs ---
-const kS=document.getElementById('kSlider'), kV=document.getElementById('kVal');
 const fS=document.getElementById('fSlider'), fV=document.getElementById('fVal');
 const oS=document.getElementById('oSlider'), oV=document.getElementById('oVal');
 const cS=document.getElementById('cSlider'), cV=document.getElementById('cVal');
@@ -742,7 +734,6 @@ function setRecProgress(pct, visible){
   _recProgressBar.style.width = v + "%";
   _recProgressLabel.textContent = v + "%";
 }
-kS.oninput=()=>kV.textContent=kS.value;
 fS.oninput=()=>fV.textContent=fS.value;
 oS.oninput=()=>{oV.textContent=oS.value; updateEstimate();};
 cS.oninput=()=>{cV.textContent=cS.value; updateEstimate();};
@@ -915,19 +906,21 @@ function kmeans(pts,k,geo,rnd,iters=15){
 function generateGrid(){
   const seed=+seedI.value|0;
   const rnd=mulberry32(seed+1);
-  const k=+kS.value, feedersPerSub=+fS.value;
-  const useReal = document.getElementById('realSubstations').checked
-                  && window.HARTFORD_SUBSTATIONS && window.HARTFORD_SUBSTATIONS.length;
+  const feedersPerSub=+fS.value;
+  const haveReal = window.HARTFORD_SUBSTATIONS && window.HARTFORD_SUBSTATIONS.length;
 
   const demand=buildDemandPoints(rnd);
-  let centers;
-  if (useReal){
-    // Real Hartford County substations from OpenStreetMap (with real names).
+  let centers, useReal;
+  if (haveReal){
+    // Real Hartford County substations from HIFLD (with real names + voltages).
     centers = window.HARTFORD_SUBSTATIONS.map(s => ({lat:s.lat, lon:s.lon}));
+    useReal = true;
     status.textContent=`Using ${centers.length} real substations…`;
   } else {
-    status.textContent=`Placing ${k} synthetic substations…`;
-    centers=kmeans(demand,k,countyGeo,rnd);
+    // Fallback only if the real dataset failed to load: synthetic k-means.
+    useReal = false;
+    centers=kmeans(demand,100,countyGeo,rnd);
+    status.textContent=`Real substation data missing — using synthetic placement…`;
   }
 
   substations=centers.map((c,i)=>({
@@ -2380,7 +2373,8 @@ function buildFeatureCollections(){
     crs: "EPSG:4326",
     inputs: {
       seed,
-      substations: +kS.value,
+      substations: substations.length,
+      substation_source: (window.HARTFORD_SUBSTATIONS && window.HARTFORD_SUBSTATIONS.length) ? "HIFLD-real" : "synthetic",
       feeders_per_sub: +fS.value,
       storm_outages: +oS.value,
       repair_crews: +cS.value,
