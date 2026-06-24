@@ -49,7 +49,7 @@ on coverage gaps go at the bottom of each entry.
 | **Fallback source** | OpenStreetMap (`power=substation` via Overpass), used automatically if HIFLD is unreachable |
 | **Fetch script** | [`08_fetch_substations.py`](08_fetch_substations.py) |
 | **Cached files** | [`data/hartford_substations.json`](data/hartford_substations.json), [`data/hartford_substations.js`](data/hartford_substations.js) |
-| **Used by** | The interactive — `generateGrid()` anchors all substations at the real HIFLD locations; synthetic feeders + laterals grow from these points. Map tooltips show real name + voltage. |
+| **Used by** | The interactive — `generateGrid()` anchors all substations at the real HIFLD locations; synthetic feeders + laterals grow from these points. Map tooltips show real name + voltage. **The grid auto-builds on page load** (commit `be09088`) so real names appear immediately without the user having to click Generate first. Also used as the territory units for the crew-stickiness toggle (each outage routes to its nearest substation; crews assigned to that substation work only that territory). |
 | **Record count** | 49 substations inside the county (as of last fetch) |
 | **License** | HIFLD: public domain (U.S. government work). OSM fallback: © OpenStreetMap contributors, ODbL 1.0. |
 | **Refresh** | `python 08_fetch_substations.py` |
@@ -109,7 +109,41 @@ on coverage gaps go at the bottom of each entry.
 
 ---
 
-## 6 · Planned / pending data sources
+## 6 · Industry-standard parameter anchors *(as of commit `be09088`)*
+
+These aren't fetched datasets but **real-world anchors** baked into the model
+when we added the latest realism factors. Tracked here so they're attributable
+when reviewers ask "where did that number come from?" and so a future calibration
+pass against PURA data has a paper trail of what was hardcoded vs. what was
+fit.
+
+| Anchor | Value | Where | Source / rationale |
+|---|---|---|---|
+| **Hartford downtown centroid** | (41.7637, -72.6851) | Frontend `treeFactor()` | Geographic centroid of Hartford city used to grade substations from urban → suburban → rural. Standard map lookup. |
+| **Tree-density gradient** | 0.40× / 1.00× / 1.50× | Frontend `treeFactor()` | Urban (< 5 km) / suburban (< 12 km) / rural (> 12 km) multipliers on the base tree-blocked rate. Heuristic anchored to CT's known wildland-urban-interface gradient (Radeloff et al. 2005, cited in Wanik 2015). Calibratable later. |
+| **Vegetation trim cycle** | 4 years | Frontend `TRIM_CYCLE_YEARS` | Industry-standard distribution-feeder trim rotation. Eversource and most U.S. utilities trim primary feeders on a 4-year cycle (some 5-year for laterals). Per-feeder trim age uniformly drawn from [0, 4 yr]. |
+| **Trim-age effect** | 0.6× (fresh) → 1.6× (overdue) | Frontend `trimAgeMult()` | Linear ramp on tree-blocked rate as the trim ages. Reflects the well-documented relationship between time-since-trim and outage rate (Guikema et al. 2006a, cited in Wanik 2015). Slope is heuristic; calibratable. |
+| **Base tree-blocked rate** | 0.30 (30%) | Frontend storm builder | Per-outage probability before the substation × trim-age multipliers. Matches the original tree_blocked_rate default. Adjusted by the soil_saturation toggle (+30%). |
+| **Soil-saturation multipliers** | road +25%, tree-blocked rate +30% | Server `schedule` endpoint | When the soil_saturation toggle is on. Heuristic; the magnitudes match qualitative findings from wet-soil tree-fall studies but should be tuned against real wet-storm event data. |
+| **Pre-storm staging** | assessment_delay → 0 (from 12 h) | Server `schedule` endpoint | When the pre_storm_staging toggle is on. Models the documented Eversource practice of pre-positioning crews for forecastable events; verified to cut ~24 h off restoration at typical scales (matches the workday-clamp rollover of the 12 h assessment phase). |
+| **Multi-day storm drag** | +6 h staging delay, +15% road impedance | Server `schedule` endpoint | When the storm_drag toggle is on AND the storm is "big" (storm_duration > 12 h or > 5000 outages). Joint slowdown captures crew fatigue + out-of-town unfamiliarity + resource exhaustion + triple-time-pay paradox. Calibratable as one parameter. |
+
+**Honest notes on these anchors**
+- Several of these multipliers are heuristic, not fit. The point of having them
+  exposed as parameters is so the calibration framework (`/api/calibrate`) can
+  tune them against real PURA event data when it arrives — at which point the
+  "Source / rationale" column gets updated with the calibrated value and a
+  reference to the storm used.
+- The 4-year vegetation trim cycle and the urban-rural gradient idea are
+  well-documented in the CT-specific literature; the *exact* multiplier values
+  are the heuristic part.
+- All of these reduce to two model-level knobs (`road_multiplier`,
+  `assessment_delay`, plus the per-outage `tree_blocked` flag), which is why
+  they compose cleanly with every other realism toggle.
+
+---
+
+## 7 · Planned / pending data sources
 
 These are tracked in [`ROADMAP.md`](ROADMAP.md) and listed here so future-you
 (or a reviewer) can see what's not yet integrated. Each one is gated on data
