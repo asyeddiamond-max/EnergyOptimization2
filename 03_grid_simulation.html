@@ -165,6 +165,13 @@
       </label>
     </div>
 
+    <div class="ctrl" style="background:#fef3c7;border-color:#fcd34d;">
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#78350f;line-height:1.4;">
+        <input type="checkbox" id="crewStickiness" style="margin-top:2px;flex-shrink:0;" />
+        <span><b style="color:#92400e">Crew stickiness (territory)</b> — real utilities assign crews to a service area. A Storrs crew works in Storrs/Mansfield; they don't drive to New Haven for an outage that's closer to a New Haven crew. Each outage is routed to its nearest substation territory; the crew fleet is split proportionally to each territory's customer count, and each sub-fleet works only its own area. Server-routed only.</span>
+      </label>
+    </div>
+
     <div class="ctrl" style="background:#f0f9ff;border-color:#7dd3fc;">
       <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#075985;line-height:1.4;">
         <input type="checkbox" id="weatherWindow" style="margin-top:2px;flex-shrink:0;" />
@@ -1035,10 +1042,19 @@ function simulateStorm(){
     const arr=seg.kind==='f'?feeders[seg.fi].pts:laterals[seg.li].pts;
     const a=arr[seg.s], b=arr[seg.s+1];
     const lat=a[0]+(b[0]-a[0])*t, lon=a[1]+(b[1]-a[1])*t;
+    // Sub_id = nearest substation index. Used by crew-stickiness to assign
+    // outages to a service-area territory.
+    let bestSub = -1, bestSubD = Infinity;
+    for (let si = 0; si < substations.length; si++){
+      const dx = substations[si].lat - lat, dy = substations[si].lon - lon;
+      const d2 = dx*dx + dy*dy;
+      if (d2 < bestSubD){ bestSubD = d2; bestSub = si; }
+    }
     outages.push({
       lat, lon, kind:seg.kind, fi:seg.fi, li:seg.li,
       popLoss: seg.popServed * popMultiplier,
       critical: rnd() < critRate,
+      sub_id: bestSub,
     });
   }
 
@@ -1832,6 +1848,7 @@ function buildServerPayload(){
   const tieredOn = document.getElementById('tieredPriority').checked;
   const weatherOn = document.getElementById('weatherWindow').checked;
   const stormDur = weatherOn ? Math.max(0, +document.getElementById('stormDurationH').value || 0) : 0;
+  const stickyOn = document.getElementById('crewStickiness').checked;
   return {
     outages: storm.outages.map((o, idx) => ({
       lat: o.lat, lon: o.lon,
@@ -1848,6 +1865,9 @@ function buildServerPayload(){
       // The make-safe selection is deterministic in outage order so it's
       // reproducible from the seed.
       priority: (idx % 33 === 0) ? 2 : (o.critical ? 1 : 0),
+      // Substation territory (nearest substation index, precomputed during storm).
+      // Used by crew-stickiness to assign crews to service areas.
+      sub_id: (o.sub_id != null ? (o.sub_id | 0) : -1),
     })),
     crews: +cS.value,
     seed: +seedI.value | 0,
@@ -1859,6 +1879,7 @@ function buildServerPayload(){
     hierarchical: hierarchicalOn,
     tiered_priority: tieredOn,
     storm_duration: stormDur,
+    crew_stickiness: stickyOn,
   };
 }
 // Fake-progress timer used while waiting on a server response. The server

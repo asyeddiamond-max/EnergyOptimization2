@@ -141,6 +141,10 @@ class Outage(BaseModel):
     is_feeder: int = 0      # 1 if this is a backbone fault, 0 if a lateral fault
     priority: int = 0       # dispatch tier: 0 normal, 1 critical facility,
                             # 2 make-safe / public-safety hazard (highest)
+    sub_id: int = -1        # index of the assigned substation (territory).
+                            # Set by the frontend as the nearest real
+                            # substation; used by crew_stickiness to partition
+                            # outages into service-area groups.
 
 
 class ScheduleRequest(BaseModel):
@@ -176,6 +180,13 @@ class ScheduleRequest(BaseModel):
     # no work happens (bucket trucks grounded). Shifts crew arrivals + outage
     # discovery to after the storm passes. 0 = no window (back-compat).
     storm_duration: float = Field(default=0.0, ge=0.0, le=120.0)
+    # Crew stickiness (advisor's main critique). When True, crews are assigned
+    # to a substation territory and only repair outages in that territory —
+    # a Storrs crew won't drive to New Haven. Implemented by partitioning the
+    # outages by sub_id, splitting crews proportionally to territory customer
+    # count, and running one independent sub-scheduler per territory in a
+    # thread pool. Total restoration time = max across territories.
+    crew_stickiness: bool = False
 
 
 class JobResult(BaseModel):
@@ -334,6 +345,85 @@ def _split_for_specialization(req_outages: list[Outage], crews: int, seed: int,
     return tree_idx, line_idx, n_tree, n_line
 
 
+def _run_scheduler_sticky(req_outages, crews, seed, realistic, customer_weight,
+                          crew_specialization, tree_blocked_rate, tree_crew_share,
+                          hierarchical, tiered_priority, storm_duration):
+    """Crew stickiness: partition outages by substation territory (sub_id),
+    split crews proportionally to each territory's customer count, run one
+    independent sub-scheduler per territory in parallel. Total restoration =
+    max across territories.
+
+    Models the real-utility behaviour that a crew assigned to Storrs works in
+    Storrs/Mansfield rather than driving to New Haven. Composes with every
+    other realism toggle — each sub-scheduler call carries them through."""
+    from concurrent.futures import ThreadPoolExecutor
+    from collections import defaultdict
+    # Group outages by their sub_id; outages missing a sub_id (sub_id < 0)
+    # get a synthetic catch-all bucket.
+    groups: dict[int, list] = defaultdict(list)
+    for o in req_outages:
+        groups[o.sub_id if o.sub_id >= 0 else -1].append(o)
+
+    # Weight each territory by total customers so we hand it crews
+    # proportional to the load it serves.
+    weights = {sid: max(1.0, sum(o.customers for o in g)) for sid, g in groups.items()}
+    total_w = sum(weights.values())
+
+    # Allocate at least 1 crew per territory; distribute the remainder by
+    # weight using the largest-remainder method so the total exactly equals
+    # the requested crew count.
+    n_groups = len(groups)
+    if crews <= n_groups:
+        # Tiny crew count vs many territories: give 1 to the n biggest
+        # territories, none to the rest (the smallest get folded into the
+        # nearest territory below).
+        sids_sorted = sorted(groups.keys(), key=lambda s: -weights[s])
+        alloc = {s: 0 for s in groups}
+        for s in sids_sorted[:crews]:
+            alloc[s] = 1
+        # Fold zero-crew territories into the largest one so no outage is orphaned.
+        biggest = sids_sorted[0]
+        for s in list(groups.keys()):
+            if alloc[s] == 0:
+                groups[biggest].extend(groups[s])
+                del groups[s]; del alloc[s]
+    else:
+        # >= 1 crew each, distribute remainder by weight.
+        raw = {s: 1 + (crews - n_groups) * weights[s] / total_w for s in groups}
+        alloc = {s: int(r) for s, r in raw.items()}
+        rem = crews - sum(alloc.values())
+        fracs = sorted(((raw[s] - alloc[s], s) for s in raw), reverse=True)
+        for _, s in fracs[:rem]:
+            alloc[s] += 1
+
+    # Run each territory's sub-scheduler in parallel.
+    def run_one(sid: int, outs: list, m: int, sub_seed: int):
+        return _run_scheduler(
+            outs, m, sub_seed, realistic, customer_weight,
+            crew_specialization=crew_specialization,
+            tree_blocked_rate=tree_blocked_rate, tree_crew_share=tree_crew_share,
+            hierarchical=hierarchical, tiered_priority=tiered_priority,
+            storm_duration=storm_duration, crew_stickiness=False,  # avoid recursion
+        )
+
+    futures = []
+    max_workers = min(16, max(2, n_groups))
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        for i, (sid, outs) in enumerate(groups.items()):
+            futures.append((sid, ex.submit(run_one, sid, outs, alloc[sid],
+                                           seed + 100 + i)))
+        results = [(sid, fut.result()) for sid, fut in futures]
+
+    # Merge crew lists; total = max across territories.
+    merged: list[CrewResult] = []
+    total_h = 0.0
+    for _sid, (t_sub, crews_sub) in results:
+        if t_sub > total_h:
+            total_h = t_sub
+        merged.extend(crews_sub)
+    return total_h, merged
+
+
 def _run_scheduler_specialized(req_outages, crews, seed, realistic,
                                customer_weight, tree_blocked_rate, tree_crew_share,
                                hierarchical=False, tiered_priority=False,
@@ -402,8 +492,16 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
                    hierarchical: bool = False,
                    tiered_priority: bool = False,
                    storm_duration: float = 0.0,
+                   crew_stickiness: bool = False,
                    ) -> tuple[float, list[CrewResult]]:
     """Call the shared scheduler and convert the result into our response shape."""
+    if crew_stickiness and len(req_outages) >= 10 and \
+            any(o.sub_id >= 0 for o in req_outages):
+        return _run_scheduler_sticky(
+            req_outages, crews, seed, realistic, customer_weight,
+            crew_specialization, tree_blocked_rate, tree_crew_share,
+            hierarchical, tiered_priority, storm_duration,
+        )
     if crew_specialization and len(req_outages) >= 10:
         return _run_scheduler_specialized(
             req_outages, crews, seed, realistic, customer_weight,
@@ -501,6 +599,7 @@ def schedule(req: ScheduleRequest) -> ScheduleResponse:
         hierarchical=req.hierarchical,
         tiered_priority=req.tiered_priority,
         storm_duration=req.storm_duration,
+        crew_stickiness=req.crew_stickiness,
     )
     return ScheduleResponse(total_time_h=total, crews=crews)
 

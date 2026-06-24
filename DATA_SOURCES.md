@@ -61,7 +61,55 @@ on coverage gaps go at the bottom of each entry.
 
 ---
 
-## 4 · Planned / pending data sources
+## 4 · Eversource Tropical Storm Isaias 2020 — crews-per-day baseline
+
+| | |
+|---|---|
+| **What** | Documented Connecticut crew deployment ramp during the response to Tropical Storm Isaias (August 4–14, 2020). |
+| **Source** | News coverage and Eversource public statements, primarily CT Mirror and NBC Connecticut |
+| **Cached file** | *Not a cached JSON file yet — facts are encoded as comments / calibration anchors in the model and in this document.* |
+| **Used by** | Reality-check baseline for the temporal crew model (mutual-aid waves + ramp). Sanity-checks the `crew_stickiness` partition and the line/tree split. |
+| **License** | News articles, treated as primary-source reporting; cited but not redistributed. |
+
+**Documented numbers**
+- **Peak customers without power:** 632,632.
+- **Damaged wire:** 500+ miles needing replacement.
+- **Crews-over-time:**
+  - Aug 5 (day 1 after storm passed): 504 line crews + 235 tree crews = **739 total**.
+  - Aug 9 (day 5): 2,500 line crews + 780 tree crews = **3,280 total**.
+  - Aug 10 (day 6): 4,500+ crews & support staff.
+- **Shift length:** 18-hour days reported.
+- **Total restoration window:** ~11 days (vs. 11 for Sandy 2012, 12 for Irene 2011).
+- **Line-vs-tree ratio:** ~76% line / 24% tree by day 5 — confirms the simulator's default 80/20 crew-specialization split is in the right neighbourhood.
+
+**Honest notes**
+- These are news-reported numbers, not a formal dataset. Eversource's own PURA filing (CT docket `20-08-11`) would be the authoritative source — that's the calibration target listed in `ROADMAP.md`.
+- The model currently treats crews as a fixed count throughout the storm. The temporal crew model in `ROADMAP.md` (Track 3, "crews as a time series") would replace that with a Wanik-style ramp curve fit to these numbers.
+
+---
+
+## 5 · Wanik et al. 2015 — baseline outage rates
+
+| | |
+|---|---|
+| **What** | Quantitative anchors for normal-day vs. storm-day outage counts in the Eversource Connecticut service territory. |
+| **Source** | Wanik, D. W. et al. (2015). *Storm outage modeling for an electric distribution network in Northeastern USA.* Natural Hazards 79(2), 1359–1384. |
+| **Reachable copy** | [hartman.byu.edu/docs/files/WanikAnagnostouHartmanFredianiAstitha_StormDamage.pdf](https://hartman.byu.edu/docs/files/WanikAnagnostouHartmanFredianiAstitha_StormDamage.pdf) |
+| **Used by** | Calibration anchors and sanity-check ranges in `ROADMAP.md` and the research-context document. |
+
+**Documented numbers**
+- **Normal day, low wind:** ~40 outages per day (median).
+- **Major storm (Sandy 2012, Irene 2011):** >15,000 outages per event — more than an entire year's worth of normal-day outages in a single storm.
+- **Storms studied:** Storm Irene 2011, Hurricane Sandy 2012, Nemo blizzard 2013.
+- **Geographic scope:** Eversource's Connecticut service territory.
+
+**Honest notes**
+- This paper is about **predicting outages from weather**, *not* about crew deployment or restoration time. The advisor's mention of "the 10-year-old David Wanik paper" likely refers to this paper as the data backbone, with crew data coming from other sources (news, PURA filings). I read the PDF in full to verify.
+- Future work would point `/api/calibrate` at the Wanik group's per-storm outage curves to fit our model's outage-count behaviour, alongside the news-derived crew ramp.
+
+---
+
+## 6 · Planned / pending data sources
 
 These are tracked in [`ROADMAP.md`](ROADMAP.md) and listed here so future-you
 (or a reviewer) can see what's not yet integrated. Each one is gated on data
