@@ -1,0 +1,338 @@
+[
+  {
+    "name": "Albany Substation",
+    "lat": 41.786533,
+    "lon": -72.745054,
+    "voltage": "",
+    "operator": ""
+  },
+  {
+    "name": "Barbour Hill Substation",
+    "lat": 41.85448,
+    "lon": -72.528611,
+    "voltage": "345000;115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Berlin Substation",
+    "lat": 41.63188,
+    "lon": -72.723033,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Black Rock Substation",
+    "lat": 41.661822,
+    "lon": -72.80559,
+    "voltage": "115000;69000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Bloomfield Substation",
+    "lat": 41.828672,
+    "lon": -72.728603,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Bristol Substation",
+    "lat": 41.671192,
+    "lon": -72.94037,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Burrit Street Substation",
+    "lat": 41.66929,
+    "lon": -72.798237,
+    "voltage": "69000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Canal Substation",
+    "lat": 41.573535,
+    "lon": -72.901957,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Canton Substation",
+    "lat": 41.838499,
+    "lon": -72.92661,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Chippen Hill Substation",
+    "lat": 41.682043,
+    "lon": -72.986879,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Collector Substation",
+    "lat": 41.977869,
+    "lon": -72.510155,
+    "voltage": "115000",
+    "operator": "Nutmeg Solar, LLC"
+  },
+  {
+    "name": "Dexter Substation",
+    "lat": 41.922338,
+    "lon": -72.62544,
+    "voltage": "115000",
+    "operator": "Algonquin Power"
+  },
+  {
+    "name": "East Hartford Substation",
+    "lat": 41.769619,
+    "lon": -72.616406,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "East New Britain Substation",
+    "lat": 41.670046,
+    "lon": -72.75367,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Enfield Substation",
+    "lat": 41.936327,
+    "lon": -72.614858,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Farmington Substation",
+    "lat": 41.741837,
+    "lon": -72.793656,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Forestville Substation",
+    "lat": 41.663318,
+    "lon": -72.896025,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Gravel Pit Substation",
+    "lat": 41.889664,
+    "lon": -72.55059,
+    "voltage": "115000",
+    "operator": "D.E. Shaw Renewable Energy Investments"
+  },
+  {
+    "name": "Hopewell Substation",
+    "lat": 41.680956,
+    "lon": -72.554982,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Manchester Substation",
+    "lat": 41.77043,
+    "lon": -72.557496,
+    "voltage": "345000;115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Newington Substation",
+    "lat": 41.717785,
+    "lon": -72.750973,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "North Bloomfield Substation",
+    "lat": 41.890907,
+    "lon": -72.758107,
+    "voltage": "345000;115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Northeast Simsbury Substation",
+    "lat": 41.908712,
+    "lon": -72.792666,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Northwest Hartford Substation",
+    "lat": 41.782906,
+    "lon": -72.704731,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Praxair Substation",
+    "lat": 41.948207,
+    "lon": -72.626824,
+    "voltage": "",
+    "operator": ""
+  },
+  {
+    "name": "Rainbow Substation",
+    "lat": 41.915633,
+    "lon": -72.69281,
+    "voltage": "",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Riverside Drive Substation",
+    "lat": 41.747491,
+    "lon": -72.642821,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Rocky Hill Substation",
+    "lat": 41.652752,
+    "lon": -72.668914,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Rood Avenue Substation",
+    "lat": 41.828744,
+    "lon": -72.668938,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Scitico Substation",
+    "lat": 41.97868,
+    "lon": -72.510503,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "South Windsor Substation",
+    "lat": 41.840219,
+    "lon": -72.600441,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Southington Substation",
+    "lat": 41.588502,
+    "lon": -72.866574,
+    "voltage": "345000;115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Southwest Hartford Substation",
+    "lat": 41.750733,
+    "lon": -72.712553,
+    "voltage": "115000",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Substation 1018609988",
+    "lat": 41.699775,
+    "lon": -72.689411,
+    "voltage": "",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Substation 1105661976",
+    "lat": 41.88441,
+    "lon": -72.737429,
+    "voltage": "",
+    "operator": ""
+  },
+  {
+    "name": "Substation 1146128918",
+    "lat": 41.794834,
+    "lon": -72.706762,
+    "voltage": "",
+    "operator": ""
+  },
+  {
+    "name": "Substation 1381678757",
+    "lat": 41.725343,
+    "lon": -72.666751,
+    "voltage": "",
+    "operator": ""
+  },
+  {
+    "name": "Substation 1413824877",
+    "lat": 41.931823,
+    "lon": -72.593691,
+    "voltage": "",
+    "operator": ""
+  },
+  {
+    "name": "Substation 1460186448",
+    "lat": 41.71923,
+    "lon": -72.733443,
+    "voltage": "",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Substation 1485093425",
+    "lat": 41.988514,
+    "lon": -73.022696,
+    "voltage": "",
+    "operator": ""
+  },
+  {
+    "name": "Substation 5368533444",
+    "lat": 41.807518,
+    "lon": -72.754591,
+    "voltage": "",
+    "operator": ""
+  },
+  {
+    "name": "Substation 552955659",
+    "lat": 41.689603,
+    "lon": -72.912927,
+    "voltage": "",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Substation 58265214",
+    "lat": 41.717979,
+    "lon": -72.769205,
+    "voltage": "",
+    "operator": ""
+  },
+  {
+    "name": "Substation 731227380",
+    "lat": 41.768865,
+    "lon": -72.892491,
+    "voltage": "",
+    "operator": ""
+  },
+  {
+    "name": "Substation 734348619",
+    "lat": 41.92642,
+    "lon": -72.691024,
+    "voltage": "",
+    "operator": ""
+  },
+  {
+    "name": "Substation 76737173",
+    "lat": 41.746875,
+    "lon": -72.820315,
+    "voltage": "",
+    "operator": ""
+  },
+  {
+    "name": "Suffield Substation",
+    "lat": 41.958139,
+    "lon": -72.645439,
+    "voltage": "",
+    "operator": "Eversource"
+  },
+  {
+    "name": "Windsor Locks Substation",
+    "lat": 41.918999,
+    "lon": -72.626205,
+    "voltage": "115000",
+    "operator": "Eversource"
+  }
+]

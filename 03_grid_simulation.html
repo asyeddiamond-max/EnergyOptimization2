@@ -180,10 +180,17 @@
 
     <div class="section-label">1 · Distribution grid</div>
 
+    <div class="ctrl" style="background:#ecfdf5;border-color:#6ee7b7;">
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#065f46;line-height:1.4;">
+        <input type="checkbox" id="realSubstations" checked style="margin-top:2px;flex-shrink:0;" />
+        <span><b style="color:#047857">Use real substations</b> — load the actual Hartford County substation locations (and real names) from OpenStreetMap instead of synthetic k-means placement. Synthetic feeders + laterals are then grown from these real anchor points. <span id="realSubCount">48 real substations loaded</span>. Uncheck to use the synthetic slider below.</span>
+      </label>
+    </div>
+
     <div class="ctrl">
       <div class="row"><span>Substations: <b id="kVal">100</b></span></div>
       <input type="range" id="kSlider" min="20" max="300" value="100" />
-      <div class="small">Placed via a hybrid of population-weighted and area-weighted k-means so coverage reaches every corner of the county.</div>
+      <div class="small">Synthetic placement (used only when "Use real substations" is off): a hybrid of population-weighted and area-weighted k-means so coverage reaches every corner of the county.</div>
     </div>
 
     <div class="ctrl">
@@ -328,6 +335,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://unpkg.com/shp-write@0.3.1/shpwrite.js"></script>
 <script src="./data/hartford_towns.js"></script>
+<script src="./data/hartford_substations.js"></script>
 <script>
 const TOWNS = [
   {name:"Hartford",lat:41.7637,lon:-72.6851,pop:121054},
@@ -908,12 +916,25 @@ function generateGrid(){
   const seed=+seedI.value|0;
   const rnd=mulberry32(seed+1);
   const k=+kS.value, feedersPerSub=+fS.value;
-  status.textContent=`Placing ${k} substations…`;
+  const useReal = document.getElementById('realSubstations').checked
+                  && window.HARTFORD_SUBSTATIONS && window.HARTFORD_SUBSTATIONS.length;
 
   const demand=buildDemandPoints(rnd);
-  const centers=kmeans(demand,k,countyGeo,rnd);
+  let centers;
+  if (useReal){
+    // Real Hartford County substations from OpenStreetMap (with real names).
+    centers = window.HARTFORD_SUBSTATIONS.map(s => ({lat:s.lat, lon:s.lon}));
+    status.textContent=`Using ${centers.length} real substations…`;
+  } else {
+    status.textContent=`Placing ${k} synthetic substations…`;
+    centers=kmeans(demand,k,countyGeo,rnd);
+  }
 
-  substations=centers.map((c,i)=>({lat:c.lat,lon:c.lon,color:PALETTE[i%PALETTE.length],popServed:0}));
+  substations=centers.map((c,i)=>({
+    lat:c.lat, lon:c.lon, color:PALETTE[i%PALETTE.length], popServed:0,
+    name: useReal ? window.HARTFORD_SUBSTATIONS[i].name : null,
+    voltage: useReal ? (window.HARTFORD_SUBSTATIONS[i].voltage||'') : '',
+  }));
 
   // Assign each demand point to nearest substation → estimate popServed
   demand.forEach(d=>{
@@ -970,7 +991,7 @@ function generateGrid(){
     status.textContent = `WARNING: 0 feeders generated. Check console for errors. Substations: ${substations.length}.`;
     return;
   }
-  status.textContent=`Grid: ${substations.length} substations, ${feeders.length} feeders, ${laterals.length} laterals. Ready to simulate storm.`;
+  status.textContent=`Grid: ${substations.length} ${useReal?'real':'synthetic'} substations, ${feeders.length} feeders, ${laterals.length} laterals. Ready to simulate storm.`;
   // Reset downstream state
   storm=null; plan=null;
   outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
@@ -985,8 +1006,10 @@ function renderGrid(){
   feeders.forEach(f=>L.polyline(f.pts,{renderer:gridCanvas,color:f.color,weight:1.3,opacity:0.95,interactive:false}).addTo(feederLayer));
   substations.forEach((s,i)=>{
     const icon=L.divIcon({className:"sub-star",html:starSVG(s.color,14),iconSize:[14,14],iconAnchor:[7,7]});
+    const label = s.name ? s.name : `Substation ${i+1}`;
+    const volt = s.voltage ? ` · ${s.voltage.replace(/;/g,'/')} V` : '';
     L.marker([s.lat,s.lon],{icon,interactive:true}).addTo(subLayer)
-      .bindTooltip(`Substation ${i+1} — ${Math.round(s.popServed).toLocaleString()} customers`);
+      .bindTooltip(`${label}${volt} — ${Math.round(s.popServed).toLocaleString()} customers`);
   });
   // Layer order after re-render: mask hides outside-county; boundary lives on its own top pane.
   if (window._mask) window._mask.bringToFront();
@@ -1672,6 +1695,12 @@ document.getElementById('presetSelect').addEventListener('change', (e) => {
   if (e.target.value) loadPreset(e.target.value);
 });
 loadPresetList();
+// Reflect the actual number of real substations loaded from OSM.
+(function(){
+  const el = document.getElementById('realSubCount');
+  const n = (window.HARTFORD_SUBSTATIONS||[]).length;
+  if (el) el.textContent = n ? `${n} real substations loaded` : 'no real substation data found — run 08_fetch_substations.py';
+})();
 // Auto-detect server availability: ping /health and /version on load,
 // update the dot + version label, and decide whether to auto-route Plan
 // restoration through the server. Re-checks every 60s.
