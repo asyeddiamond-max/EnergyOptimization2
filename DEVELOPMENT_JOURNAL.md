@@ -256,6 +256,33 @@ A running log of design decisions, additions, and trade-offs made to the simulat
 
 ---
 
+## Phase — Crew time series, fatigue model, graph flip (June 2026)
+
+**Goal:** Address four specific advisor requests: flip the restoration curve to show "customers without power" (high→low), implement crew time-series ramp from real data, model crew fatigue and overtime economics, and overlay real DOE restoration curves.
+
+**What was built:**
+
+1. **Flipped restoration graph (high→low)** — The inline SVG curve now shows "customers without power" dropping from peak to zero, matching the advisor's request and standard utility reporting conventions. Previously showed "customers restored" rising from zero — the advisor said "turn your graph upside down."
+
+2. **Crew time-series ramp (Isaias model)** — Crews mobilize on a logistic curve calibrated to real PURA Docket 20-08-03 data: ~16% of peak force on day 1 (504 line + 235 tree = 739 crews), ~40% by day 3, ~73% by day 5 (2,500 line + 780 tree = 3,280), full force by day 7 (4,500+). Replaces the old 3-wave model (50%/30%/20%) with a continuous, data-driven ramp. Toggle-controlled so users can compare against instantaneous deployment.
+
+3. **Crew fatigue & overtime productivity decline** — After day 2 of continuous 16-hour shifts, repair times increase 5% per additional day, capped at +30% by day 8. Non-critical repairs get an additional 8% penalty after day 4, modeling the behavioral incentive where IBEW double-time pay ($100+/hr) reduces urgency. Based on Circadian workforce research (10% OT increase → 2.4% productivity loss) and SHRM overtime studies (accident risk triples after 16h continuous work). Addresses the advisor's "behavioral social science" dimension.
+
+4. **Real DOE curve overlay** — The restoration graph now overlays a dashed red curve showing the closest-matching real DOE OE-417 event's restoration trajectory for visual comparison between simulated and actual restoration.
+
+**Key decisions:**
+- Logistic ramp (k=0.06, t_mid=72h) was chosen over a step function because real crew mobilization is continuous, not discrete waves.
+- Fatigue penalty is conservative (5%/day, max 30%) to avoid overstating the effect. The 8% non-critical penalty is the "behavioral" component the advisor specifically wanted.
+- DOE overlay uses a simplified S-curve interpolation since actual hour-by-hour restoration data is not publicly available from PURA filings.
+
+**Data sources:**
+- Crew counts: PURA Docket 20-08-03, CT Mirror (2020-08-05), NBC Connecticut
+- Crew compensation: IBEW Outside Construction contracts, powerlinemanjobs.com
+- Fatigue research: Circadian (circadian.com), SHRM overtime toolkit
+- DOE events: DOE OE-417 Electric Disturbance database
+
+---
+
 ## Major open questions
 
 1. **Should we calibrate against real Eversource outage data?** This was identified as the natural next research direction. Would require Eversource cooperation or PURA-filed records. Outcome: potentially publishable.

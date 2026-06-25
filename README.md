@@ -43,6 +43,9 @@ For a lighter standalone preview (single SVG, no Leaflet basemap):
 | Flood-zone road closures | FEMA NFHL river corridors add +35% road impedance for outages near flood zones |
 | Equipment/material shortage | progressive repair delay after 60% completion in major events (Eversource Isaias model) |
 | Customer callback lag | 2–8h discovery delay for ~15% of rural lateral outages not covered by SCADA |
+| Crew time-series ramp | Logistic mobilization curve calibrated to Isaias 2020 PURA daily crew counts (16% day 1 → 100% day 7) |
+| Crew fatigue & overtime | Progressive productivity decline (+5%/day after day 2); behavioral overtime incentive model (IBEW double-time) |
+| Customers-without-power curve | High→low restoration graph with real DOE event overlay for comparison |
 | GIS export | GeoJSON + Esri shapefile |
 
 ---

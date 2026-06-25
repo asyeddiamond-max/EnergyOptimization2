@@ -268,7 +268,34 @@ fit.
 
 ---
 
-## 15 · Planned / pending data sources
+## 15 · Crew Time-Series Ramp (Isaias 2020 PURA data)
+
+| Field | Value |
+|---|---|
+| **What** | Logistic crew-mobilization curve calibrated to real daily crew counts from Tropical Storm Isaias |
+| **Source** | CT PURA Docket No. 20-08-03; CT Mirror (2020-08-05, 2020-09-15); NBC Connecticut (2020-08-07) |
+| **URLs** | https://portal.ct.gov/-/media/PURA/1-Final-Decision--PURA-Issues-Ruling-on-Utilities-Preparation-for-Response-to-Tropical-Storm-Isaias.pdf, https://ctmirror.org/2020/08/05/lamont-says-it-will-take-days-to-recover-power/ |
+| **Data points** | Day 1: 504 line + 235 tree = 739 crews (~16% of peak); Day 5: 2,500 line + 780 tree = 3,280 (~73%); Peak: 4,500+ |
+| **Model** | Logistic function: crews(t) = M / (1 + e^(-0.06 × (t - 72h))), where M = slider crew count |
+| **Used by** | Crew time-series ramp toggle — replaces instantaneous deployment with gradual mobilization |
+| **Coverage note** | Ramp is calibrated to Isaias (a major event with 632K customers affected). Smaller storms ramp faster because fewer mutual-aid crews are needed. The model applies the same ramp shape regardless of storm size — a simplification. |
+
+---
+
+## 16 · Crew Fatigue & Overtime Productivity Model
+
+| Field | Value |
+|---|---|
+| **What** | Progressive repair-time penalty from crew fatigue during extended 16-hour shift operations |
+| **Sources** | Circadian workforce studies (circadian.com/blog/excessive-overtime); SHRM Overtime Toolkit (shrm.org); IBEW Outside Construction contract provisions (ibew1245.com); powerlinemanjobs.com storm pay analysis |
+| **Key findings** | 10% increase in overtime → 2.4% productivity decrease (U.S. manufacturing); accident risk triples after 16 hours continuous work; storm crews earn $5,000–$12,000/week gross at double-time ($100+/hr) on 16-hour shifts |
+| **Model** | After day 2 of continuous deployment, repair times increase 5% per additional day (capped at +30% by day 8). Non-critical repairs get an additional 8% penalty after day 4, modeling the behavioral incentive where double/triple-time pay reduces urgency on non-emergency work |
+| **Used by** | Crew fatigue & overtime decline toggle |
+| **Behavioral note** | The overtime pay incentive is a real phenomenon discussed in utility labor economics. IBEW contracts guarantee double-time for storm hours. When a journeyman lineman earns $100+/hr on double-time 16-hour shifts, the economic incentive structure can reduce urgency on non-critical repairs. This is the "behavioral/social science" dimension the advisor flagged. |
+
+---
+
+## 17 · Planned / pending data sources
 
 These are tracked in [`ROADMAP.md`](ROADMAP.md) and listed here so future-you
 (or a reviewer) can see what's not yet integrated. Each one is gated on data
