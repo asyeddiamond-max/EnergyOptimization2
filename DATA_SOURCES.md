@@ -295,7 +295,55 @@ fit.
 
 ---
 
-## 17 · Planned / pending data sources
+## 17 · Underground Line Model
+
+| Field | Value |
+|---|---|
+| **What** | Urban substations in Hartford County have significant underground distribution infrastructure that is nearly immune to storm damage. |
+| **Source** | Eversource rate case filings to CT PURA; industry standard underground penetration estimates for New England urban cores. |
+| **Parameters** | Urban threshold: <25% NLCD canopy. Underground fraction: 40% of laterals. Storm immunity: 90% outage rejection. |
+| **Used by** | Underground line model toggle in storm simulation. |
+| **Coverage note** | Actual underground infrastructure maps are CEII (Critical Energy Infrastructure Information) and not publicly available. The model uses NLCD canopy percentage as a proxy for urbanization level. Real underground penetration likely varies by neighborhood within a substation service area. |
+
+---
+
+## 18 · Switching / Back-Feed (FLISR)
+
+| Field | Value |
+|---|---|
+| **What** | Fault Location, Isolation, and Service Restoration — automated distribution switches that can reroute power through alternate feeders without a crew visit. |
+| **Source** | Eversource distribution automation deployment reports; IEEE 1366 reliability metrics for automated switching. |
+| **Parameters** | 20% of feeder-level outages eligible for automatic switching. Restoration time ~30 minutes (remote operation). |
+| **Used by** | Switching/back-feed toggle in storm simulation. Switch-restored outages are pre-marked as done and excluded from crew dispatch. |
+| **Coverage note** | The 20% rate is a conservative estimate. Eversource's actual FLISR coverage in Hartford County may be higher in areas with newer automation infrastructure. Real FLISR eligibility depends on switch placement topology, load transfer capacity, and fault type — none of which are modeled here. |
+
+---
+
+## 19 · AMI Smart Meter Coverage
+
+| Field | Value |
+|---|---|
+| **What** | Advanced Metering Infrastructure (smart meters) that detect outages instantly via "last-gasp" power-loss signals, eliminating the need for customer callback-based detection. |
+| **Source** | Eversource AMI deployment reports to CT PURA; CT DEEP energy policy filings on smart grid modernization. |
+| **Parameters** | Urban (<25% canopy): 70% AMI, 1–3h lag on 30% of laterals. Suburban (25–50%): 50% AMI, 2–5h lag on 50% of laterals. Rural (>50%): 30% AMI, 3–8h lag on 70% of all outages. |
+| **Used by** | AMI smart meter coverage toggle, replacing the flat 15% callback-lag model with spatially-varying detection. |
+| **Coverage note** | Actual Eversource AMI deployment rates by substation territory are not publicly available. The canopy-based penetration estimates are calibrated to industry averages for New England utilities at various stages of AMI rollout. |
+
+---
+
+## 20 · Mutual-Aid Travel Time
+
+| Field | Value |
+|---|---|
+| **What** | Out-of-state mutual-aid crews must drive from their home territories to Connecticut before beginning storm restoration work. |
+| **Source** | IBEW mutual-aid agreement protocols; Eversource Isaias 2020 after-action report documenting crew origin states (MA, NY, RI, PA, OH). |
+| **Parameters** | MA/RI crews: +2h travel. NY crews: +4h travel. PA/OH crews: +6h travel. Applied to wave 2 (30% of crews) and wave 3 (20% of crews). Wave 1 (local Eversource, 50%) unaffected. |
+| **Used by** | Mutual-aid travel time toggle in restoration scheduler. |
+| **Coverage note** | Real travel times depend on staging area locations, traffic, and whether crews are pre-positioned at utility yards vs. driving from home. The state-based distance bands are simplified averages. |
+
+---
+
+## 21 · Planned / pending data sources
 
 These are tracked in [`ROADMAP.md`](ROADMAP.md) and listed here so future-you
 (or a reviewer) can see what's not yet integrated. Each one is gated on data

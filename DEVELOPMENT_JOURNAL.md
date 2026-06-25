@@ -338,6 +338,31 @@ The report now contains 19 fully-written sections:
 
 ---
 
+## Phase — Five realism features batch (June 2026)
+
+**Goal:** Implement the remaining five recommended realism features: underground line model, switching/back-feed, AMI smart meter coverage, mutual-aid travel time, and deepened crew stickiness.
+
+**What was built:**
+
+1. **Underground line model** — Urban substations (NLCD canopy <25%) have ~40% of laterals modeled as underground. Underground segments have 90% immunity to storm damage (outages rejected during placement). Based on Eversource filings showing 35–45% underground penetration in Hartford, New Britain, and East Hartford urban cores.
+
+2. **Switching / back-feed (FLISR)** — ~20% of feeder-level outages are auto-restored via normally-open tie switches in ~30 minutes without requiring a crew visit. These outages are marked `switch_restored` during storm simulation, their `popLoss` zeroed out, and they are pre-marked as `done` in the scheduler so no crew is dispatched. Based on Eversource distribution automation (Fault Location, Isolation, and Service Restoration) deployment in Hartford County.
+
+3. **AMI smart meter coverage** — Replaces the flat 15% callback-lag model with spatially-varying outage detection based on Advanced Metering Infrastructure penetration. Urban areas (<25% canopy) have ~70% AMI with short detection delays (1–3h on 30% of laterals). Suburban (25–50% canopy) have ~50% AMI (2–5h on 50% of laterals). Rural (>50% canopy) have ~30% AMI (3–8h on 70% of all outages). Based on Eversource AMI deployment reports to CT PURA.
+
+4. **Mutual-aid travel time** — Out-of-state mutual-aid crews in the second and third mobilization waves receive additional travel delays before they can begin work: MA/RI crews +2h, NY crews +4h, PA/OH crews +6h. The first wave (50% of crews, local Eversource) is unaffected. Based on IBEW mutual-aid protocols and Eversource Isaias after-action report documenting crew origin states.
+
+5. **Deepened crew stickiness** — Previously a server-only toggle. Now implemented in the browser scheduler: each crew tracks its assigned feeder circuit (`crewFeederAssignment[]`). Once a crew picks up an outage on a feeder, it completes all remaining outages on that feeder before accepting work on a different circuit. When no more outages remain on its assigned feeder, the assignment clears and the crew reverts to nearest-outage dispatch. This addresses the advisor's main critique that the greedy scheduler unrealistically bounces crews between feeders.
+
+**Key decisions:**
+- Underground model uses NLCD canopy as a proxy for urbanization rather than actual underground infrastructure maps (which are CEII and not publicly available).
+- FLISR rate set at 20% (conservative estimate — Eversource's actual FLISR coverage in Hartford County may be higher in areas with newer automation).
+- AMI penetration rates are estimates; actual Eversource deployment data is not publicly available.
+- Mutual-aid travel uses simplified state-based distance bands rather than actual drive times from specific staging areas.
+- Crew stickiness uses O(N) linear scan per feeder-assignment check — acceptable for county-scale simulations but would need indexing for statewide scale.
+
+---
+
 ## Major open questions
 
 1. **Should we calibrate against real Eversource outage data?** This was identified as the natural next research direction. Would require Eversource cooperation or PURA-filed records. Outcome: potentially publishable.

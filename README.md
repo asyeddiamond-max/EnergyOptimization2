@@ -47,6 +47,11 @@ For a lighter standalone preview (single SVG, no Leaflet basemap):
 | Crew fatigue & overtime | Progressive productivity decline (+5%/day after day 2); behavioral overtime incentive model (IBEW double-time) |
 | Customers-without-power curve | High→low restoration graph with real DOE event overlay for comparison |
 | Wind-field weighted outage placement | HURDAT2 track proximity × wind speed Gaussian weighting (σ=30mi); segments near the storm path get 3–5× more outages |
+| Underground line model | Urban substations (<25% canopy) have ~40% underground laterals with 90% storm immunity |
+| Switching / back-feed (FLISR) | ~20% of feeder outages auto-restored via normally-open tie switches in ~30 min, no crew needed |
+| AMI smart meter coverage | Spatially-varying outage detection: urban 70% AMI (instant), suburban 50%, rural 30% (callback delays) |
+| Mutual-aid travel time | Out-of-state crews (MA/RI +2h, NY +4h, PA/OH +6h) based on IBEW mutual-aid protocols |
+| Deepened crew stickiness | Crews complete entire feeder circuits before moving to a new one, matching real utility dispatch |
 | GIS export | GeoJSON + Esri shapefile |
 
 ---
