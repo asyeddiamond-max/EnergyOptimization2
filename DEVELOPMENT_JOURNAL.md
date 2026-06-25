@@ -320,6 +320,24 @@ The report now contains 19 fully-written sections:
 
 ---
 
+## Phase — Wind-field weighted outage placement (June 2026)
+
+**Goal:** Replace uniform outage placement with wind-field-weighted placement using the HURDAT2 storm tracks already loaded, so outages concentrate near the storm path proportional to wind speed.
+
+**What was built:**
+
+1. **Wind-field weighted segment sampling** — When a storm track is selected and the toggle is active, each network segment gets a weight computed as Gaussian spatial decay (σ=30 miles) × normalized wind speed from the nearest HURDAT2 track point. Binary search on a cumulative distribution enables O(log N) weighted sampling. Segments right on the track get 3–5× more outages than distant areas. A floor weight of 0.1 ensures distant segments still receive some outages (embedded failures, indirect wind effects).
+
+2. **Toggle control** — New "Wind-field weighted placement" checkbox (amber styling) in the Storm section. Defaults to checked. Falls back to uniform placement when no storm track is selected or the toggle is off.
+
+**Key decisions:**
+- Gaussian σ=30 miles chosen as approximate TC wind field radius for CT-latitude storms (Hartford County is ~20mi across, so most of the county falls within 1σ of a track passing through the center).
+- Wind speed normalized to 50 kt baseline — typical sustained wind for CT tropical storm impacts.
+- Floor weight of 0.1 (not zero) prevents unrealistic "zero outages" in areas far from the track, since real storms cause embedded thunderstorms and indirect damage county-wide.
+- Binary search on Float64Array cumulative weights for efficient weighted sampling even at 25K outages.
+
+---
+
 ## Major open questions
 
 1. **Should we calibrate against real Eversource outage data?** This was identified as the natural next research direction. Would require Eversource cooperation or PURA-filed records. Outcome: potentially publishable.

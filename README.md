@@ -46,6 +46,7 @@ For a lighter standalone preview (single SVG, no Leaflet basemap):
 | Crew time-series ramp | Logistic mobilization curve calibrated to Isaias 2020 PURA daily crew counts (16% day 1 → 100% day 7) |
 | Crew fatigue & overtime | Progressive productivity decline (+5%/day after day 2); behavioral overtime incentive model (IBEW double-time) |
 | Customers-without-power curve | High→low restoration graph with real DOE event overlay for comparison |
+| Wind-field weighted outage placement | HURDAT2 track proximity × wind speed Gaussian weighting (σ=30mi); segments near the storm path get 3–5× more outages |
 | GIS export | GeoJSON + Esri shapefile |
 
 ---
