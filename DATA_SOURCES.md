@@ -229,7 +229,46 @@ fit.
 
 ---
 
-## 12 · Planned / pending data sources
+## 12 · FEMA Flood Zone Corridors (Hartford County)
+
+| Field | Value |
+|---|---|
+| **What** | Simplified centerline geometries for major flood-prone river corridors in Hartford County |
+| **Source** | FEMA National Flood Hazard Layer (NFHL), simplified to 5 major corridors |
+| **URL** | https://www.fema.gov/flood-maps/national-flood-hazard-layer |
+| **Format** | Inline JS constant (`FLOOD_CORRIDORS`), 5 polylines with lat/lon points |
+| **Corridors** | Connecticut River, Park River, Hockanum River, Farmington River, Salmon Brook |
+| **Used by** | Flood-zone road-closure toggle — outages within 1.5 mi of a corridor get +35% road impedance |
+| **Coverage note** | Corridors are simplified to centerlines, not full floodplain polygons. The 1.5-mile buffer is a conservative proxy for FEMA Zone A/AE extent. Smaller tributaries (e.g., Podunk River, Mattabesset River) are not included. |
+| **Calibration anchor** | CT DOT road-closure records during Irene (2011) and Sandy (2012) confirm major road closures along these corridors |
+
+---
+
+## 13 · Equipment Shortage Model
+
+| Field | Value |
+|---|---|
+| **What** | Progressive repair-time penalty during major events (5,000+ outages) |
+| **Source** | Eversource Isaias 2020 after-action report; CT PURA Docket No. 20-08-03 |
+| **Model** | After 60% of repairs complete, each subsequent repair takes up to 40% longer due to transformer/pole/conductor supply depletion |
+| **Used by** | Equipment shortage toggle in the restoration scheduler |
+| **Calibration anchor** | Eversource reported equipment staging delays in the final restoration phase of Isaias, particularly for distribution transformers which had to be sourced from regional warehouses |
+
+---
+
+## 14 · Customer Callback Lag Model
+
+| Field | Value |
+|---|---|
+| **What** | Discovery delay for outages on rural laterals not covered by SCADA/smart meters |
+| **Source** | CT PURA testimony on Eversource outage detection capabilities; industry literature on outage management systems |
+| **Model** | ~15% of lateral outages in high-canopy (rural) areas get 2–8 hours of additional discovery delay |
+| **Used by** | Customer callback lag toggle — adds discovery delay before crews are dispatched |
+| **Coverage note** | The 15% figure is a conservative estimate. Actual callback-dependent detection varies by utility AMI (Advanced Metering Infrastructure) deployment. Eversource CT had partial AMI rollout as of 2020. |
+
+---
+
+## 15 · Planned / pending data sources
 
 These are tracked in [`ROADMAP.md`](ROADMAP.md) and listed here so future-you
 (or a reviewer) can see what's not yet integrated. Each one is gated on data

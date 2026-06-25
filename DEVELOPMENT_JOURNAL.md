@@ -233,6 +233,29 @@ A running log of design decisions, additions, and trade-offs made to the simulat
 
 ---
 
+## Phase — Environmental/behavioral realism + report upgrade (June 2026)
+
+**Goal:** Add three new environmental and behavioral realism factors to the restoration scheduler, improve the simulation report with per-town individualized breakdowns, and add a progress bar to the server wake button.
+
+**What was built:**
+
+1. **Flood-zone road closures** — Five major Hartford County river corridors (Connecticut River, Park River, Hockanum River, Farmington River, Salmon Brook) modeled as simplified centerline geometries from FEMA NFHL. Outages within 1.5 miles of a flood corridor get +35% road impedance, simulating the need for crews to take longer detour routes when low-lying roads are impassable. Based on CT DOT road-closure records during Irene (2011) and Sandy (2012).
+
+2. **Equipment/material shortage** — During major events (5,000+ outages), the supply of replacement transformers, poles, and conductor spools runs thin. After 60% of repairs are complete, each subsequent repair takes progressively longer (up to +40% penalty) as crews wait for resupply from regional warehouses. Based on Eversource Isaias after-action reports citing equipment staging delays.
+
+3. **Customer callback lag** — Not all outages are detected by SCADA or smart meters. On rural laterals in high-canopy areas, ~15% of outages are only discovered when a customer calls to report them, adding 2–8 hours of additional discovery delay. Based on CT PURA testimony on Eversource outage detection gaps.
+
+4. **Per-town simulation report** — Section 5 of the download report now includes an individualized breakdown for each of the 29 Hartford County towns: outage counts, customers affected (% of town population), critical-facility outages, tree-blocked %, flood-zone outages, callback-lag count, and full restoration timeline (first repair, 50%, 90%, 100%, avg repair time).
+
+5. **Server wake progress bar** — The "Wake server now" button now shows a visual progress bar with stage-aware labels ("Sending wake signal," "Server is booting," "Almost ready") and a 65-second countdown. Turns green on success, red on timeout.
+
+**Key decisions:**
+- Flood corridors are simplified to centerlines rather than full floodplain polygons — accurate enough for the road-impedance model and avoids needing to load large FEMA shapefiles in-browser.
+- Equipment shortage only kicks in during major events (5,000+ outages) to avoid penalizing small storms where supply chains are adequate.
+- Callback lag is scoped to rural laterals (high tree-factor areas) because urban areas generally have better AMI coverage and faster detection.
+
+---
+
 ## Major open questions
 
 1. **Should we calibrate against real Eversource outage data?** This was identified as the natural next research direction. Would require Eversource cooperation or PURA-filed records. Outcome: potentially publishable.

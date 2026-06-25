@@ -39,7 +39,10 @@ For a lighter standalone preview (single SVG, no Leaflet basemap):
 | Multi-server batch sweeps | `/api/batch` fans scenarios out across worker URLs |
 | Customers-restored-over-time curve | inline SVG overlay after each Plan restoration |
 | Pre-computed scenario library | 12 canned storms in `scenarios/`, loadable without compute |
-| Simulation report download | detailed text report of grid, storm, restoration plan, crew dispatch log, and DOE benchmarks |
+| Simulation report download | detailed text report with per-town breakdowns, restoration timelines, crew dispatch log, and DOE benchmarks |
+| Flood-zone road closures | FEMA NFHL river corridors add +35% road impedance for outages near flood zones |
+| Equipment/material shortage | progressive repair delay after 60% completion in major events (Eversource Isaias model) |
+| Customer callback lag | 2–8h discovery delay for ~15% of rural lateral outages not covered by SCADA |
 | GIS export | GeoJSON + Esri shapefile |
 
 ---
