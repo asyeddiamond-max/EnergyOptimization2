@@ -283,6 +283,43 @@ A running log of design decisions, additions, and trade-offs made to the simulat
 
 ---
 
+## Phase — Massively expanded simulation report (June 2026)
+
+**Goal:** Rewrite `generateSimulationReport()` from a ~200-line summary into a ~1,000-line, 19-section comprehensive analysis document that the user described as wanting "the level of depth where one would need multiple servers in order to get this information."
+
+**What was built:**
+
+The report now contains 19 fully-written sections:
+
+1. **Distribution Grid Configuration & Topology** — line miles, density stats, coordinate system, generation seed
+2. **Substation-Level Detail** — full table with lat/lon, voltage, feeders, laterals, canopy%, treeFactor, trim age; vulnerability and population rankings
+3. **Critical Infrastructure Inventory** — all HIFLD facilities with nearest-substation distances, per-town facility counts
+4. **Network Topology Analysis** — feeder/lateral length statistics (mean, std dev, percentiles), per-substation topology table with customers/mile
+5. **Storm Damage Assessment** — overall impact, customer-loss distribution with histogram, per-substation damage table, top-5 worst-hit narrative
+6. **Spatial Damage Analysis** — quadrant breakdown, geographic extent, damage centroid, grid-cell clustering with Gini coefficient
+7. **Restoration Plan & Crew Operations** — summary stats, all realism toggles with check marks, crew mobilization timeline by day, restoration milestones (1%–100%) with inter-milestone rate
+8. **Hour-by-Hour Restoration Timeline** — tabular hour-by-hour progression with day/time-of-day, ASCII progress bars
+9. **Crew Performance & Utilization Analysis** — full crew table (jobs, arrival, drive miles, customers, cust/hour, jobs/day), performance distribution stats, top/bottom 5, utilization metrics
+10. **Cost Estimation & Labor Economics** — IBEW compensation structure, itemized cost breakdown (labor, per diem, travel, materials, overhead), cost ratios (per customer, per outage, per capita), fatigue/behavioral analysis
+11. **Per-Town Individualized Breakdown** — summary table for all 29 towns, then detailed profiles with damage stats, restoration timeline (10%/50%/90%/100%), restoration rate
+12. **Restoration Equity Analysis** — towns ranked by median restoration time, urban vs rural comparison with disparity ratio
+13. **DOE OE-417 Comparative Analysis** — simulated vs historical comparison with customer/duration deltas and scale/speed ratios
+14. **Network Vulnerability Assessment** — damage-to-capacity ratio per substation with severity labels, vegetation vulnerability corridors
+15. **Full Dispatch Log** — expanded from 200 to 1,000 jobs with day/time-of-day columns
+16. **Realism Model Parameters** — every parameter value with its source citation
+17. **Data Sources & Provenance** — 15 sources with URLs and coverage notes
+18. **Methodology Notes & Limitations** — grid generation, storm model, scheduler, customer impact, cost estimate methodology; 10 enumerated known limitations
+19. **Appendix: Raw Configuration Dump** — full JSON of all toggle states and configuration
+
+**Key decisions:**
+- Added statistical helper functions (`avg`, `stddev`, `percentile`, `sorted`) and an ASCII bar-chart function (`bar()`) for inline visualizations
+- Equity analysis compares urban (pop>30K) vs rural (pop≤15K) restoration times — flags disparity ratios >1.3× as equity concerns
+- Cost model uses IBEW double-time rates ($100/hr effective) with per diem, mileage, and 15% overhead — conservative industry estimates
+- Gini coefficient computed for spatial damage concentration analysis
+- Report self-reports its own size in KB at the footer
+
+---
+
 ## Major open questions
 
 1. **Should we calibrate against real Eversource outage data?** This was identified as the natural next research direction. Would require Eversource cooperation or PURA-filed records. Outcome: potentially publishable.

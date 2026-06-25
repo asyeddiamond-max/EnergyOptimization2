@@ -2971,193 +2971,593 @@ function generateSimulationReport(){
   const seed = +seedI.value|0;
   const now = new Date().toISOString();
   const realistic = document.getElementById('realisticMode').checked;
+  function fmtH(h){
+    if (h < 1) return (h*60).toFixed(0) + ' minutes';
+    if (h < 24) return h.toFixed(1) + ' hours';
+    return Math.floor(h/24) + ' days ' + Math.round(h%24) + ' hours';
+  }
+  function pct(n,d){ return d>0 ? (100*n/d).toFixed(1)+'%' : '0%'; }
+  function bar(frac, w=30){ const f=Math.round(frac*w); return '█'.repeat(f)+'░'.repeat(w-f)+' '+pct(frac*100,100); }
 
   let r = '';
-  r += '═══════════════════════════════════════════════════════════════════\n';
-  r += '         HARTFORD COUNTY STORM & RESTORATION SIMULATION REPORT\n';
-  r += '═══════════════════════════════════════════════════════════════════\n\n';
-  r += `Generated: ${now}\n`;
-  r += `Random Seed: ${seed}\n`;
-  r += `Mode: ${realistic ? 'Realistic (7-factor model)' : 'Optimistic baseline'}\n\n`;
+  r += '╔═══════════════════════════════════════════════════════════════════════════════════╗\n';
+  r += '║           HARTFORD COUNTY STORM & RESTORATION SIMULATION — FULL REPORT          ║\n';
+  r += '║                          Comprehensive Analysis Document                         ║\n';
+  r += '╚═══════════════════════════════════════════════════════════════════════════════════╝\n\n';
+  r += `Report Generated:   ${now}\n`;
+  r += `Simulation Engine:  Hartford Grid Simulator v3.0 (browser + Numba server)\n`;
+  r += `Random Seed:        ${seed}\n`;
+  r += `Mode:               ${realistic ? 'REALISTIC (multi-factor model)' : 'Optimistic baseline (no realism factors)'}\n`;
+  r += `County:             Hartford County, Connecticut\n`;
+  r += `State FIPS:         09-003\n`;
+  r += `County Area:        751 sq mi (1,945 km²)\n`;
+  r += `Population (2020):  ${TOTAL_POP.toLocaleString()}\n`;
+  r += `Households (est):   ~${Math.round(TOTAL_POP/2.5).toLocaleString()} (avg 2.5 persons/household)\n\n`;
 
-  // --- Section 1: Grid Configuration ---
-  r += '───────────────────────────────────────────────────────────────────\n';
-  r += ' 1. DISTRIBUTION GRID CONFIGURATION\n';
-  r += '───────────────────────────────────────────────────────────────────\n\n';
-  r += `Substations: ${substations.length}`;
-  const src = (window.HARTFORD_SUBSTATIONS && window.HARTFORD_SUBSTATIONS.length) ? 'HIFLD federal dataset (real)' : 'Synthetic k-means';
-  r += ` (source: ${src})\n`;
-  r += `Feeders per substation: ${+fS.value}\n`;
-  r += `Total feeders: ${feeders.length}\n`;
-  r += `Total laterals: ${laterals.length}\n`;
-  r += `County population: ${TOTAL_POP.toLocaleString()}\n\n`;
+  // TABLE OF CONTENTS
+  r += '─── TABLE OF CONTENTS ──────────────────────────────────────────────────────────────\n\n';
+  r += '  1.  Distribution Grid Configuration & Topology\n';
+  r += '  2.  Substation-Level Detail (HIFLD)\n';
+  r += '  3.  Critical Infrastructure Inventory\n';
+  r += '  4.  Network Topology Analysis\n';
+  r += '  5.  Storm Damage Assessment\n';
+  r += '  6.  Spatial Damage Analysis\n';
+  r += '  7.  Restoration Plan & Crew Operations\n';
+  r += '  8.  Hour-by-Hour Restoration Timeline\n';
+  r += '  9.  Crew Performance & Utilization Analysis\n';
+  r += '  10. Cost Estimation & Labor Economics\n';
+  r += '  11. Per-Town Individualized Breakdown (29 towns)\n';
+  r += '  12. Restoration Equity Analysis\n';
+  r += '  13. Comparative Analysis — DOE OE-417 Benchmarks\n';
+  r += '  14. Network Vulnerability Assessment\n';
+  r += '  15. Full Dispatch Log\n';
+  r += '  16. Realism Model Parameters\n';
+  r += '  17. Data Sources & Provenance\n';
+  r += '  18. Methodology Notes & Limitations\n';
+  r += '  19. Appendix: Raw Configuration Dump\n\n';
 
-  r += 'Substation Details:\n';
-  r += '  #   Name                              Voltage   Pop Served   Tree Canopy Factor\n';
-  r += '  ─── ────────────────────────────────── ──────── ──────────── ──────────────────\n';
+  // ==================== SECTION 1: GRID CONFIGURATION ====================
+  r += '═══════════════════════════════════════════════════════════════════════════════════\n';
+  r += ' 1. DISTRIBUTION GRID CONFIGURATION & TOPOLOGY\n';
+  r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
+  const src = (window.HARTFORD_SUBSTATIONS && window.HARTFORD_SUBSTATIONS.length) ? 'HIFLD federal dataset (real locations)' : 'Synthetic k-means placement';
+  r += `Substation source:       ${src}\n`;
+  r += `Substations:             ${substations.length}\n`;
+  r += `Feeders per substation:  ${+fS.value} (configurable)\n`;
+  r += `Total feeders:           ${feeders.length}\n`;
+  r += `Total laterals:          ${laterals.length}\n`;
+  r += `Total network segments:  ${(feeders.length + laterals.length).toLocaleString()}\n`;
+  r += `County population:       ${TOTAL_POP.toLocaleString()}\n`;
+  r += `Customers per segment:   ~${Math.round(TOTAL_POP / (feeders.length + laterals.length)).toLocaleString()} (avg)\n`;
+  const useTracts = document.getElementById('useCensusTracts') && document.getElementById('useCensusTracts').checked;
+  r += `Demand model:            ${useTracts ? 'Census tract centroids (~196 tracts, 2020 Census)' : 'Town centroids (29 towns, 2020 Census)'}\n`;
+  r += `Grid generation seed:    ${seed}\n`;
+  r += `Coordinate system:       WGS84 (EPSG:4326)\n`;
+  r += `County bounding box:     ~41.50°N to ~42.05°N, ~73.00°W to ~72.40°W\n\n`;
+
+  // Network density stats
+  const totalSegLen = feeders.reduce((s,f) => {
+    let len=0; for(let i=1;i<f.path.length;i++) len+=dist(f.path[i-1],f.path[i]);
+    return s+len;
+  }, 0) + laterals.reduce((s,l) => s+dist(l.a,l.b), 0);
+  r += `Estimated total line miles: ${totalSegLen.toFixed(0)} miles\n`;
+  r += `Line density:              ${(totalSegLen/751).toFixed(2)} miles per sq mi of county area\n`;
+  r += `Population density:        ${Math.round(TOTAL_POP/751).toLocaleString()} persons per sq mi\n\n`;
+
+  // ==================== SECTION 2: SUBSTATION DETAIL ====================
+  r += '═══════════════════════════════════════════════════════════════════════════════════\n';
+  r += ' 2. SUBSTATION-LEVEL DETAIL\n';
+  r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
+  r += '  #   Name                              Lat        Lon         Voltage   Pop Served   Feeders  Laterals  Canopy%  Tree×   Trim Age\n';
+  r += '  ─── ────────────────────────────────── ────────── ─────────── ──────── ──────────── ──────── ──────── ──────── ─────── ────────\n';
   substations.forEach((s, i) => {
     const name = (s.name || `Synthetic-${i+1}`).padEnd(36);
     const volt = (s.voltage || '—').toString().padEnd(8);
     const pop = Math.round(s.popServed).toLocaleString().padStart(12);
-    const nlcd = s.name && NLCD_CANOPY_BY_SUBSTATION[s.name] != null
-      ? `${NLCD_CANOPY_BY_SUBSTATION[s.name]}% canopy → ${s.treeFactor.toFixed(2)}×`
-      : `${s.treeFactor.toFixed(2)}× (distance heuristic)`;
-    r += `  ${(i+1).toString().padStart(3)} ${name} ${volt} ${pop}   ${nlcd}\n`;
+    const canopyPct = (s.name && NLCD_CANOPY_BY_SUBSTATION[s.name] != null) ? NLCD_CANOPY_BY_SUBSTATION[s.name] : '—';
+    const nFeeders = feeders.filter(f=>f.sub_id===i).length;
+    const nLaterals = laterals.filter(l=>l.sub_id===i).length;
+    const trimAge = s.trimAge != null ? s.trimAge.toFixed(1) : '—';
+    r += `  ${(i+1).toString().padStart(3)} ${name} ${s.lat.toFixed(5).padStart(10)} ${s.lon.toFixed(5).padStart(11)} ${volt} ${pop} ${nFeeders.toString().padStart(8)} ${nLaterals.toString().padStart(8)} ${canopyPct.toString().padStart(8)} ${s.treeFactor.toFixed(2).padStart(7)} ${trimAge.toString().padStart(8)}\n`;
+  });
+  r += `\n  Canopy factor formula: canopy_pct / 50 (50% = 1.0× baseline)\n`;
+  r += `  Source: USGS NLCD 2021 Tree Canopy Cover, 30m resolution, 1km buffer around each substation\n`;
+
+  // Substation ranking
+  r += '\n  Substations ranked by vulnerability (highest tree factor):\n';
+  const subsSorted = substations.map((s,i)=>({...s,idx:i})).sort((a,b)=>b.treeFactor-a.treeFactor);
+  subsSorted.slice(0,10).forEach((s,rank) => {
+    r += `    ${rank+1}. ${(s.name||'Sub-'+(s.idx+1)).padEnd(30)} treeFactor=${s.treeFactor.toFixed(2)}  pop=${Math.round(s.popServed).toLocaleString()}\n`;
+  });
+  r += '\n  Substations ranked by population served (highest first):\n';
+  const subsByPop = substations.map((s,i)=>({...s,idx:i})).sort((a,b)=>b.popServed-a.popServed);
+  subsByPop.slice(0,10).forEach((s,rank) => {
+    r += `    ${rank+1}. ${(s.name||'Sub-'+(s.idx+1)).padEnd(30)} pop=${Math.round(s.popServed).toLocaleString()}  treeFactor=${s.treeFactor.toFixed(2)}\n`;
   });
 
-  // --- Section 2: Critical Facilities ---
+  // ==================== SECTION 3: CRITICAL FACILITIES ====================
   const facs = window.HARTFORD_CRITICAL_FACILITIES || [];
-  r += '\n───────────────────────────────────────────────────────────────────\n';
-  r += ' 2. CRITICAL FACILITIES (HIFLD)\n';
-  r += '───────────────────────────────────────────────────────────────────\n\n';
+  r += '\n═══════════════════════════════════════════════════════════════════════════════════\n';
+  r += ' 3. CRITICAL INFRASTRUCTURE INVENTORY (HIFLD)\n';
+  r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
   if (facs.length){
     const byType = {};
     facs.forEach(f => { byType[f.type] = (byType[f.type]||0)+1; });
-    r += `Total: ${facs.length} facilities\n`;
+    r += `Total critical facilities: ${facs.length}\n`;
     for (const [t,c] of Object.entries(byType)) r += `  ${t.toUpperCase()}: ${c}\n`;
-    r += `\nProximity radius for priority-1 flagging: 0.5 miles\n`;
-    r += '\n  Name                                          Type      Town\n';
-    r += '  ──────────────────────────────────────────────── ──────── ────────────────\n';
-    facs.forEach(f => {
-      r += `  ${f.name.padEnd(48)} ${f.type.padEnd(8)} ${f.town}\n`;
+    r += `\nPriority-1 flagging radius: 0.5 miles (0.8 km)\n`;
+    r += `Rule: Any outage within 0.5 miles of a critical facility is flagged priority-1\n`;
+    r += `      and scheduled before all non-critical outages in the restoration queue.\n\n`;
+    r += '  #   Name                                          Type       Town              Lat        Lon         Nearest Sub          Dist (mi)\n';
+    r += '  ─── ──────────────────────────────────────────────── ────────── ──────────────── ────────── ─────────── ──────────────────── ─────────\n';
+    facs.forEach((f, i) => {
+      let nearSub = substations[0], nearD = Infinity;
+      substations.forEach(s => { const d=dist(f,s); if(d<nearD){nearD=d;nearSub=s;} });
+      r += `  ${(i+1).toString().padStart(3)} ${f.name.padEnd(48)} ${f.type.padEnd(10)} ${f.town.padEnd(16)} ${f.lat.toFixed(5).padStart(10)} ${f.lon.toFixed(5).padStart(11)} ${(nearSub.name||'—').padEnd(20)} ${nearD.toFixed(2).padStart(9)}\n`;
+    });
+    // Facilities per town
+    r += '\n  Critical facilities by town:\n';
+    const facsByTown = {};
+    facs.forEach(f => { facsByTown[f.town] = (facsByTown[f.town]||0)+1; });
+    Object.entries(facsByTown).sort((a,b)=>b[1]-a[1]).forEach(([t,c]) => {
+      r += `    ${t.padEnd(20)} ${c} facilities\n`;
     });
   } else {
     r += 'No HIFLD facility data loaded — using random 2% critical flagging.\n';
   }
 
-  // --- Section 3: Storm Damage ---
+  // ==================== SECTION 4: NETWORK TOPOLOGY ====================
+  r += '\n═══════════════════════════════════════════════════════════════════════════════════\n';
+  r += ' 4. NETWORK TOPOLOGY ANALYSIS\n';
+  r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
+  // Feeder length stats
+  const feederLens = feeders.map(f => {
+    let len=0; for(let i=1;i<f.path.length;i++) len+=dist(f.path[i-1],f.path[i]);
+    return len;
+  });
+  const latLens = laterals.map(l => dist(l.a, l.b));
+  const avg = arr => arr.reduce((s,v)=>s+v,0)/arr.length;
+  const stddev = arr => { const m=avg(arr); return Math.sqrt(arr.reduce((s,v)=>s+(v-m)**2,0)/arr.length); };
+  const sorted = arr => [...arr].sort((a,b)=>a-b);
+  const percentile = (arr,p) => { const s=sorted(arr); return s[Math.floor(s.length*p/100)]; };
+
+  r += 'Feeder segment statistics:\n';
+  r += `  Count:      ${feeders.length}\n`;
+  r += `  Total len:  ${feederLens.reduce((s,v)=>s+v,0).toFixed(1)} miles\n`;
+  r += `  Mean len:   ${avg(feederLens).toFixed(2)} miles\n`;
+  r += `  Std dev:    ${stddev(feederLens).toFixed(2)} miles\n`;
+  r += `  Median:     ${percentile(feederLens,50).toFixed(2)} miles\n`;
+  r += `  5th %ile:   ${percentile(feederLens,5).toFixed(2)} miles\n`;
+  r += `  95th %ile:  ${percentile(feederLens,95).toFixed(2)} miles\n`;
+  r += `  Max:        ${Math.max(...feederLens).toFixed(2)} miles\n\n`;
+
+  r += 'Lateral segment statistics:\n';
+  r += `  Count:      ${laterals.length}\n`;
+  r += `  Total len:  ${latLens.reduce((s,v)=>s+v,0).toFixed(1)} miles\n`;
+  r += `  Mean len:   ${avg(latLens).toFixed(3)} miles\n`;
+  r += `  Std dev:    ${stddev(latLens).toFixed(3)} miles\n`;
+  r += `  Median:     ${percentile(latLens,50).toFixed(3)} miles\n`;
+  r += `  Max:        ${Math.max(...latLens).toFixed(3)} miles\n\n`;
+
+  // Per-substation topology
+  r += 'Per-substation topology:\n';
+  r += '  Substation                           Feeders  Laterals  Total Segs  Line Miles  Customers  Cust/Mile\n';
+  r += '  ──────────────────────────────────── ──────── ──────── ────────── ────────── ────────── ─────────\n';
+  substations.forEach((s, i) => {
+    const sf = feeders.filter(f=>f.sub_id===i);
+    const sl = laterals.filter(l=>l.sub_id===i);
+    const sMiles = sf.reduce((sum,f)=>{let l=0;for(let j=1;j<f.path.length;j++)l+=dist(f.path[j-1],f.path[j]);return sum+l;},0)
+                 + sl.reduce((sum,l)=>sum+dist(l.a,l.b),0);
+    const name = (s.name || `Sub-${i+1}`).padEnd(36);
+    const custPerMile = sMiles > 0 ? Math.round(s.popServed / sMiles) : 0;
+    r += `  ${name} ${sf.length.toString().padStart(8)} ${sl.length.toString().padStart(8)} ${(sf.length+sl.length).toString().padStart(10)} ${sMiles.toFixed(1).padStart(10)} ${Math.round(s.popServed).toLocaleString().padStart(10)} ${custPerMile.toLocaleString().padStart(9)}\n`;
+  });
+
+  // ==================== SECTION 5: STORM DAMAGE ====================
   if (storm){
-    r += '\n───────────────────────────────────────────────────────────────────\n';
-    r += ' 3. STORM DAMAGE ASSESSMENT\n';
-    r += '───────────────────────────────────────────────────────────────────\n\n';
-    r += `Total outage locations: ${storm.outages.length.toLocaleString()}\n`;
-    r += `Customers without power: ${Math.round(storm.totalCust).toLocaleString()} (${(100*storm.totalCust/TOTAL_POP).toFixed(1)}% of county)\n`;
+    r += '\n═══════════════════════════════════════════════════════════════════════════════════\n';
+    r += ' 5. STORM DAMAGE ASSESSMENT\n';
+    r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
+    r += '── 5.1 Overall Impact ──\n\n';
+    const N = storm.outages.length;
+    r += `Total outage locations:                ${N.toLocaleString()}\n`;
+    r += `Customers without power:               ${Math.round(storm.totalCust).toLocaleString()} (${pct(storm.totalCust,TOTAL_POP)} of county)\n`;
+    r += `Estimated households without power:     ~${Math.round(storm.totalCust/2.5).toLocaleString()}\n`;
     const critCount = storm.outages.filter(o=>o.critical).length;
     const treeCount = storm.outages.filter(o=>o.tree_blocked).length;
-    r += `Critical-facility outages (priority-1): ${critCount} (${(100*critCount/storm.outages.length).toFixed(1)}%)\n`;
-    r += `Tree-blocked outages: ${treeCount} (${(100*treeCount/storm.outages.length).toFixed(1)}%)\n`;
-    r += `Feeder outages: ${storm.outages.filter(o=>o.kind==='f').length}\n`;
-    r += `Lateral outages: ${storm.outages.filter(o=>o.kind==='l').length}\n\n`;
+    const floodCount = storm.outages.filter(o=>o.near_flood_zone).length;
+    const callbackCount = storm.outages.filter(o=>o.callback_lag_h>0).length;
+    const feederOut = storm.outages.filter(o=>o.kind==='f').length;
+    const lateralOut = storm.outages.filter(o=>o.kind==='l').length;
+    r += `Critical-facility outages (priority-1): ${critCount} (${pct(critCount,N)})\n`;
+    r += `Tree-blocked outages:                   ${treeCount} (${pct(treeCount,N)})\n`;
+    r += `Flood-zone outages:                     ${floodCount} (${pct(floodCount,N)})\n`;
+    r += `Callback-lag outages:                   ${callbackCount} (${pct(callbackCount,N)})\n`;
+    r += `Feeder-level outages:                   ${feederOut} (${pct(feederOut,N)})\n`;
+    r += `Lateral-level outages:                  ${lateralOut} (${pct(lateralOut,N)})\n`;
+    r += `Avg customers per outage:               ${(storm.totalCust/N).toFixed(1)}\n`;
+    r += `Outage density:                         ${(N/751).toFixed(1)} outages per sq mi\n\n`;
 
-    // Per-substation breakdown
+    // Customer loss distribution
+    const custLosses = storm.outages.map(o=>o.popLoss||0);
+    r += '── 5.2 Customer Loss Distribution ──\n\n';
+    r += `  Mean customers per outage:    ${avg(custLosses).toFixed(1)}\n`;
+    r += `  Median:                       ${percentile(custLosses,50).toFixed(1)}\n`;
+    r += `  Std deviation:                ${stddev(custLosses).toFixed(1)}\n`;
+    r += `  5th percentile:               ${percentile(custLosses,5).toFixed(1)}\n`;
+    r += `  25th percentile:              ${percentile(custLosses,25).toFixed(1)}\n`;
+    r += `  75th percentile:              ${percentile(custLosses,75).toFixed(1)}\n`;
+    r += `  95th percentile:              ${percentile(custLosses,95).toFixed(1)}\n`;
+    r += `  Max:                          ${Math.max(...custLosses).toFixed(1)}\n\n`;
+
+    // Histogram
+    const buckets = [0,10,25,50,100,250,500,1000,Infinity];
+    r += '  Customer-loss histogram:\n';
+    for (let b=0;b<buckets.length-1;b++){
+      const lo=buckets[b], hi=buckets[b+1];
+      const cnt = custLosses.filter(c=>c>=lo&&c<hi).length;
+      const label = hi===Infinity ? `${lo}+` : `${lo}–${hi-1}`;
+      r += `    ${label.padStart(10)} customers: ${cnt.toString().padStart(6)} outages  ${bar(cnt/N)}\n`;
+    }
+
+    // Per-substation damage
+    r += '\n── 5.3 Per-Substation Damage ──\n\n';
     const subDamage = {};
     storm.outages.forEach(o => {
       const sid = o.sub_id;
-      if (!subDamage[sid]) subDamage[sid] = {count:0, cust:0, crit:0, tree:0};
+      if (!subDamage[sid]) subDamage[sid] = {count:0, cust:0, crit:0, tree:0, flood:0, feeder:0, lateral:0, custArr:[]};
       subDamage[sid].count++;
       subDamage[sid].cust += o.popLoss;
+      subDamage[sid].custArr.push(o.popLoss);
       if (o.critical) subDamage[sid].crit++;
       if (o.tree_blocked) subDamage[sid].tree++;
+      if (o.near_flood_zone) subDamage[sid].flood++;
+      if (o.kind==='f') subDamage[sid].feeder++; else subDamage[sid].lateral++;
     });
-    r += 'Per-Substation Damage:\n';
-    r += '  Substation                           Outages   Customers Lost   Critical   Tree-Blocked\n';
-    r += '  ──────────────────────────────────── ──────── ──────────────── ────────── ────────────\n';
-    Object.keys(subDamage).sort((a,b)=>+a-+b).forEach(sid => {
+    r += '  Substation                           Outages   Cust Lost    %County  Critical  Tree-Blk  Flood  Feeder  Lateral  AvgCust/Out\n';
+    r += '  ──────────────────────────────────── ──────── ──────────── ──────── ──────── ──────── ────── ─────── ──────── ───────────\n';
+    Object.keys(subDamage).sort((a,b)=>subDamage[b].cust-subDamage[a].cust).forEach(sid => {
       const d = subDamage[sid];
       const name = (substations[sid]?.name || `Sub-${+sid+1}`).padEnd(36);
-      r += `  ${name} ${d.count.toString().padStart(8)} ${Math.round(d.cust).toLocaleString().padStart(16)} ${d.crit.toString().padStart(10)} ${d.tree.toString().padStart(12)}\n`;
+      r += `  ${name} ${d.count.toString().padStart(8)} ${Math.round(d.cust).toLocaleString().padStart(12)} ${pct(d.cust,storm.totalCust).padStart(8)} ${d.crit.toString().padStart(8)} ${d.tree.toString().padStart(8)} ${d.flood.toString().padStart(6)} ${d.feeder.toString().padStart(7)} ${d.lateral.toString().padStart(8)} ${(d.cust/d.count).toFixed(1).padStart(11)}\n`;
+    });
+
+    // Worst-hit substations narrative
+    r += '\n  Top 5 worst-hit substations (by customers affected):\n';
+    const worstSubs = Object.entries(subDamage).sort((a,b)=>b[1].cust-a[1].cust).slice(0,5);
+    worstSubs.forEach(([sid,d],rank) => {
+      const s = substations[sid];
+      const name = s?.name || `Sub-${+sid+1}`;
+      const canopy = s?.name && NLCD_CANOPY_BY_SUBSTATION[s.name] != null ? NLCD_CANOPY_BY_SUBSTATION[s.name]+'%' : 'N/A';
+      r += `\n    ${rank+1}. ${name}\n`;
+      r += `       Outages: ${d.count} | Customers lost: ${Math.round(d.cust).toLocaleString()} (${pct(d.cust,storm.totalCust)} of total)\n`;
+      r += `       Tree canopy: ${canopy} | Tree-blocked: ${pct(d.tree,d.count)} | Flood-zone: ${d.flood}\n`;
+      r += `       Feeder damage: ${d.feeder} | Lateral damage: ${d.lateral}\n`;
+      r += `       Population served: ${Math.round(s.popServed).toLocaleString()} | Impact ratio: ${pct(d.cust,s.popServed)} of service area\n`;
     });
   }
 
-  // --- Section 4: Restoration Plan ---
-  if (plan){
-    r += '\n───────────────────────────────────────────────────────────────────\n';
-    r += ' 4. RESTORATION PLAN & CREW DISPATCH\n';
-    r += '───────────────────────────────────────────────────────────────────\n\n';
-
-    function fmtH(h){
-      if (h < 24) return h.toFixed(1) + ' hours';
-      return Math.floor(h/24) + ' days ' + Math.round(h%24) + ' hours';
-    }
-    r += `Total crews deployed: ${plan.crews.length.toLocaleString()}\n`;
-    r += `Total restoration time: ${fmtH(plan.totalTime)}\n`;
-    const totalJobs = plan.crews.reduce((s,c)=>s+c.jobs.length, 0);
-    r += `Total jobs completed: ${totalJobs.toLocaleString()}\n\n`;
-
-    if (realistic){
-      r += 'Realism factors active:\n';
-      r += '  • Rolling-horizon scheduling (crews only see discovered outages)\n';
-      r += '  • Stochastic repair times (log-normal: median 2h, 90th %ile 6h)\n';
-      r += '  • Damage-assessment ramp (12h delay, 30% early / 70% exponential)\n';
-      r += '  • Mutual-aid waves (50% at +12h, +30% at +36h, +20% at +60h)\n';
-      r += '  • Road-network impedance (haversine × 1.5)\n';
-      r += '  • 14h workday clamp (6 AM – 8 PM, overnight downtime)\n';
-      r += '  • Tiered priority (critical facilities first)\n';
-      if (document.getElementById('customerPriority').checked) r += '  • Customer-impact weighting\n';
-      if (document.getElementById('crewSpecialization').checked) r += '  • Crew specialization (80/20 line/tree)\n';
-      if (document.getElementById('hierarchicalMode').checked) r += '  • Hierarchical restoration (sub→feeder→lateral)\n';
-      if (document.getElementById('crewStickiness').checked) r += '  • Crew stickiness (territory assignment)\n';
-      if (document.getElementById('stormDrag').checked) r += '  • Multi-day storm drag (+6h delay, +15% impedance)\n';
-      if (document.getElementById('soilSaturation').checked) r += '  • Soil saturation (+25% road, +30% tree-blocked)\n';
-      if (document.getElementById('preStormStaging').checked) r += '  • Pre-storm staging (0h assessment delay)\n';
-      if (document.getElementById('weatherWindow').checked) r += `  • Weather window (${document.getElementById('stormDurationH').value}h storm duration)\n`;
-      if (document.getElementById('crewTimeSeriesRamp').checked) r += '  • Crew time-series ramp (Isaias logistic model: 16% day 1 → 100% day 7)\n';
-      if (document.getElementById('crewFatigueOT').checked) r += '  • Crew fatigue & overtime decline (+5%/day after day 2, up to +30% by day 8)\n';
-      if (document.getElementById('floodZoneClosures').checked) r += '  • Flood-zone road closures (+35% road impedance near river corridors)\n';
-      if (document.getElementById('equipmentShortage').checked) r += '  • Equipment/material shortage (+40% repair time after 60% completion)\n';
-      if (document.getElementById('customerCallbackLag').checked) r += '  • Customer callback lag (2–8h discovery delay for 15% of lateral outages)\n';
-      r += '\n';
-    }
-
-    // Crew summary table
-    r += 'Crew Summary:\n';
-    r += '  Crew#  Jobs   First Job (h)   Last Job (h)   Total Active (h)\n';
-    r += '  ────── ────── ─────────────── ────────────── ────────────────\n';
-    plan.crews.forEach((c, i) => {
-      if (!c.jobs.length) return;
-      const first = c.jobs[0].etaFinish;
-      const last = c.jobs[c.jobs.length-1].etaFinish;
-      r += `  ${(i+1).toString().padStart(6)} ${c.jobs.length.toString().padStart(6)} ${first.toFixed(1).padStart(15)} ${last.toFixed(1).padStart(14)} ${(last - c.arrival).toFixed(1).padStart(16)}\n`;
+  // ==================== SECTION 6: SPATIAL DAMAGE ANALYSIS ====================
+  if (storm){
+    r += '\n\n═══════════════════════════════════════════════════════════════════════════════════\n';
+    r += ' 6. SPATIAL DAMAGE ANALYSIS\n';
+    r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
+    // Damage density by quadrant
+    const cLat = 41.78, cLon = -72.68;
+    const quads = {NE:{n:0,c:0},NW:{n:0,c:0},SE:{n:0,c:0},SW:{n:0,c:0}};
+    storm.outages.forEach(o => {
+      const q = (o.lat>=cLat?'N':'S')+(o.lon>=cLon?'E':'W');
+      quads[q].n++; quads[q].c += o.popLoss||0;
     });
+    r += '── 6.1 Damage by County Quadrant ──\n\n';
+    r += '  Quadrant   Outages    Customers    % of Total   Density\n';
+    r += '  ────────── ────────── ──────────── ──────────── ─────────────────────────────────\n';
+    for (const [q,v] of Object.entries(quads)){
+      r += `  ${q.padEnd(10)} ${v.n.toLocaleString().padStart(10)} ${Math.round(v.c).toLocaleString().padStart(12)} ${pct(v.c,storm.totalCust).padStart(12)}   ${bar(v.c/storm.totalCust)}\n`;
+    }
 
-    // Restoration timeline milestones
-    r += '\nRestoration Milestones:\n';
+    // Geographic extent
+    const lats = storm.outages.map(o=>o.lat), lons = storm.outages.map(o=>o.lon);
+    r += `\n── 6.2 Geographic Extent of Damage ──\n\n`;
+    r += `  Northernmost outage: ${Math.max(...lats).toFixed(5)}°N\n`;
+    r += `  Southernmost outage: ${Math.min(...lats).toFixed(5)}°N\n`;
+    r += `  Easternmost outage:  ${Math.max(...lons).toFixed(5)}°W\n`;
+    r += `  Westernmost outage:  ${Math.min(...lons).toFixed(5)}°W\n`;
+    r += `  N-S span:            ${((Math.max(...lats)-Math.min(...lats))*69).toFixed(1)} miles\n`;
+    r += `  E-W span:            ${((Math.max(...lons)-Math.min(...lons))*51).toFixed(1)} miles\n`;
+    r += `  Damage centroid:     ${avg(lats).toFixed(5)}°N, ${avg(lons).toFixed(5)}°W\n`;
+
+    // Damage clustering analysis
+    r += `\n── 6.3 Damage Clustering ──\n\n`;
+    const gridRes = 0.02;
+    const cells = {};
+    storm.outages.forEach(o => {
+      const key = `${Math.floor(o.lat/gridRes)},${Math.floor(o.lon/gridRes)}`;
+      cells[key] = (cells[key]||0)+1;
+    });
+    const cellCounts = Object.values(cells);
+    r += `  Grid cells (0.02° ≈ 1.4mi × 1.0mi): ${cellCounts.length} cells with damage\n`;
+    r += `  Mean outages per cell:    ${avg(cellCounts).toFixed(1)}\n`;
+    r += `  Max outages in one cell:  ${Math.max(...cellCounts)}\n`;
+    r += `  Cells with 50+ outages:   ${cellCounts.filter(c=>c>=50).length}\n`;
+    r += `  Cells with 100+ outages:  ${cellCounts.filter(c=>c>=100).length}\n`;
+    const gini = (() => {
+      const s = sorted(cellCounts); const n=s.length; let sum=0;
+      for(let i=0;i<n;i++) sum += (2*i-n+1)*s[i];
+      return sum / (n * s.reduce((a,b)=>a+b,0));
+    })();
+    r += `  Gini coefficient:         ${gini.toFixed(3)} (0=uniform, 1=concentrated)\n`;
+  }
+
+  // ==================== SECTION 7: RESTORATION PLAN ====================
+  if (plan){
+    r += '\n═══════════════════════════════════════════════════════════════════════════════════\n';
+    r += ' 7. RESTORATION PLAN & CREW OPERATIONS\n';
+    r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
+    const totalJobs = plan.crews.reduce((s,c)=>s+c.jobs.length, 0);
+    const activeCrews = plan.crews.filter(c=>c.jobs.length>0).length;
+    const idleCrews = plan.crews.length - activeCrews;
+
+    r += '── 7.1 Summary Statistics ──\n\n';
+    r += `  Total crews deployed:         ${plan.crews.length.toLocaleString()}\n`;
+    r += `  Active crews (≥1 job):        ${activeCrews.toLocaleString()}\n`;
+    r += `  Idle crews (0 jobs):          ${idleCrews.toLocaleString()}\n`;
+    r += `  Total restoration time:       ${fmtH(plan.totalTime)}\n`;
+    r += `  Total jobs completed:         ${totalJobs.toLocaleString()}\n`;
+    r += `  Avg jobs per crew:            ${(totalJobs/activeCrews).toFixed(1)}\n`;
+    r += `  Avg customers per job:        ${storm ? (storm.totalCust/totalJobs).toFixed(1) : '—'}\n`;
+    const totalCrewHours = plan.crews.reduce((s,c) => s + (c.jobs.length ? c.jobs[c.jobs.length-1].etaFinish - c.arrival : 0), 0);
+    r += `  Total crew-hours:             ${Math.round(totalCrewHours).toLocaleString()}\n`;
+    r += `  Total crew-days:              ${(totalCrewHours/16).toFixed(0)} (at 16h/day shifts)\n`;
+    r += `  Customers restored per crew-hour: ${storm ? (storm.totalCust/totalCrewHours).toFixed(1) : '—'}\n`;
+    r += `  Jobs per crew per day:        ${(totalJobs/(totalCrewHours/16)).toFixed(2)}\n\n`;
+
+    r += '── 7.2 Realism Factors Active ──\n\n';
+    if (realistic){
+      r += '  [✓] Rolling-horizon scheduling (crews only see discovered outages)\n';
+      r += '  [✓] Stochastic repair times (log-normal: median 2h, 90th %ile 6h)\n';
+      r += '  [✓] Damage-assessment ramp (12h delay, 30% early / 70% exponential)\n';
+      r += '  [✓] Mutual-aid waves (50% at +12h, +30% at +36h, +20% at +60h)\n';
+      r += '  [✓] Road-network impedance (haversine × 1.5)\n';
+      r += '  [✓] 14h workday clamp (6 AM – 8 PM, overnight downtime)\n';
+      r += '  [✓] Tiered priority (critical facilities first)\n';
+      const toggles = [
+        ['customerPriority','Customer-impact weighting'],
+        ['crewSpecialization','Crew specialization (80/20 line/tree)'],
+        ['hierarchicalMode','Hierarchical restoration (sub→feeder→lateral)'],
+        ['crewStickiness','Crew stickiness (territory assignment)'],
+        ['stormDrag','Multi-day storm drag (+6h delay, +15% impedance)'],
+        ['soilSaturation','Soil saturation (+25% road, +30% tree-blocked)'],
+        ['preStormStaging','Pre-storm staging (0h assessment delay)'],
+        ['weatherWindow','Weather window'],
+        ['crewTimeSeriesRamp','Crew time-series ramp (Isaias logistic model)'],
+        ['crewFatigueOT','Crew fatigue & overtime decline'],
+        ['floodZoneClosures','Flood-zone road closures (+35% impedance)'],
+        ['equipmentShortage','Equipment/material shortage (+40% after 60%)'],
+        ['customerCallbackLag','Customer callback lag (2–8h rural laterals)'],
+      ];
+      for (const [id, label] of toggles){
+        const el = document.getElementById(id);
+        if (el) r += `  [${el.checked?'✓':' '}] ${label}\n`;
+      }
+    } else {
+      r += '  No realism factors — optimistic baseline (instant crew deployment, fixed repair,\n';
+      r += '  no assessment delay, 24h workday, no road impedance)\n';
+    }
+
+    // Crew arrival timeline
+    r += '\n── 7.3 Crew Mobilization Timeline ──\n\n';
+    const arrivals = plan.crews.map(c=>c.arrival).sort((a,b)=>a-b);
+    const arrivalBuckets = {};
+    arrivals.forEach(a => { const day = Math.floor(a/24); arrivalBuckets[day]=(arrivalBuckets[day]||0)+1; });
+    r += '  Day  Hour Range     Crews Arrived  Cumulative  % of Total  Mobilization Curve\n';
+    r += '  ──── ──────────── ─────────────── ──────────── ────────── ────────────────────────────────\n';
+    let cumArrivals = 0;
+    for (const day of Object.keys(arrivalBuckets).sort((a,b)=>+a-+b)){
+      cumArrivals += arrivalBuckets[day];
+      r += `  ${day.toString().padStart(4)} ${(+day*24+'h–'+(+day*24+24)+'h').padEnd(12)} ${arrivalBuckets[day].toString().padStart(15)} ${cumArrivals.toString().padStart(12)} ${pct(cumArrivals,plan.crews.length).padStart(10)}  ${bar(cumArrivals/plan.crews.length,25)}\n`;
+    }
+
+    // Restoration milestones
+    r += '\n── 7.4 Restoration Milestones ──\n\n';
     const allJobs = [];
     for (const c of plan.crews) for (const j of c.jobs) allJobs.push(j);
     allJobs.sort((a,b) => a.etaFinish - b.etaFinish);
     if (allJobs.length && storm){
       let cumCust = 0;
-      const milestones = [10, 25, 50, 75, 90, 95, 99, 100];
+      const milestones = [1, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 75, 80, 85, 90, 95, 97, 99, 100];
       let mi = 0;
+      r += '  Milestone  Time                 Customers Restored  Jobs Done   Rate (cust/h since last)\n';
+      r += '  ───────── ──────────────────── ─────────────────── ────────── ────────────────────────\n';
+      let prevTime = 0, prevCust = 0;
+      let jobIdx = 0;
       for (const j of allJobs){
+        jobIdx++;
         const o = storm.outages[j.outageIdx] || j.o;
         cumCust += (o.popLoss || 0);
-        const pct = 100 * cumCust / storm.totalCust;
-        while (mi < milestones.length && pct >= milestones[mi]){
-          r += `  ${milestones[mi].toString().padStart(3)}% customers restored: ${fmtH(j.etaFinish)}\n`;
+        const p = 100 * cumCust / storm.totalCust;
+        while (mi < milestones.length && p >= milestones[mi]){
+          const dt = j.etaFinish - prevTime;
+          const dc = cumCust - prevCust;
+          const rate = dt > 0 ? (dc/dt).toFixed(0) : '—';
+          r += `  ${(milestones[mi]+'%').padStart(9)} ${fmtH(j.etaFinish).padEnd(20)} ${Math.round(cumCust).toLocaleString().padStart(19)} ${jobIdx.toLocaleString().padStart(10)}   ${rate.toString().padStart(8)} cust/h\n`;
+          prevTime = j.etaFinish; prevCust = cumCust;
           mi++;
         }
       }
     }
-
-    // Detailed dispatch log (first 200 jobs)
-    r += '\nDetailed Dispatch Log (first 200 jobs):\n';
-    r += '  Job#  Crew#  Outage Lat    Outage Lon    Type     Critical  Tree-Blocked  ETA (h)\n';
-    r += '  ────── ────── ──────────── ──────────── ──────── ──────── ──────────── ─────────\n';
-    let jobNum = 0;
-    for (let ci = 0; ci < plan.crews.length; ci++){
-      for (const j of plan.crews[ci].jobs){
-        jobNum++;
-        if (jobNum > 200) break;
-        const o = storm ? storm.outages[j.outageIdx] || j.o : j.o;
-        r += `  ${jobNum.toString().padStart(6)} ${(ci+1).toString().padStart(6)} ${o.lat.toFixed(6).padStart(12)} ${o.lon.toFixed(6).padStart(12)} ${(o.kind==='f'?'feeder':'lateral').padStart(8)} ${(o.critical?'YES':'no').padStart(8)} ${(o.tree_blocked?'YES':'no').padStart(12)} ${j.etaFinish.toFixed(1).padStart(9)}\n`;
-      }
-      if (jobNum > 200) break;
-    }
-    if (jobNum > 200) r += `  ... (${totalJobs - 200} more jobs omitted)\n`;
   } else {
-    r += '\n───────────────────────────────────────────────────────────────────\n';
-    r += ' 4. RESTORATION PLAN\n';
-    r += '───────────────────────────────────────────────────────────────────\n\n';
+    r += '\n═══════════════════════════════════════════════════════════════════════════════════\n';
+    r += ' 7. RESTORATION PLAN\n';
+    r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
     r += 'No restoration plan computed yet. Click "Plan restoration" first.\n';
   }
 
-  // --- Section 5: Per-Town individualized breakdown ---
+  // ==================== SECTION 8: HOUR-BY-HOUR TIMELINE ====================
+  if (plan && storm){
+    r += '\n═══════════════════════════════════════════════════════════════════════════════════\n';
+    r += ' 8. HOUR-BY-HOUR RESTORATION TIMELINE\n';
+    r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
+    const allJ = [];
+    for (const c of plan.crews) for (const j of c.jobs) allJ.push(j);
+    allJ.sort((a,b)=>a.etaFinish-b.etaFinish);
+    const maxH = Math.ceil(plan.totalTime);
+    let cumC = 0, cumJ = 0, ji = 0;
+    r += '  Hour   Day  TOD      Jobs Done  Cust Restored  % Restored  Still Out       Restoration Progress\n';
+    r += '  ────── ──── ──────── ────────── ──────────── ──────────── ──────────────── ────────────────────────────────\n';
+    for (let h = 0; h <= maxH; h += Math.max(1, Math.floor(maxH/100))){
+      while (ji < allJ.length && allJ[ji].etaFinish <= h){
+        const o = storm.outages[allJ[ji].outageIdx] || allJ[ji].o;
+        cumC += (o.popLoss || 0);
+        cumJ++;
+        ji++;
+      }
+      const day = Math.floor(h/24);
+      const tod = h%24;
+      const todStr = tod<6?'night':tod<12?'morning':tod<18?'afternoon':'evening';
+      const stillOut = Math.round(storm.totalCust - cumC);
+      r += `  ${h.toString().padStart(6)} ${day.toString().padStart(4)} ${todStr.padEnd(8)} ${cumJ.toLocaleString().padStart(10)} ${Math.round(cumC).toLocaleString().padStart(12)} ${pct(cumC,storm.totalCust).padStart(12)} ${stillOut.toLocaleString().padStart(16)}  ${bar(cumC/storm.totalCust, 20)}\n`;
+    }
+  }
+
+  // ==================== SECTION 9: CREW PERFORMANCE ====================
+  if (plan){
+    r += '\n═══════════════════════════════════════════════════════════════════════════════════\n';
+    r += ' 9. CREW PERFORMANCE & UTILIZATION ANALYSIS\n';
+    r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
+    const crewStats = plan.crews.filter(c=>c.jobs.length>0).map((c,i) => {
+      const jobs = c.jobs.length;
+      const first = c.jobs[0].etaFinish;
+      const last = c.jobs[c.jobs.length-1].etaFinish;
+      const active = last - c.arrival;
+      const daysOnShift = active / 24;
+      let totalDrive=0, totalCust=0;
+      let prev = {lat:c.depot.lat, lon:c.depot.lon};
+      for (const j of c.jobs){
+        totalDrive += dist(prev, j.o);
+        totalCust += (storm ? (storm.outages[j.outageIdx]||j.o).popLoss : j.o.popLoss) || 0;
+        prev = {lat:j.o.lat, lon:j.o.lon};
+      }
+      return {idx:i, jobs, first, last, active, daysOnShift, totalDrive, totalCust, arrival:c.arrival};
+    });
+
+    r += '── 9.1 Full Crew Table ──\n\n';
+    r += '  Crew#  Jobs  Arrival(h)  First(h)  Last(h)   Active(h)  Days   Miles   Cust Restored  Cust/Hour  Jobs/Day\n';
+    r += '  ────── ────── ────────── ──────── ──────── ────────── ────── ──────── ─────────────── ────────── ────────\n';
+    crewStats.forEach(c => {
+      r += `  ${(c.idx+1).toString().padStart(6)} ${c.jobs.toString().padStart(6)} ${c.arrival.toFixed(1).padStart(10)} ${c.first.toFixed(1).padStart(8)} ${c.last.toFixed(1).padStart(8)} ${c.active.toFixed(1).padStart(10)} ${c.daysOnShift.toFixed(1).padStart(6)} ${c.totalDrive.toFixed(1).padStart(8)} ${Math.round(c.totalCust).toLocaleString().padStart(15)} ${(c.active>0?(c.totalCust/c.active).toFixed(1):'—').padStart(10)} ${(c.daysOnShift>0?(c.jobs/c.daysOnShift).toFixed(1):'—').padStart(8)}\n`;
+    });
+
+    r += '\n── 9.2 Crew Performance Distribution ──\n\n';
+    const jobCounts = crewStats.map(c=>c.jobs);
+    const driveDistances = crewStats.map(c=>c.totalDrive);
+    const custPerCrew = crewStats.map(c=>c.totalCust);
+    const activeHours = crewStats.map(c=>c.active);
+    r += '  Metric                  Mean      Median    StdDev    Min       Max       P5        P95\n';
+    r += '  ──────────────────────── ──────── ──────── ──────── ──────── ──────── ──────── ────────\n';
+    const metrics = [
+      ['Jobs per crew', jobCounts],
+      ['Drive distance (mi)', driveDistances],
+      ['Customers restored', custPerCrew],
+      ['Active hours', activeHours],
+    ];
+    for (const [label, arr] of metrics){
+      if (!arr.length) continue;
+      r += `  ${label.padEnd(24)} ${avg(arr).toFixed(1).padStart(8)} ${percentile(arr,50).toFixed(1).padStart(8)} ${stddev(arr).toFixed(1).padStart(8)} ${Math.min(...arr).toFixed(1).padStart(8)} ${Math.max(...arr).toFixed(1).padStart(8)} ${percentile(arr,5).toFixed(1).padStart(8)} ${percentile(arr,95).toFixed(1).padStart(8)}\n`;
+    }
+
+    // Top/bottom performers
+    r += '\n  Top 5 most productive crews (by customers restored):\n';
+    crewStats.sort((a,b)=>b.totalCust-a.totalCust).slice(0,5).forEach((c,i) => {
+      r += `    ${i+1}. Crew #${c.idx+1}: ${Math.round(c.totalCust).toLocaleString()} customers, ${c.jobs} jobs, ${c.totalDrive.toFixed(1)} mi driven, ${c.daysOnShift.toFixed(1)} days on shift\n`;
+    });
+    r += '\n  Bottom 5 least productive crews (by customers restored):\n';
+    crewStats.sort((a,b)=>a.totalCust-b.totalCust).slice(0,5).forEach((c,i) => {
+      r += `    ${i+1}. Crew #${c.idx+1}: ${Math.round(c.totalCust).toLocaleString()} customers, ${c.jobs} jobs, ${c.totalDrive.toFixed(1)} mi driven, ${c.daysOnShift.toFixed(1)} days on shift\n`;
+    });
+
+    // Utilization
+    r += '\n── 9.3 Crew Utilization ──\n\n';
+    const totalPossibleHours = plan.crews.length * plan.totalTime;
+    const totalActiveHours = activeHours.reduce((s,v)=>s+v,0);
+    r += `  Total possible crew-hours:  ${Math.round(totalPossibleHours).toLocaleString()} (${plan.crews.length} crews × ${fmtH(plan.totalTime)})\n`;
+    r += `  Total active crew-hours:    ${Math.round(totalActiveHours).toLocaleString()}\n`;
+    r += `  Overall utilization:        ${pct(totalActiveHours,totalPossibleHours)}\n`;
+    r += `  Idle crew-hours:            ${Math.round(totalPossibleHours - totalActiveHours).toLocaleString()}\n`;
+    r += `  Wasted capacity:            ${pct(totalPossibleHours-totalActiveHours,totalPossibleHours)}\n`;
+  }
+
+  // ==================== SECTION 10: COST ESTIMATION ====================
+  if (plan && storm){
+    r += '\n═══════════════════════════════════════════════════════════════════════════════════\n';
+    r += ' 10. COST ESTIMATION & LABOR ECONOMICS\n';
+    r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
+    r += 'Source: IBEW Outside Construction contract provisions; powerlinemanjobs.com;\n';
+    r += '        Circadian workforce research; SHRM overtime toolkit.\n\n';
+    const totalJobs = plan.crews.reduce((s,c)=>s+c.jobs.length, 0);
+    const totalCrewHours = plan.crews.reduce((s,c) => s + (c.jobs.length ? c.jobs[c.jobs.length-1].etaFinish - c.arrival : 0), 0);
+    const totalCrewDays = totalCrewHours / 16;
+    const BASE_RATE = 50;
+    const OT_MULT = 2.0;
+    const PER_DIEM = 150;
+    const TRAVEL_REIMB = 0.67;
+
+    r += '── 10.1 Compensation Structure (IBEW Storm Rates) ──\n\n';
+    r += `  Base journeyman rate:       $${BASE_RATE}/hr\n`;
+    r += `  Storm overtime multiplier:  ${OT_MULT}× (double-time for all storm hours)\n`;
+    r += `  Effective storm rate:       $${(BASE_RATE*OT_MULT).toFixed(0)}/hr\n`;
+    r += `  Per diem:                   $${PER_DIEM}/day (lodging + meals)\n`;
+    r += `  Mileage reimbursement:      $${TRAVEL_REIMB}/mile\n`;
+    r += `  Typical weekly gross:       $5,000–$12,000 per lineman\n`;
+    r += `  Shift structure:            16-hour days (5:00 AM – 9:00 PM), 7 days/week\n\n`;
+
+    r += '── 10.2 Estimated Storm Restoration Cost ──\n\n';
+    const laborCost = totalCrewHours * BASE_RATE * OT_MULT;
+    const perDiemCost = totalCrewDays * PER_DIEM * plan.crews.length;
+    const totalDriveMiles = plan.crews.reduce((s,c) => {
+      let d=0, prev={lat:c.depot.lat,lon:c.depot.lon};
+      for(const j of c.jobs){d+=dist(prev,j.o)*1.5;prev={lat:j.o.lat,lon:j.o.lon};}
+      return s+d;
+    }, 0);
+    const travelCost = totalDriveMiles * TRAVEL_REIMB;
+    const materialPerOutage = 2500;
+    const materialCost = totalJobs * materialPerOutage;
+    const overhead = (laborCost + perDiemCost + travelCost + materialCost) * 0.15;
+    const totalCost = laborCost + perDiemCost + travelCost + materialCost + overhead;
+
+    r += `  Labor (${Math.round(totalCrewHours).toLocaleString()} crew-hrs × $${BASE_RATE*OT_MULT}/hr):    $${Math.round(laborCost).toLocaleString()}\n`;
+    r += `  Per diem (${Math.round(totalCrewDays).toLocaleString()} crew-days × $${PER_DIEM}):      $${Math.round(perDiemCost).toLocaleString()}\n`;
+    r += `  Travel (${Math.round(totalDriveMiles).toLocaleString()} mi × $${TRAVEL_REIMB}):          $${Math.round(travelCost).toLocaleString()}\n`;
+    r += `  Materials ($${materialPerOutage.toLocaleString()}/outage avg):           $${Math.round(materialCost).toLocaleString()}\n`;
+    r += `  Overhead (15%):                              $${Math.round(overhead).toLocaleString()}\n`;
+    r += `  ─────────────────────────────────────────────────────\n`;
+    r += `  ESTIMATED TOTAL:                             $${Math.round(totalCost).toLocaleString()}\n\n`;
+    r += `  Cost per customer restored:     $${(totalCost/storm.totalCust).toFixed(2)}\n`;
+    r += `  Cost per outage repaired:       $${(totalCost/totalJobs).toFixed(2)}\n`;
+    r += `  Cost per capita (county):       $${(totalCost/TOTAL_POP).toFixed(2)}\n\n`;
+
+    r += '── 10.3 Fatigue & Productivity Impact ──\n\n';
+    r += '  Research findings:\n';
+    r += '    • 10% increase in overtime → 2.4% decrease in productivity (Circadian)\n';
+    r += '    • Accident risk triples after 16 hours of continuous work (SHRM)\n';
+    r += '    • 54% of high-OT firms report high absenteeism (Circadian)\n';
+    r += '    • Self-reinforcing cycle: absenteeism → more OT for remaining crews → more fatigue\n\n';
+    r += '  Behavioral incentive analysis:\n';
+    r += '    • Crews are paid by the hour, not by the job\n';
+    r += '    • Storm hours at double-time ($100+/hr) create reduced urgency on non-critical repairs\n';
+    r += '    • This is not malfeasance — it is a rational economic response to the incentive structure\n';
+    r += '    • Estimated productivity loss from fatigue + behavioral effect: 15–30% by day 5\n';
+    r += '    • Counterfactual: if crews were paid per-job, estimated restoration would be 10–20% faster\n';
+    r += '    • However, per-job payment creates safety risks (rushing) — the hourly model is industry standard\n';
+  }
+
+  // ==================== SECTION 11: PER-TOWN BREAKDOWN ====================
   if (storm){
-    r += '\n───────────────────────────────────────────────────────────────────\n';
-    r += ' 5. PER-TOWN OUTAGE & RESTORATION BREAKDOWN\n';
-    r += '───────────────────────────────────────────────────────────────────\n\n';
-    r += 'Source: Outage lat/lon geocoded to nearest town centroid from 2020 Census.\n\n';
+    r += '\n═══════════════════════════════════════════════════════════════════════════════════\n';
+    r += ' 11. PER-TOWN INDIVIDUALIZED BREAKDOWN (29 TOWNS)\n';
+    r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
+    r += 'Methodology: Each outage geocoded to nearest town centroid (Manhattan distance).\n';
+    r += 'Source: U.S. Census Bureau, 2020 Decennial Census, Hartford County, CT.\n\n';
     const TOWNS = window.TOWN_CENTROIDS || [
       {name:"Hartford",lat:41.7637,lon:-72.6851,pop:121054},
       {name:"New Britain",lat:41.6612,lon:-72.7795,pop:74135},
@@ -3190,99 +3590,357 @@ function generateSimulationReport(){
       {name:"Hartland",lat:42.0087,lon:-72.9348,pop:2060},
     ];
     const townStats = {};
-    for (const t of TOWNS) townStats[t.name] = {pop:t.pop, outages:0, cust:0, crit:0, tree:0, flood:0, callbackLag:0, jobs:[]};
-    storm.outages.forEach((o,idx) => {
+    for (const t of TOWNS) townStats[t.name] = {lat:t.lat,lon:t.lon,pop:t.pop,outages:0,cust:0,crit:0,tree:0,flood:0,callbackLag:0,feeder:0,lateral:0,jobs:[],custArr:[]};
+    storm.outages.forEach(o => {
       let best = TOWNS[0], bestD = Infinity;
-      for (const t of TOWNS){
-        const d = Math.abs(o.lat-t.lat)+Math.abs(o.lon-t.lon);
-        if (d < bestD){ bestD=d; best=t; }
-      }
+      for (const t of TOWNS){ const d=Math.abs(o.lat-t.lat)+Math.abs(o.lon-t.lon); if(d<bestD){bestD=d;best=t;} }
       const s = townStats[best.name];
-      s.outages++;
-      s.cust += o.popLoss||0;
+      s.outages++; s.cust += o.popLoss||0; s.custArr.push(o.popLoss||0);
       if (o.critical) s.crit++;
       if (o.tree_blocked) s.tree++;
       if (o.near_flood_zone) s.flood++;
       if (o.callback_lag_h > 0) s.callbackLag++;
+      if (o.kind==='f') s.feeder++; else s.lateral++;
     });
     if (plan){
       for (const c of plan.crews){
         for (const j of c.jobs){
           const o = storm.outages[j.outageIdx] || j.o;
           let best = TOWNS[0], bestD = Infinity;
-          for (const t of TOWNS){
-            const d = Math.abs(o.lat-t.lat)+Math.abs(o.lon-t.lon);
-            if (d < bestD){ bestD=d; best=t; }
-          }
+          for (const t of TOWNS){ const d=Math.abs(o.lat-t.lat)+Math.abs(o.lon-t.lon); if(d<bestD){bestD=d;best=t;} }
           townStats[best.name].jobs.push(j.etaFinish);
         }
       }
     }
     const sortedTowns = Object.entries(townStats).filter(([,v])=>v.outages>0).sort((a,b)=>b[1].cust-a[1].cust);
+
+    // Summary table first
+    r += '  Town                 Pop(2020)   Outages  Customers   %TownPop  %County  Critical  Tree%   Flood  First(h)  Last(h)   Days\n';
+    r += '  ──────────────────── ────────── ──────── ────────── ──────── ──────── ──────── ─────── ────── ──────── ──────── ──────\n';
     for (const [name, s] of sortedTowns){
-      r += `  ┌─ ${name.toUpperCase()} (2020 pop: ${s.pop.toLocaleString()})\n`;
-      r += `  │  Outage locations: ${s.outages}\n`;
-      r += `  │  Customers affected: ${Math.round(s.cust).toLocaleString()} (${(100*s.cust/s.pop).toFixed(1)}% of town pop)\n`;
-      r += `  │  Critical-facility outages: ${s.crit}\n`;
-      r += `  │  Tree-blocked outages: ${s.tree} (${s.outages>0?(100*s.tree/s.outages).toFixed(0):0}%)\n`;
-      if (s.flood > 0) r += `  │  Flood-zone outages: ${s.flood}\n`;
-      if (s.callbackLag > 0) r += `  │  Late-discovery (callback lag): ${s.callbackLag}\n`;
-      if (s.jobs.length){
-        s.jobs.sort((a,b)=>a-b);
-        const first = s.jobs[0], last = s.jobs[s.jobs.length-1];
-        const mid = s.jobs[Math.floor(s.jobs.length/2)];
-        const p90 = s.jobs[Math.floor(s.jobs.length*0.9)];
-        r += `  │  Restoration timeline:\n`;
-        r += `  │    First repair complete: ${fmtH(first)}\n`;
-        r += `  │    50% restored: ${fmtH(mid)}\n`;
-        r += `  │    90% restored: ${fmtH(p90)}\n`;
-        r += `  │    Full restoration: ${fmtH(last)}\n`;
-        r += `  │    Avg repair time: ${fmtH(s.jobs.reduce((a,b)=>a+b,0)/s.jobs.length)}\n`;
-      }
-      r += `  └───────────────────────────────────────────────────\n\n`;
+      s.jobs.sort((a,b)=>a-b);
+      const first = s.jobs.length ? s.jobs[0].toFixed(1) : '—';
+      const last = s.jobs.length ? s.jobs[s.jobs.length-1].toFixed(1) : '—';
+      const days = s.jobs.length ? ((s.jobs[s.jobs.length-1]-s.jobs[0])/24).toFixed(1) : '—';
+      r += `  ${name.padEnd(20)} ${s.pop.toLocaleString().padStart(10)} ${s.outages.toString().padStart(8)} ${Math.round(s.cust).toLocaleString().padStart(10)} ${pct(s.cust,s.pop).padStart(8)} ${pct(s.cust,storm.totalCust).padStart(8)} ${s.crit.toString().padStart(8)} ${(s.outages>0?pct(s.tree,s.outages):'—').padStart(7)} ${s.flood.toString().padStart(6)} ${first.toString().padStart(8)} ${last.toString().padStart(8)} ${days.toString().padStart(6)}\n`;
     }
-    r += `  Total towns affected: ${sortedTowns.length} of ${TOWNS.length}\n\n`;
+
+    // Detailed town-by-town
+    r += '\n── Detailed Town Profiles ──\n';
+    for (const [name, s] of sortedTowns){
+      r += `\n  ╔══ ${name.toUpperCase()} ${'═'.repeat(Math.max(1,60-name.length))}╗\n`;
+      r += `  ║ 2020 Census Population: ${s.pop.toLocaleString()}\n`;
+      r += `  ║ Centroid: ${s.lat.toFixed(4)}°N, ${s.lon.toFixed(4)}°W\n`;
+      r += `  ║\n`;
+      r += `  ║ DAMAGE:\n`;
+      r += `  ║   Outage locations:      ${s.outages}\n`;
+      r += `  ║   Customers affected:    ${Math.round(s.cust).toLocaleString()} (${pct(s.cust,s.pop)} of town)\n`;
+      r += `  ║   Est. households out:   ~${Math.round(s.cust/2.5).toLocaleString()}\n`;
+      r += `  ║   Share of county damage: ${pct(s.cust,storm.totalCust)}\n`;
+      r += `  ║   Feeder-level outages:  ${s.feeder} (${pct(s.feeder,s.outages)})\n`;
+      r += `  ║   Lateral-level outages: ${s.lateral} (${pct(s.lateral,s.outages)})\n`;
+      r += `  ║   Critical-facility:     ${s.crit}\n`;
+      r += `  ║   Tree-blocked:          ${s.tree} (${pct(s.tree,s.outages)})\n`;
+      if (s.flood > 0) r += `  ║   Flood-zone:            ${s.flood} (${pct(s.flood,s.outages)})\n`;
+      if (s.callbackLag > 0) r += `  ║   Callback-lag:          ${s.callbackLag} (${pct(s.callbackLag,s.outages)})\n`;
+      r += `  ║   Avg cust per outage:   ${(s.cust/s.outages).toFixed(1)}\n`;
+      r += `  ║   Outage density:        ${(s.outages/30).toFixed(1)} per sq mi (est ~30 sq mi avg town area)\n`;
+      if (s.custArr.length){
+        r += `  ║   Cust/outage range:     ${Math.min(...s.custArr).toFixed(0)} – ${Math.max(...s.custArr).toFixed(0)}\n`;
+      }
+      if (s.jobs.length){
+        const mid = s.jobs[Math.floor(s.jobs.length/2)];
+        const p10 = s.jobs[Math.floor(s.jobs.length*0.1)];
+        const p90 = s.jobs[Math.floor(s.jobs.length*0.9)];
+        const avgJ = s.jobs.reduce((a,b)=>a+b,0)/s.jobs.length;
+        r += `  ║\n`;
+        r += `  ║ RESTORATION:\n`;
+        r += `  ║   First repair:          ${fmtH(s.jobs[0])}\n`;
+        r += `  ║   10% restored:          ${fmtH(p10)}\n`;
+        r += `  ║   50% restored (median): ${fmtH(mid)}\n`;
+        r += `  ║   90% restored:          ${fmtH(p90)}\n`;
+        r += `  ║   Full restoration:      ${fmtH(s.jobs[s.jobs.length-1])}\n`;
+        r += `  ║   Avg job completion:     ${fmtH(avgJ)}\n`;
+        r += `  ║   Duration (first→last):  ${fmtH(s.jobs[s.jobs.length-1]-s.jobs[0])}\n`;
+        r += `  ║   Jobs completed:         ${s.jobs.length}\n`;
+        r += `  ║   Restoration rate:       ${(s.cust/(s.jobs[s.jobs.length-1]-s.jobs[0])).toFixed(1)} customers/hour\n`;
+      }
+      r += `  ╚${'═'.repeat(68)}╝\n`;
+    }
+    r += `\n  Towns with zero damage: ${TOWNS.filter(t=>townStats[t.name].outages===0).map(t=>t.name).join(', ') || 'None'}\n`;
+    r += `  Total towns affected: ${sortedTowns.length} of ${TOWNS.length}\n`;
   }
 
-  // --- Section 6: DOE OE-417 calibration benchmarks ---
+  // ==================== SECTION 12: EQUITY ANALYSIS ====================
+  if (plan && storm){
+    r += '\n═══════════════════════════════════════════════════════════════════════════════════\n';
+    r += ' 12. RESTORATION EQUITY ANALYSIS\n';
+    r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
+    r += 'This section examines whether restoration prioritized densely-populated areas\n';
+    r += 'over rural towns, and whether small towns experienced disproportionately long\n';
+    r += 'wait times for power restoration.\n\n';
+
+    const TOWNS = window.TOWN_CENTROIDS || [{name:"Hartford",lat:41.7637,lon:-72.6851,pop:121054},{name:"Hartland",lat:42.0087,lon:-72.9348,pop:2060}];
+    const tStats = {};
+    for (const t of TOWNS) tStats[t.name] = {pop:t.pop, jobs:[]};
+    if (plan) for (const c of plan.crews) for (const j of c.jobs){
+      const o = storm.outages[j.outageIdx] || j.o;
+      let best = TOWNS[0], bestD = Infinity;
+      for (const t of TOWNS){ const d=Math.abs(o.lat-t.lat)+Math.abs(o.lon-t.lon); if(d<bestD){bestD=d;best=t;} }
+      tStats[best.name].jobs.push(j.etaFinish);
+    }
+    const townTimelines = Object.entries(tStats).filter(([,v])=>v.jobs.length>0).map(([name,v])=>{
+      v.jobs.sort((a,b)=>a-b);
+      return {name, pop:v.pop, medianRestore: v.jobs[Math.floor(v.jobs.length/2)], lastRestore: v.jobs[v.jobs.length-1], firstRestore: v.jobs[0]};
+    });
+
+    // First restored vs last restored
+    r += '  Towns ranked by MEDIAN restoration time (fastest first):\n';
+    r += '  Rank  Town                 Pop(2020)   Median(h)    Last(h)     Category\n';
+    r += '  ────── ──────────────────── ────────── ──────────── ──────────── ──────────────\n';
+    townTimelines.sort((a,b)=>a.medianRestore-b.medianRestore).forEach((t,i) => {
+      const cat = t.pop > 50000 ? 'Urban' : t.pop > 20000 ? 'Suburban' : t.pop > 10000 ? 'Small town' : 'Rural';
+      r += `  ${(i+1).toString().padStart(6)} ${t.name.padEnd(20)} ${t.pop.toLocaleString().padStart(10)} ${t.medianRestore.toFixed(1).padStart(12)} ${t.lastRestore.toFixed(1).padStart(12)} ${cat.padStart(14)}\n`;
+    });
+
+    // Urban vs rural comparison
+    const urban = townTimelines.filter(t=>t.pop>30000);
+    const rural = townTimelines.filter(t=>t.pop<=15000);
+    if (urban.length && rural.length){
+      const urbanAvg = avg(urban.map(t=>t.medianRestore));
+      const ruralAvg = avg(rural.map(t=>t.medianRestore));
+      r += `\n  Urban towns (pop>30K):  avg median restore = ${fmtH(urbanAvg)} (${urban.length} towns)\n`;
+      r += `  Rural towns (pop≤15K): avg median restore = ${fmtH(ruralAvg)} (${rural.length} towns)\n`;
+      r += `  Disparity ratio:       ${(ruralAvg/urbanAvg).toFixed(2)}× (rural takes ${(ruralAvg/urbanAvg).toFixed(2)}× as long)\n`;
+      if (ruralAvg > urbanAvg * 1.3) r += `  ⚠ Rural restoration is significantly slower than urban — potential equity concern.\n`;
+    }
+  }
+
+  // ==================== SECTION 13: DOE BENCHMARKS ====================
   const doeEvents = window.HARTFORD_DOE_OE417 || [];
   if (doeEvents.length){
-    r += '\n───────────────────────────────────────────────────────────────────\n';
-    r += ' 6. HISTORICAL CALIBRATION BENCHMARKS (DOE OE-417)\n';
-    r += '───────────────────────────────────────────────────────────────────\n\n';
-    r += '  Event                            Date         Customers     Duration\n';
-    r += '  ────────────────────────────────── ──────────── ───────────── ────────\n';
+    r += '\n═══════════════════════════════════════════════════════════════════════════════════\n';
+    r += ' 13. COMPARATIVE ANALYSIS — DOE OE-417 HISTORICAL BENCHMARKS\n';
+    r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
+    r += 'Source: U.S. Department of Energy, Office of Electricity, Form OE-417\n';
+    r += '        Electric Disturbance Events, filtered to Connecticut / Eversource territory.\n\n';
+    r += '  Event                            Date         Customers     Duration   Utility\n';
+    r += '  ────────────────────────────────── ──────────── ───────────── ──────── ──────────────────────\n';
     doeEvents.forEach(e => {
       const days = Math.round(e.duration_h / 24);
-      r += `  ${e.event.padEnd(36)} ${e.date.padEnd(12)} ${e.customers_affected.toLocaleString().padStart(13)} ${days}d (${e.duration_h}h)\n`;
+      r += `  ${e.event.padEnd(36)} ${e.date.padEnd(12)} ${e.customers_affected.toLocaleString().padStart(13)} ${days}d (${e.duration_h}h) ${(e.utility||'').padStart(22)}\n`;
     });
-    r += '\n';
+    if (plan && storm){
+      r += '\n  Simulated vs. Historical Comparison:\n';
+      r += '  ─────────────────────────────────────────────────────────────────\n';
+      const simCust = Math.round(storm.totalCust);
+      const simDur = plan.totalTime;
+      doeEvents.forEach(e => {
+        const custDiff = simCust - e.customers_affected;
+        const durDiff = simDur - e.duration_h;
+        r += `\n  vs. ${e.event} (${e.date}):\n`;
+        r += `    Real:      ${e.customers_affected.toLocaleString()} customers, ${e.duration_h}h restoration\n`;
+        r += `    Simulated: ${simCust.toLocaleString()} customers, ${simDur.toFixed(0)}h restoration\n`;
+        r += `    Customer delta:  ${custDiff>=0?'+':''}${custDiff.toLocaleString()} (sim ${custDiff>=0?'higher':'lower'})\n`;
+        r += `    Duration delta:  ${durDiff>=0?'+':''}${durDiff.toFixed(0)}h (sim ${durDiff>=0?'slower':'faster'})\n`;
+        if (e.customers_affected > 0) r += `    Scale ratio:     ${(simCust/e.customers_affected).toFixed(2)}× (simulated/real customers)\n`;
+        if (e.duration_h > 0) r += `    Speed ratio:     ${(simDur/e.duration_h).toFixed(2)}× (simulated/real duration)\n`;
+        if (e.notes) r += `    Notes: ${e.notes}\n`;
+      });
+    }
   }
 
-  // --- Section 6: Data sources ---
-  r += '\n───────────────────────────────────────────────────────────────────\n';
-  r += ' 7. DATA SOURCES & PROVENANCE\n';
-  r += '───────────────────────────────────────────────────────────────────\n\n';
-  r += '• Substations: HIFLD (Homeland Infrastructure Foundation-Level Data)\n';
-  r += '• Critical facilities: HIFLD hospitals, fire stations, EMS stations\n';
-  r += '• Tree canopy: USGS NLCD 2021 Tree Canopy Cover (30m, CONUS)\n';
-  r += '• Census tracts: US Census Bureau, 2020 Decennial Census (TIGER/Line)\n';
-  r += '• Storm tracks: NOAA NHC HURDAT2 (Atlantic basin best track)\n';
-  r += '• Disturbance events: DOE OE-417 Electric Disturbance database\n';
-  r += '• County boundary: OpenStreetMap / Nominatim\n';
-  r += '• Town populations: US Census Bureau, 2020 Decennial Census\n';
-  r += '• Town boundaries: OpenStreetMap (admin_level=8)\n';
-  r += '• Storm baselines: Eversource Isaias 2020 filings (PURA Docket 20-08-03)\n';
-  r += '• Crew-count baselines: Wanik et al. 2015, J. Infrastructure Systems\n';
-  r += '• Flood zones: FEMA National Flood Hazard Layer (NFHL), Hartford County\n';
-  r += '• Equipment shortage model: Eversource Isaias after-action report (staging delays)\n';
-  r += '• Callback lag model: CT PURA testimony on Eversource outage detection gaps\n';
-  r += '• Crew time-series ramp: PURA Docket 20-08-03, CT Mirror, NBC CT (Isaias 2020 daily crew counts)\n';
-  r += '• Crew fatigue model: Circadian workforce studies, SHRM overtime toolkit, IBEW contract provisions\n';
-  r += '• Crew compensation: IBEW Outside Construction agreements, powerlinemanjobs.com (double-time/16h shifts)\n\n';
-  r += '═══════════════════════════════════════════════════════════════════\n';
-  r += '                          END OF REPORT\n';
-  r += '═══════════════════════════════════════════════════════════════════\n';
+  // ==================== SECTION 14: VULNERABILITY ASSESSMENT ====================
+  if (storm){
+    r += '\n═══════════════════════════════════════════════════════════════════════════════════\n';
+    r += ' 14. NETWORK VULNERABILITY ASSESSMENT\n';
+    r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
+    // Identify substations with disproportionate damage
+    const subDamage2 = {};
+    storm.outages.forEach(o => {
+      const sid = o.sub_id;
+      if (!subDamage2[sid]) subDamage2[sid] = {count:0, cust:0};
+      subDamage2[sid].count++; subDamage2[sid].cust += o.popLoss;
+    });
+    r += '── 14.1 Substations by Damage-to-Capacity Ratio ──\n\n';
+    r += '  A ratio >1.0 means the substation lost MORE customers than it nominally serves,\n';
+    r += '  indicating cascading failures or demand redistribution.\n\n';
+    r += '  Substation                           Cust Served  Cust Lost    Ratio    Assessment\n';
+    r += '  ──────────────────────────────────── ──────────── ──────────── ──────── ──────────────────\n';
+    substations.forEach((s,i) => {
+      const d = subDamage2[i] || {count:0,cust:0};
+      const ratio = s.popServed > 0 ? d.cust / s.popServed : 0;
+      const assess = ratio > 1.2 ? '⚠ CRITICAL' : ratio > 0.8 ? '⚠ SEVERE' : ratio > 0.4 ? 'MODERATE' : ratio > 0.1 ? 'LIGHT' : 'MINIMAL';
+      r += `  ${(s.name||`Sub-${i+1}`).padEnd(36)} ${Math.round(s.popServed).toLocaleString().padStart(12)} ${Math.round(d.cust).toLocaleString().padStart(12)} ${ratio.toFixed(2).padStart(8)} ${assess.padStart(18)}\n`;
+    });
+
+    // High-canopy vulnerability corridor
+    r += '\n── 14.2 Vegetation Vulnerability Corridors ──\n\n';
+    r += '  Substations with tree canopy ≥50% are in high-vulnerability vegetation corridors.\n';
+    r += '  These areas experience disproportionate tree-related outages during storms.\n\n';
+    const highCanopy = substations.filter(s => s.treeFactor >= 1.0);
+    highCanopy.forEach(s => {
+      const d = subDamage2[substations.indexOf(s)] || {count:0};
+      const canopy = s.name && NLCD_CANOPY_BY_SUBSTATION[s.name] != null ? NLCD_CANOPY_BY_SUBSTATION[s.name]+'%' : '—';
+      r += `  • ${(s.name||'—').padEnd(25)} canopy: ${canopy.padEnd(5)}  treeFactor: ${s.treeFactor.toFixed(2)}  outages: ${d.count}\n`;
+    });
+    if (!highCanopy.length) r += '  No substations with tree factor ≥ 1.0\n';
+  }
+
+  // ==================== SECTION 15: FULL DISPATCH LOG ====================
+  if (plan){
+    r += '\n═══════════════════════════════════════════════════════════════════════════════════\n';
+    r += ' 15. FULL DISPATCH LOG\n';
+    r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
+    const totalJobs = plan.crews.reduce((s,c)=>s+c.jobs.length, 0);
+    const LOG_LIMIT = 1000;
+    r += `  Showing first ${Math.min(totalJobs,LOG_LIMIT).toLocaleString()} of ${totalJobs.toLocaleString()} jobs.\n\n`;
+    r += '  Job#    Crew#  Outage Lat     Outage Lon     Type      Critical  Tree  Flood  CustLost  ETA(h)    Day  TOD\n';
+    r += '  ─────── ────── ───────────── ───────────── ──────── ──────── ────── ────── ──────── ──────── ───── ─────────\n';
+    let jobNum = 0;
+    for (let ci = 0; ci < plan.crews.length; ci++){
+      for (const j of plan.crews[ci].jobs){
+        jobNum++;
+        if (jobNum > LOG_LIMIT) break;
+        const o = storm ? storm.outages[j.outageIdx] || j.o : j.o;
+        const day = Math.floor(j.etaFinish/24);
+        const tod = j.etaFinish%24;
+        const todStr = tod<6?'night':tod<12?'AM':tod<18?'PM':'eve';
+        r += `  ${jobNum.toString().padStart(7)} ${(ci+1).toString().padStart(6)} ${o.lat.toFixed(6).padStart(13)} ${o.lon.toFixed(6).padStart(13)} ${(o.kind==='f'?'feeder':'lateral').padEnd(8)} ${(o.critical?'YES':'—').padStart(8)} ${(o.tree_blocked?'YES':'—').padStart(6)} ${(o.near_flood_zone?'YES':'—').padStart(6)} ${Math.round(o.popLoss||0).toLocaleString().padStart(8)} ${j.etaFinish.toFixed(1).padStart(8)} ${day.toString().padStart(5)} ${todStr.padStart(9)}\n`;
+      }
+      if (jobNum > LOG_LIMIT) break;
+    }
+    if (jobNum >= LOG_LIMIT && totalJobs > LOG_LIMIT) r += `  ... (${(totalJobs - LOG_LIMIT).toLocaleString()} more jobs omitted)\n`;
+  }
+
+  // ==================== SECTION 16: REALISM PARAMETERS ====================
+  r += '\n═══════════════════════════════════════════════════════════════════════════════════\n';
+  r += ' 16. REALISM MODEL PARAMETERS\n';
+  r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
+  r += '  Parameter                          Value          Source\n';
+  r += '  ──────────────────────────────────── ────────────── ────────────────────────────────────────────────\n';
+  r += '  Assessment delay                   12 hours       Industry standard; Eversource Isaias filings\n';
+  r += '  Workday clamp                      6 AM – 8 PM    IBEW safety rules; 14h max shift\n';
+  r += '  Repair time distribution           Log-normal     Liu et al. 2007; median 2h, 90th pct 6h\n';
+  r += '  Road impedance multiplier          1.5×           Haversine→driving distance proxy\n';
+  r += '  Discovery ramp (early visibility)  30%            First-hour outages visible to dispatch\n';
+  r += '  Discovery time constant            36 hours       Exponential reveal of remaining 70%\n';
+  r += '  Critical facility radius           0.5 miles      HIFLD proximity flagging\n';
+  r += '  Crew ramp t_mid                    72 hours       Isaias PURA data (day 3 = inflection)\n';
+  r += '  Crew ramp steepness (k)            0.06           Fitted to 16% day 1, 73% day 5\n';
+  r += '  Fatigue onset                      Day 2          Circadian workforce research\n';
+  r += '  Fatigue rate                       +5%/day        Conservative estimate from OT studies\n';
+  r += '  Fatigue cap                        +30%           Day 8 maximum\n';
+  r += '  Behavioral OT penalty              +8%            Non-critical repairs after day 4\n';
+  r += '  Flood impedance bonus              +35%           FEMA NFHL corridor proxy\n';
+  r += '  Flood corridor radius              1.5 miles      Conservative floodplain estimate\n';
+  r += '  Equipment shortage onset           60% complete   Eversource after-action reports\n';
+  r += '  Equipment shortage max             +40%           Transformer/pole supply depletion\n';
+  r += '  Callback lag fraction              ~15%           Rural laterals, high-canopy areas\n';
+  r += '  Callback lag range                 2–8 hours      CT PURA testimony on detection gaps\n';
+  r += '  Tree-blocked fraction              ~30%           Industry estimate for forested New England\n';
+  r += '  Sectionalizer effect               0.5×           Per-outage customer impact halved\n';
+  r += '  NLCD canopy baseline               50%            50% canopy = 1.0× tree factor\n';
+  r += '  Trim cycle                         4 years        Eversource vegetation management program\n\n';
+
+  // ==================== SECTION 17: DATA SOURCES ====================
+  r += '═══════════════════════════════════════════════════════════════════════════════════\n';
+  r += ' 17. DATA SOURCES & PROVENANCE\n';
+  r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
+  const sources = [
+    ['Substations','HIFLD (Homeland Infrastructure Foundation-Level Data)','https://hifld-geoplatform.opendata.arcgis.com/','49 real substations in Hartford County'],
+    ['Critical facilities','HIFLD hospitals, fire, EMS, water treatment','https://hifld-geoplatform.opendata.arcgis.com/','52 facilities across 4 categories'],
+    ['Tree canopy','USGS NLCD 2021 Tree Canopy Cover','https://www.mrlc.gov/data/nlcd-2021-usfs-tree-canopy-cover-conus','30m resolution, 1km buffer per substation'],
+    ['Census tracts','U.S. Census Bureau, 2020 Decennial Census','https://data.census.gov/','~196 tracts, TIGER/Line centroids + P1 population'],
+    ['Storm tracks','NOAA NHC HURDAT2 (Atlantic basin best track)','https://www.nhc.noaa.gov/data/#hurdat','Sandy, Isaias, Irene, Henri'],
+    ['Disturbance events','DOE OE-417 Electric Disturbance database','https://www.oe.netl.doe.gov/OE417_annual_summary.aspx','8 CT events, 2011–2024'],
+    ['County boundary','OpenStreetMap / Nominatim','https://nominatim.openstreetmap.org/','Cached locally as GeoJSON'],
+    ['Town populations','U.S. Census Bureau, 2020 Decennial Census','https://data.census.gov/','29 towns, P1 total population'],
+    ['Town boundaries','OpenStreetMap (admin_level=8)','https://www.openstreetmap.org/','All 29 Hartford County towns'],
+    ['Storm baselines','Eversource Isaias 2020 filings','CT PURA Docket No. 20-08-03','PURA investigation + after-action report'],
+    ['Crew counts','CT Mirror, NBC Connecticut (Isaias coverage)','https://ctmirror.org/','Daily crew deployment numbers, Aug 2020'],
+    ['Crew compensation','IBEW Outside Construction agreements','https://ibew1245.com/','Double-time storm rates, per diem, shift structure'],
+    ['Crew productivity','Circadian workforce studies, SHRM','https://circadian.com/blog/excessive-overtime','OT→productivity decline research'],
+    ['Flood zones','FEMA National Flood Hazard Layer (NFHL)','https://www.fema.gov/flood-maps/national-flood-hazard-layer','Hartford County river corridors'],
+    ['Outage prediction','Wanik et al. 2015, Natural Hazards','https://doi.org/10.1007/s11069-015-1855-1','WRF + land cover + infrastructure model'],
+  ];
+  for (const [name, desc, url, notes] of sources){
+    r += `  ${name}\n`;
+    r += `    Source:  ${desc}\n`;
+    r += `    URL:     ${url}\n`;
+    r += `    Notes:   ${notes}\n\n`;
+  }
+
+  // ==================== SECTION 18: METHODOLOGY ====================
+  r += '═══════════════════════════════════════════════════════════════════════════════════\n';
+  r += ' 18. METHODOLOGY NOTES & LIMITATIONS\n';
+  r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
+  r += '  GRID GENERATION:\n';
+  r += '    Substations are placed at real HIFLD locations. Feeders are synthetic random walks\n';
+  r += '    radiating outward from each substation, clipped to the county polygon. Laterals\n';
+  r += '    branch off random midpoints of feeders. The network topology is NOT the real\n';
+  r += '    Eversource distribution network — real topology is CEII (Critical Energy/Electric\n';
+  r += '    Infrastructure Information) and not publicly available.\n\n';
+  r += '  STORM MODEL:\n';
+  r += '    Outages are placed uniformly on network segments, weighted by segment count per\n';
+  r += '    substation. Tree-blocking is assigned based on NLCD canopy factor. This does NOT\n';
+  r += '    model wind-field exposure — all substations have equal probability of outages per\n';
+  r += '    segment. A wind-exposure-weighted placement model is the natural next step.\n\n';
+  r += '  SCHEDULER:\n';
+  r += '    Greedy nearest-outage assignment with min-heap on crew finish times. Each crew\n';
+  r += '    picks the nearest undone outage (optionally weighted by customer count). This is\n';
+  r += '    a known baseline — real utilities use more sophisticated dispatch (territory-based,\n';
+  r += '    hierarchical priority queues). The greedy scheduler overestimates efficiency by\n';
+  r += '    ~15–25% compared to real dispatch constraints.\n\n';
+  r += '  CUSTOMER IMPACT:\n';
+  r += '    Customer counts per outage are proportional to the parent substation\'s served\n';
+  r += '    population divided by its segment count. Sectionalizer model halves impact per\n';
+  r += '    outage in realistic mode. Real customer-per-outage counts vary enormously\n';
+  r += '    depending on network topology and transformer placement.\n\n';
+  r += '  COST ESTIMATES:\n';
+  r += '    Based on IBEW prevailing rates and industry averages. Actual costs vary by\n';
+  r += '    utility, region, and specific contract terms. Material costs ($2,500/outage avg)\n';
+  r += '    are a rough industry estimate covering poles, transformers, conductor, and hardware.\n';
+  r += '    Real major-storm costs include vegetation management, customer communications,\n';
+  r += '    regulatory proceedings, and rate case impacts not modeled here.\n\n';
+  r += '  KNOWN LIMITATIONS:\n';
+  r += '    1. Synthetic network topology (real CEII data not available)\n';
+  r += '    2. Uniform outage placement (no wind-field or geographic weighting)\n';
+  r += '    3. Greedy scheduler (not MILP/constraint programming optimal)\n';
+  r += '    4. No switching/back-feed model (de-energized sections can\'t be rerouted)\n';
+  r += '    5. Crew ramp calibrated to single event (Isaias 2020)\n';
+  r += '    6. No underground vs. overhead line distinction\n';
+  r += '    7. Material cost estimates are rough industry averages\n';
+  r += '    8. No customer callback validation (AMI deployment rate assumed)\n';
+  r += '    9. No inter-utility coordination modeling\n';
+  r += '   10. Weather forcing not yet integrated (wind/temperature Colabs available)\n\n';
+
+  // ==================== SECTION 19: RAW CONFIG DUMP ====================
+  r += '═══════════════════════════════════════════════════════════════════════════════════\n';
+  r += ' 19. APPENDIX: RAW CONFIGURATION DUMP\n';
+  r += '═══════════════════════════════════════════════════════════════════════════════════\n\n';
+  const config = {
+    seed, substations: substations.length, feedersPerSub: +fS.value,
+    totalFeeders: feeders.length, totalLaterals: laterals.length,
+    outages: storm ? storm.outages.length : 0,
+    crews: plan ? plan.crews.length : 0,
+    realistic, totalPop: TOTAL_POP,
+    useCensusTracts: useTracts,
+  };
+  const toggleIds = ['realisticMode','customerPriority','crewSpecialization','hierarchicalMode',
+    'crewStickiness','stormDrag','soilSaturation','preStormStaging','weatherWindow',
+    'crewTimeSeriesRamp','crewFatigueOT','floodZoneClosures','equipmentShortage',
+    'customerCallbackLag','useCensusTracts','showCriticalFacilities','showStormTrack','showDoePanel'];
+  for (const id of toggleIds){
+    const el = document.getElementById(id);
+    if (el) config[id] = el.checked;
+  }
+  r += JSON.stringify(config, null, 2) + '\n\n';
+
+  r += '╔═══════════════════════════════════════════════════════════════════════════════════╗\n';
+  r += '║                              END OF REPORT                                      ║\n';
+  r += `║  Total length: ~${Math.round(r.length/1024)} KB | Generated by Hartford Grid Simulator v3.0       ║\n`;
+  r += '╚═══════════════════════════════════════════════════════════════════════════════════╝\n';
 
   downloadBlob(new Blob([r], {type:'text/plain'}), `hartford_simulation_report_seed${seed}_${new Date().toISOString().replace(/[:.]/g,'-')}.txt`);
   status.textContent = 'Simulation report downloaded.';
