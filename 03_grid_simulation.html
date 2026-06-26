@@ -3602,7 +3602,7 @@ function generateSimulationReport(){
       const weights = substations.map((s,i) => {
         let minD2=Infinity, w=0;
         for(const tp of trackData.track){const d2=(tp.lat-s.lat)**2+(tp.lon-s.lon)**2;if(d2<minD2){minD2=d2;w=tp.wind_kt;}}
-        return Math.max(0.1,Math.exp(-(Math.sqrt(minD2)*69)**2/(2*30*30))*w/50);
+        return Math.max(0.1,Math.exp(-((Math.sqrt(minD2)*69)**2)/(2*30*30))*w/50);
       });
       const outCnts = substations.map((_,i) => storm.outages.filter(o=>o.sub_id===i).length);
       const mW = avg(weights), mO = avg(outCnts);
