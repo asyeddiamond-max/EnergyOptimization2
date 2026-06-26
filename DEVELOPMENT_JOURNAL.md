@@ -363,6 +363,46 @@ The report now contains 19 fully-written sections:
 
 ---
 
+## Phase — Deep report expansion (June 2026)
+
+**Goal:** Make the simulation report substantially more in-depth, adding analysis sections that would typically require dedicated analytics infrastructure.
+
+**What was added:**
+
+1. **Section 7.5 — Overnight downtime analysis**: Quantifies cumulative crew idle time from 8PM–6AM clamping, shows customers still out at each nightfall with visual bars.
+
+2. **Section 7.6 — Restoration speed by phase**: Breaks restoration into Emergency (0–24h), Surge (24–72h), Sustained (72–168h), Long-tail (168h+) phases with per-phase job counts, customer rates, and descriptions.
+
+3. **Section 9.4 — Crew fatigue progression by day**: Day-by-day table showing active crew counts, average days on shift, fatigue band distribution (Fresh/Mid/Tired/Exhausted), and estimated productivity percentage.
+
+4. **Section 9.5 — Drive distance analysis**: Total drive miles, per-crew and per-job averages, fuel consumption estimate (6 mpg bucket trucks), and fuel cost.
+
+5. **Section 10.4 — Day-by-day cost breakdown**: Itemized daily costs showing jobs done, customers restored, active crews, labor cost, and cumulative cost with percentage.
+
+6. **Section 10.5 — Mutual-aid cost premium**: Breakdown of the cost premium from out-of-state crews including per diem, travel-time labor, and mileage reimbursement.
+
+7. **Section 12.2 — Tree-canopy equity**: Compares restoration times for high-canopy (≥50%) vs low-canopy (<30%) towns, computes disparity ratio.
+
+8. **Section 12.3 — Critical-facility priority verification**: Validates that the scheduler's critical-facility priority actually resulted in faster restoration for critical outages vs non-critical.
+
+9. **Section 14.3 — Flood corridor vulnerability**: Per-corridor breakdown (CT River, Park River, Hockanum, Farmington, Salmon Brook) of flood-zone outages.
+
+10. **Section 14.4 — FLISR switching coverage analysis**: Per-substation switching effectiveness table, crew-hours and cost savings from automation.
+
+11. **Section 14.5 — AMI detection coverage gaps**: Instant vs delayed detection stats, cumulative undetected customer-hours.
+
+12. **Section 20 — Sensitivity analysis**: Factor sensitivity table (14 factors), crew count sensitivity curve with power-law model, IEEE reliability KPIs (SAIDI, SAIFI, CAIDI, ASAI).
+
+13. **Section 21 — Executive summary**: Key findings with worst-hit town, automation impact, active realism factor count, and CEII disclaimer.
+
+14. **Dispatch log expanded** from 1,000 to 2,000 entries.
+
+15. **Table of contents** updated with all subsection references.
+
+**Report now has 21 top-level sections with 35+ subsections.**
+
+---
+
 ## Major open questions
 
 1. **Should we calibrate against real Eversource outage data?** This was identified as the natural next research direction. Would require Eversource cooperation or PURA-filed records. Outcome: potentially publishable.
