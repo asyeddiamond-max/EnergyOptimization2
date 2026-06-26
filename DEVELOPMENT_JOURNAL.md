@@ -403,6 +403,41 @@ The report now contains 19 fully-written sections:
 
 ---
 
+## Phase — Eversource real-data integration (June 2026)
+
+**Goal:** Incorporate real Eversource CT reliability metrics and operational parameters from published sources to replace synthetic estimates with ground-truth values.
+
+**Data sources investigated:**
+- Eversource outage map (outagemap.eversource.com) — KUBRA Storm Center SC4 instance. All API endpoints return 403 Forbidden; real-time data not programmatically accessible.
+- Eversource CT Reliability Scorecards (2025) — per-town data exists as PNG images, not machine-readable.
+- RPA "State of the Grid in Connecticut" (2025) — SAIDI/SAIFI/peak load/generation mix data.
+- Fox Weather smart switch coverage — 8,500 switches, 1.5M interruptions avoided/yr.
+- Eversource CT Newsroom — ERP levels, 90% tree-cause rate, infrastructure stats.
+- poweroutage.us, findenergy.com — blocked by 403 (bot protection).
+
+**What was integrated:**
+
+1. **`EVERSOURCE_CT` constants block** — 30+ real parameters including SAIDI (76.0 min 2021, 164.6 min statewide 2023), SAIFI (0.686/0.872), 1.3M customers, 23,000 mi distribution, 8,500 smart switches, 5-level ERP targets, peak loads, generation mix, investment figures.
+
+2. **Tree-blocked rate: 30% → 90%** — Eversource states ">90% of storm outages caused by trees." The old 30% was a generic estimate. Now uses `EVERSOURCE_CT.treesCauseStorm`.
+
+3. **FLISR switching rate: 20% → 42%** — Eversource reports 42% of outages restored within 5 minutes via smart switches. Now uses `EVERSOURCE_CT.restoredUnder5min`.
+
+4. **Report section 13.2: ERP Level Classification** — Classifies each simulated event into Eversource's 5-level Emergency Response Plan (L5: 0-9% out, 1-3d → L1: 70-100% out, 18+d). Shows whether simulated restoration meets the ERP target.
+
+5. **Report section 13.3: Eversource Published Benchmarks** — Side-by-side table comparing simulated SAIDI/SAIFI/CAIDI against real Eversource (2021) and CT statewide (2023) values.
+
+6. **Report section 13.4: Eversource Infrastructure Summary** — Full infrastructure profile sourced from published data.
+
+7. **Data sources updated** — 7 new source entries in the report's section 17 and in DATA_SOURCES.md (section 21).
+
+**Key decisions:**
+- Used 42% for FLISR rate during storms even though that's the all-conditions average — during major storms the rate is likely lower due to multiple concurrent faults overwhelming switching capacity. This is a known upper-bound estimate.
+- Tree-blocked rate of 90% applies specifically to storm outages (not blue-sky), which is exactly what our simulation models.
+- ERP level classification uses the simulated customer count against Eversource's full 1.3M CT base, not just Hartford County, since ERP levels are system-wide.
+
+---
+
 ## Major open questions
 
 1. **Should we calibrate against real Eversource outage data?** This was identified as the natural next research direction. Would require Eversource cooperation or PURA-filed records. Outcome: potentially publishable.

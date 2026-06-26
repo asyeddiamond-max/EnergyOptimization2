@@ -343,7 +343,42 @@ fit.
 
 ---
 
-## 21 · Planned / pending data sources
+## 21 · Eversource CT Reliability Scorecards & Published Metrics (2021–2025)
+
+- **Source** Eversource Energy annual reliability scorecards, RPA "State of the Grid in Connecticut" (2025), Fox Weather smart switch reporting, Eversource CT Newsroom
+- **URLs**
+  - https://www.eversource.com/residential/outages/connecticut-reliability-scorecards
+  - https://rpa.org/news/lab/the-state-of-the-grid-in-connecticut
+  - https://www.foxweather.com/lifestyle/smarter-grids-shorter-outages-new-england-power-restoration-technology
+  - https://outagemap.eversource.com/external/default.html (KUBRA Storm Center, SC4)
+- **Where in repo** `EVERSOURCE_CT` constant in `03_grid_simulation.html` (~line 560)
+- **What it provides**
+  - **SAIDI**: 76.0 min/cust (Eversource 2021), 164.6 min/cust (CT statewide 2023)
+  - **SAIFI**: 0.686 int/cust (Eversource 2021), 0.872 int/cust (CT statewide 2023)
+  - **Customer base**: 1.3 million across 157 municipalities
+  - **Distribution**: 23,000 miles of electric distribution lines
+  - **Smart switches**: ~8,500 deployed (CT/MA/NH), 1.5M interruptions avoided/yr in CT
+  - **Auto-restoration**: 42% of outages restored within 5 minutes via smart switches
+  - **Storm outage cause**: >90% of storm power outages caused by trees
+  - **Top 3 causes**: trees, equipment failure, vehicle pole strikes
+  - **ERP levels**: 5-level emergency response plan with restoration targets (L5: 1-3 days @ 0-9% out → L1: 18+ days @ 70-100% out)
+  - **Peak load**: 4,563 MW (2025), 5,270 MW extreme weather (2034 projection)
+  - **Generation mix**: 60% gas, 33% nuclear, 6% renewables (2023)
+  - **Infrastructure investment**: $9B transmission (2016-2024), $2.3B resilience (2024)
+  - **Maintenance (2025)**: 15,027 trees removed, 4,400 new poles, 200 mi new wire, 24 new smart switches
+  - **Electricity rate**: 27.24¢/kWh (June 2025, 5th highest in US)
+- **How used**
+  - Tree-blocked rate updated from 30% to 90% (matching real storm data)
+  - FLISR switching rate updated from 20% to 42% (matching smart switch auto-restoration rate)
+  - ERP level classification added to simulation report (section 13.2)
+  - Real SAIDI/SAIFI benchmarks for comparison in report (section 13.3)
+  - Infrastructure summary in report (section 13.4)
+  - Sensitivity analysis KPIs benchmarked against real values (section 20.3)
+- **Coverage gaps** Per-town scorecard data exists as PNG images on Eversource's site but actual numeric values are not machine-readable. The KUBRA-powered outage map (outagemap.eversource.com) API endpoints are all locked down (403 Forbidden) — real-time outage data cannot be programmatically accessed.
+
+---
+
+## 22 · Planned / pending data sources
 
 These are tracked in [`ROADMAP.md`](ROADMAP.md) and listed here so future-you
 (or a reviewer) can see what's not yet integrated. Each one is gated on data

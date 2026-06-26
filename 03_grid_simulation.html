@@ -556,6 +556,51 @@ const NLCD_CANOPY_BY_SUBSTATION = {
   "Burlington":60,
 };
 
+// --- Real Eversource CT reliability parameters (2021–2025 published data) ---
+// Sources:
+//   RPA "State of the Grid in Connecticut" (2025): rpa.org/news/lab/the-state-of-the-grid-in-connecticut
+//   Eversource CT Reliability Scorecards (2025): eversource.com/residential/outages/connecticut-reliability-scorecards
+//   Eversource CT Newsroom (Jun 2025): hurricane season preparedness release
+//   Fox Weather (2025): smart switches / FLISR deployment data
+//   Eversource PURA filings & IEEE benchmark survey (2024)
+const EVERSOURCE_CT = {
+  customers:         1_300_000,
+  towns:             157,
+  employees:         10_000,
+  distLineMiles:     23_000,
+  smartSwitches:     8_500,     // across CT/MA/NH; ~3000 est. in CT alone
+  smartSwitchNewCT:  24,        // installed in CT in 2025
+  smartSwitchPlan:   500,       // planned for CT over next 5 years
+  interruptionsAvoidedCT: 1_500_000, // per year via automation
+  restoredUnder5min: 0.42,     // 42% of outages restored <5 min (smart switches)
+  treesCauseStorm:   0.90,     // >90% of storm outages caused by trees (Eversource 2025)
+  topCauses:         ['trees','equipment','vehicle pole strikes'],
+  treesRemoved2025:  15_027,
+  newPoles2025:      4_400,
+  newWireMiles2025:  200,
+  saidi2021:         76.0,     // minutes/customer (Eversource, excl. major events)
+  saifi2021:         0.686,    // interruptions/customer
+  saidiStatewide2023:164.6,    // minutes/customer (all CT, incl. major events)
+  saifiStatewide2023:0.872,    // interruptions/customer
+  avgInterruptionInterval: 20, // months between outages per customer (2025)
+  reliabilityImprovement: 0.15,// 15% improvement since 2017
+  peakLoadMW2025:    4_563,
+  peakLoadMW2034ext: 5_270,
+  erpLevels: {
+    5: {custPct:'0-9%',   restoreDays:'1-3'},
+    4: {custPct:'10-29%', restoreDays:'2-6'},
+    3: {custPct:'30-49%', restoreDays:'5-10'},
+    2: {custPct:'50-69%', restoreDays:'8-21'},
+    1: {custPct:'70-100%',restoreDays:'18+'},
+  },
+  uiSaidi:           61.3,    // United Illuminating 2024
+  uiSaifi:           0.71,    // United Illuminating 2024
+  elecRate:          27.24,    // cents/kWh (June 2025, 5th highest in US)
+  genMix:            {gas:0.60, nuclear:0.33, renewables:0.06},
+  transmissionSpend: 9_000_000_000,  // 2016-2024 asset condition
+  resilienceSpend:   2_300_000_000,  // 2024 grid resilience
+};
+
 // --- Flood-zone river corridors (FEMA flood zones, simplified to centerlines) ---
 // Major flood-prone corridors in Hartford County. Outages within ~1.5 mi of
 // these corridors get a road-impedance penalty when the flood-zone toggle is on.
@@ -1409,7 +1454,7 @@ function simulateStorm(){
     //       less tree-blocked; older trims more so. trimAgeMult(age):
     //       age 0 -> 0.6×, age 4 -> 1.6×.
     // Multiplied against a base ~0.30 rate to produce a per-outage probability.
-    const baseTreeRate = 0.30;
+    const baseTreeRate = EVERSOURCE_CT.treesCauseStorm;
     const parentFeederIdx = seg.kind === 'f' ? seg.fi :
                             (laterals[seg.li] ? laterals[seg.li].feederIdx : -1);
     const feederTrim = (parentFeederIdx >= 0 && feeders[parentFeederIdx])
@@ -1431,7 +1476,7 @@ function simulateStorm(){
     // Switching/back-feed: ~20% of feeder outages can be auto-restored via
     // normally-open tie switches (FLISR) in ~30 min without a crew visit.
     let switchRestored = false;
-    if (switchingOn && seg.kind === 'f' && !isCritical && rnd() < 0.20){
+    if (switchingOn && seg.kind === 'f' && !isCritical && rnd() < EVERSOURCE_CT.restoredUnder5min){
       switchRestoredCount++;
       switchRestored = true;
     }
@@ -2476,7 +2521,7 @@ function buildServerPayload(){
     realistic: document.getElementById('realisticMode').checked,
     customer_weight: customerWeight,
     crew_specialization: specializationOn,
-    tree_blocked_rate: 0.30,
+    tree_blocked_rate: EVERSOURCE_CT.treesCauseStorm,
     tree_crew_share: 0.20,
     hierarchical: hierarchicalOn,
     tiered_priority: tieredOn,
@@ -4249,6 +4294,66 @@ function generateSimulationReport(){
     }
   }
 
+  // --- 13.2 Eversource ERP Level Classification & Real Benchmarks ---
+  if (plan && storm){
+    r += '\n── 13.2 Eversource Emergency Response Plan (ERP) Level Classification ──\n\n';
+    r += '  Source: Eversource CT Newsroom & PURA filings (2025)\n\n';
+    const pctAffected = storm.totalCust / EVERSOURCE_CT.customers * 100;
+    let erpLevel = 5, erpCustPct = '0-9%', erpRestoreDays = '1-3';
+    if (pctAffected >= 70) { erpLevel=1; erpCustPct='70-100%'; erpRestoreDays='18+'; }
+    else if (pctAffected >= 50) { erpLevel=2; erpCustPct='50-69%'; erpRestoreDays='8-21'; }
+    else if (pctAffected >= 30) { erpLevel=3; erpCustPct='30-49%'; erpRestoreDays='5-10'; }
+    else if (pctAffected >= 10) { erpLevel=4; erpCustPct='10-29%'; erpRestoreDays='2-6'; }
+    r += '  ERP     Customers Out    Target Restoration    This Simulation\n';
+    r += '  Level   (% of service)   (days)                \n';
+    r += '  ─────── ──────────────── ──────────────────── ─────────────────────────────────\n';
+    for (let lvl = 5; lvl >= 1; lvl--){
+      const e = EVERSOURCE_CT.erpLevels[lvl];
+      const marker = lvl === erpLevel ? ' ◄ THIS EVENT' : '';
+      r += `  ${('Level '+lvl).padEnd(7)} ${e.custPct.padEnd(16)} ${(e.restoreDays+' days').padEnd(20)} ${marker}\n`;
+    }
+    r += `\n  Simulated customers affected: ${Math.round(storm.totalCust).toLocaleString()} / ${EVERSOURCE_CT.customers.toLocaleString()} = ${pctAffected.toFixed(1)}%\n`;
+    r += `  ⇒ This event classifies as ERP Level ${erpLevel} (${erpCustPct} out)\n`;
+    r += `  ⇒ Eversource target: full restoration in ${erpRestoreDays} days\n`;
+    r += `  ⇒ Simulated restoration: ${fmtH(plan.totalTime)}`;
+    const erpTargetDays = parseFloat(erpRestoreDays) * 24;
+    if (plan.totalTime <= erpTargetDays) r += ' ✓ WITHIN TARGET\n';
+    else r += ' ⚠ EXCEEDS TARGET\n';
+
+    r += '\n── 13.3 Eversource Published Reliability Benchmarks ──\n\n';
+    r += '  Source: RPA "State of the Grid in Connecticut" (2025), IEEE benchmark (2024)\n\n';
+    r += '  Metric                          Eversource (2021)   CT Statewide (2023)   This Simulation\n';
+    r += '  ──────────────────────────────── ─────────────────── ───────────────────── ─────────────────\n';
+    const simSaidi = (storm.totalCust * plan.totalTime / TOTAL_POP).toFixed(1);
+    const simSaifi = (storm.totalCust / TOTAL_POP).toFixed(3);
+    const simCaidi = plan.totalTime.toFixed(1);
+    r += `  SAIDI (min/cust/yr)              ${EVERSOURCE_CT.saidi2021.toFixed(1).padStart(6)}              ${EVERSOURCE_CT.saidiStatewide2023.toFixed(1).padStart(6)}                ${simSaidi.padStart(8)}\n`;
+    r += `  SAIFI (int/cust/yr)              ${EVERSOURCE_CT.saifi2021.toFixed(3).padStart(6)}              ${EVERSOURCE_CT.saifiStatewide2023.toFixed(3).padStart(6)}                ${simSaifi.padStart(8)}\n`;
+    r += `  CAIDI (min/int)                  ${(EVERSOURCE_CT.saidi2021/EVERSOURCE_CT.saifi2021).toFixed(1).padStart(6)}              ${(EVERSOURCE_CT.saidiStatewide2023/EVERSOURCE_CT.saifiStatewide2023).toFixed(1).padStart(6)}                ${simCaidi.padStart(8)}\n`;
+    r += `  Avg interrupt interval (mo)      ${EVERSOURCE_CT.avgInterruptionInterval}                    —                     —\n`;
+    r += '\n  Note: Simulation values are for a single major storm event. SAIDI/SAIFI are\n';
+    r += '  normally calculated on an annual basis. Direct comparison is illustrative,\n';
+    r += '  not statistical.\n';
+
+    r += '\n── 13.4 Eversource Infrastructure Summary ──\n\n';
+    r += `  Customers served (CT):           ${EVERSOURCE_CT.customers.toLocaleString()}\n`;
+    r += `  Municipalities:                  ${EVERSOURCE_CT.towns}\n`;
+    r += `  Distribution line miles:         ${EVERSOURCE_CT.distLineMiles.toLocaleString()}\n`;
+    r += `  Employees (tri-state):           ${EVERSOURCE_CT.employees.toLocaleString()}\n`;
+    r += `  Smart switches deployed:         ~${EVERSOURCE_CT.smartSwitches.toLocaleString()} (CT/MA/NH)\n`;
+    r += `  Interruptions avoided/yr (CT):   ${EVERSOURCE_CT.interruptionsAvoidedCT.toLocaleString()}\n`;
+    r += `  Outages restored <5 min:         ${(EVERSOURCE_CT.restoredUnder5min*100).toFixed(0)}%\n`;
+    r += `  Trees removed (2025):            ${EVERSOURCE_CT.treesRemoved2025.toLocaleString()}\n`;
+    r += `  New utility poles (2025):        ${EVERSOURCE_CT.newPoles2025.toLocaleString()}\n`;
+    r += `  New overhead wire (2025):        ${EVERSOURCE_CT.newWireMiles2025} miles\n`;
+    r += `  Peak load (2025):                ${EVERSOURCE_CT.peakLoadMW2025.toLocaleString()} MW\n`;
+    r += `  Peak load (2034 extreme):        ${EVERSOURCE_CT.peakLoadMW2034ext.toLocaleString()} MW\n`;
+    r += `  Electricity rate (Jun 2025):     ${EVERSOURCE_CT.elecRate}¢/kWh (5th highest in US)\n`;
+    r += `  Generation mix:                  ${(EVERSOURCE_CT.genMix.gas*100).toFixed(0)}% gas, ${(EVERSOURCE_CT.genMix.nuclear*100).toFixed(0)}% nuclear, ${(EVERSOURCE_CT.genMix.renewables*100).toFixed(0)}% renewables\n`;
+    r += `  Grid resilience investment:      $${(EVERSOURCE_CT.resilienceSpend/1e9).toFixed(1)}B (2024)\n`;
+    r += `  Transmission asset investment:   $${(EVERSOURCE_CT.transmissionSpend/1e9).toFixed(0)}B (2016-2024)\n`;
+  }
+
   // ==================== SECTION 14: VULNERABILITY ASSESSMENT ====================
   if (storm){
     r += '\n═══════════════════════════════════════════════════════════════════════════════════\n';
@@ -4447,6 +4552,12 @@ function generateSimulationReport(){
     ['Crew productivity','Circadian workforce studies, SHRM','https://circadian.com/blog/excessive-overtime','OT→productivity decline research'],
     ['Flood zones','FEMA National Flood Hazard Layer (NFHL)','https://www.fema.gov/flood-maps/national-flood-hazard-layer','Hartford County river corridors'],
     ['Outage prediction','Wanik et al. 2015, Natural Hazards','https://doi.org/10.1007/s11069-015-1855-1','WRF + land cover + infrastructure model'],
+    ['Eversource reliability','Eversource CT Reliability Scorecards (2025)','https://www.eversource.com/residential/outages/connecticut-reliability-scorecards','SAIDI, SAIFI, 149 town scorecards, outage causes'],
+    ['CT grid analysis','RPA "State of the Grid in Connecticut" (2025)','https://rpa.org/news/lab/the-state-of-the-grid-in-connecticut','SAIDI 164.6 min, SAIFI 0.872, peak load, gen mix'],
+    ['Smart switch data','Fox Weather / Eversource FLISR deployment','https://www.foxweather.com/lifestyle/smarter-grids-shorter-outages-new-england-power-restoration-technology','8,500 switches, 1.5M interruptions avoided/yr CT'],
+    ['ERP levels','Eversource CT Newsroom, hurricane preparedness (Jun 2025)','https://www.eversource.com/residential/about/our-company/news-room/connecticut-news','5-level ERP, 90% storm outages from trees'],
+    ['Eversource outage map','Eversource / KUBRA Storm Center','https://outagemap.eversource.com/external/default.html','Real-time outage map, SC4 instance'],
+    ['Grid investment','Eversource PURA filings & IEEE benchmark (2024)','CT PURA rate case filings','$2.3B resilience spend, 15% reliability improvement since 2017'],
   ];
   for (const [name, desc, url, notes] of sources){
     r += `  ${name}\n`;
