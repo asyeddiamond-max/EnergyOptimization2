@@ -105,15 +105,16 @@
   .map-legend .ml-line { display:inline-block; width:18px; border-top:2px solid; }
   .map-legend .sq { display:inline-block; width:11px; height:11px; background:#475569; border:1px solid #1e293b; border-radius:2px; }
 
+  .rf-root { background:#f8fafc !important; border-color:#cbd5e1 !important; }
   .rf-panel { display:none; margin-top:6px; max-height:340px; overflow-y:auto; }
   .rf-panel.rf-open { display:block; }
-  .rf-item { border-top:1px solid #fde68a; padding:3px 0 3px 2px; }
+  .rf-item { border-top:1px solid #e2e8f0; padding:4px 0 4px 2px; }
   .rf-item:first-child { border-top:none; }
   .rf-label { display:flex; align-items:center; gap:5px; cursor:pointer; font-size:11px; }
-  .rf-label input[type=checkbox] { flex-shrink:0; margin:0; }
-  .rf-name { font-weight:600; color:#78350f; cursor:pointer; font-size:10.5px; }
-  .rf-name:hover { text-decoration:underline; }
-  .rf-desc { display:none; font-size:9.5px; color:#92400e; line-height:1.35; margin:2px 0 1px 20px; }
+  .rf-label input[type=checkbox] { flex-shrink:0; margin:0; accent-color:#3b82f6; }
+  .rf-name { font-weight:600; color:#334155; cursor:pointer; font-size:10.5px; }
+  .rf-name:hover { color:#1d4ed8; }
+  .rf-desc { display:none; font-size:9.5px; color:#64748b; line-height:1.35; margin:2px 0 1px 20px; }
   .rf-item.rf-expanded .rf-desc { display:block; }
 </style>
 </head>
@@ -141,19 +142,19 @@
       </div>
     </div>
 
-    <div class="ctrl rf-root" style="background:#fef3c7;border-color:#fcd34d;">
+    <div class="ctrl rf-root">
       <div style="display:flex;align-items:center;justify-content:space-between;">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#78350f;">
-          <input type="checkbox" id="realisticMode" checked style="flex-shrink:0;" />
-          <b style="color:#92400e">Realistic mode</b>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#1e293b;">
+          <input type="checkbox" id="realisticMode" checked style="flex-shrink:0;accent-color:#3b82f6;" />
+          <b style="color:#1e293b;">Realistic mode</b>
         </label>
-        <span id="realisticActiveCount" style="font-size:10px;color:#b45309;font-weight:600;"></span>
+        <span id="realisticActiveCount" style="font-size:10px;color:#64748b;font-weight:600;"></span>
       </div>
-      <div style="font-size:10px;color:#92400e;margin:3px 0 0 26px;line-height:1.35;">7 base factors + 17 advanced features for full-fidelity storm restoration modeling.</div>
+      <div style="font-size:10px;color:#64748b;margin:3px 0 0 26px;line-height:1.35;">7 base factors + 17 advanced features for full-fidelity storm restoration modeling.</div>
       <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
-        <button type="button" id="realisticExpandBtn" style="background:none;border:1px solid #d97706;color:#92400e;font-size:10px;padding:2px 10px;border-radius:4px;cursor:pointer;">Advanced features &#9662;</button>
-        <button type="button" id="rfSelectAll" style="background:none;border:none;color:#b45309;font-size:10px;cursor:pointer;padding:0;text-decoration:underline;">all</button>
-        <button type="button" id="rfSelectNone" style="background:none;border:none;color:#b45309;font-size:10px;cursor:pointer;padding:0;text-decoration:underline;">none</button>
+        <button type="button" id="realisticExpandBtn" style="background:#f1f5f9;border:1px solid #cbd5e1;color:#475569;font-size:10px;padding:2px 10px;border-radius:4px;cursor:pointer;">Advanced features &#9662;</button>
+        <button type="button" id="rfSelectAll" style="background:none;border:none;color:#3b82f6;font-size:10px;cursor:pointer;padding:0;text-decoration:underline;">all</button>
+        <button type="button" id="rfSelectNone" style="background:none;border:none;color:#3b82f6;font-size:10px;cursor:pointer;padding:0;text-decoration:underline;">none</button>
       </div>
       <div id="realisticSubToggles" class="rf-panel">
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="customerPriority" checked /><span class="rf-name">Customer-impact priority</span></label><div class="rf-desc">Crews favour outages restoring more customers instead of pure nearest-neighbour. Server-routed only.</div></div>
@@ -584,10 +585,10 @@ legend.onAdd=function(){
     <div class="ml-row"><span class="ml-line" style="border-color:#bfc4cb;border-width:1px"></span> Lateral</div>
     <div class="ml-row"><svg width="14" height="14" viewBox="0 0 14 14"><line x1="2" y1="2" x2="12" y2="12" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round"/><line x1="12" y1="2" x2="2" y2="12" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round"/></svg> Storm outage</div>
     <div class="ml-row"><svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" rx="2" fill="#475569" stroke="#1e293b" stroke-width="1"/></svg> Crew depot</div>
-    <div class="ml-row"><svg width="14" height="14" viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="2" fill="#e11d48" stroke="#881337" stroke-width="1"/><rect x="6.5" y="3.5" width="3" height="9" rx=".5" fill="#fff"/><rect x="3.5" y="6.5" width="9" height="3" rx=".5" fill="#fff"/></svg> Hospital</div>
-    <div class="ml-row"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 1C8 1 3 6 3 10a5 5 0 0010 0C13 6 8 1 8 1z" fill="#fb923c" stroke="#c2410c" stroke-width="1"/><path d="M8 7c0 0-2 2-2 4a2 2 0 004 0c0-2-2-4-2-4z" fill="#fef9c3"/></svg> Fire station</div>
-    <div class="ml-row"><svg width="14" height="14" viewBox="0 0 16 16"><rect x="1" y="3" width="14" height="10" rx="2" fill="#3b82f6" stroke="#1e3a8a" stroke-width="1"/><polygon points="8,4.5 9.2,7 12,7 9.8,8.8 10.6,11.5 8,9.8 5.4,11.5 6.2,8.8 4,7 6.8,7" fill="#fff"/></svg> EMS</div>
-    <div class="ml-row"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 2C8 2 3.5 7.5 3.5 10.5a4.5 4.5 0 009 0C12.5 7.5 8 2 8 2z" fill="#38bdf8" stroke="#0369a1" stroke-width="1"/></svg> Water plant</div>
+    <div class="ml-row"><svg width="14" height="14" viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="2" fill="#b91c1c" stroke="#7f1d1d" stroke-width="1"/><rect x="6.5" y="3.5" width="3" height="9" rx=".5" fill="#fef2f2"/><rect x="3.5" y="6.5" width="9" height="3" rx=".5" fill="#fef2f2"/></svg> Hospital</div>
+    <div class="ml-row"><svg width="14" height="14" viewBox="0 0 16 16"><polygon points="8,1 15,15 1,15" fill="#ea580c" stroke="#9a3412" stroke-width="1" stroke-linejoin="round"/></svg> Fire station</div>
+    <div class="ml-row"><svg width="14" height="14" viewBox="0 0 16 16"><polygon points="8,1 15,8 8,15 1,8" fill="#2563eb" stroke="#1e3a8a" stroke-width="1" stroke-linejoin="round"/></svg> EMS</div>
+    <div class="ml-row"><svg width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="#0284c7" stroke="#075985" stroke-width="1"/></svg> Water plant</div>
     <div class="ml-row"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="#fbbf24" stroke="#92400e" stroke-width="1.5"/></svg> Storm track point (wind speed)</div>
     <div class="ml-row ml-note">Colored dots on outages = crew assignment + repair order.</div>
   `;
@@ -3092,10 +3093,10 @@ function renderCriticalFacilities(){
   if (!show || !facs.length) return;
   critFacilityLayer = L.layerGroup();
   const critSVG = {
-    hospital: `<svg width="16" height="16" viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="2" fill="#e11d48" stroke="#881337" stroke-width="1"/><rect x="6.5" y="3.5" width="3" height="9" rx=".5" fill="#fff"/><rect x="3.5" y="6.5" width="9" height="3" rx=".5" fill="#fff"/></svg>`,
-    fire: `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 1C8 1 3 6 3 10a5 5 0 0010 0C13 6 8 1 8 1z" fill="#fb923c" stroke="#c2410c" stroke-width="1"/><path d="M8 7c0 0-2 2-2 4a2 2 0 004 0c0-2-2-4-2-4z" fill="#fef9c3"/></svg>`,
-    ems: `<svg width="16" height="16" viewBox="0 0 16 16"><rect x="1" y="3" width="14" height="10" rx="2" fill="#3b82f6" stroke="#1e3a8a" stroke-width="1"/><polygon points="8,4.5 9.2,7 12,7 9.8,8.8 10.6,11.5 8,9.8 5.4,11.5 6.2,8.8 4,7 6.8,7" fill="#fff"/></svg>`,
-    water: `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 2C8 2 3.5 7.5 3.5 10.5a4.5 4.5 0 009 0C12.5 7.5 8 2 8 2z" fill="#38bdf8" stroke="#0369a1" stroke-width="1"/></svg>`,
+    hospital: `<svg width="16" height="16" viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="2" fill="#b91c1c" stroke="#7f1d1d" stroke-width="1"/><rect x="6.5" y="3.5" width="3" height="9" rx=".5" fill="#fef2f2"/><rect x="3.5" y="6.5" width="9" height="3" rx=".5" fill="#fef2f2"/></svg>`,
+    fire: `<svg width="16" height="16" viewBox="0 0 16 16"><polygon points="8,1 15,15 1,15" fill="#ea580c" stroke="#9a3412" stroke-width="1" stroke-linejoin="round"/></svg>`,
+    ems: `<svg width="16" height="16" viewBox="0 0 16 16"><polygon points="8,1 15,8 8,15 1,8" fill="#2563eb" stroke="#1e3a8a" stroke-width="1" stroke-linejoin="round"/></svg>`,
+    water: `<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="#0284c7" stroke="#075985" stroke-width="1"/></svg>`,
   };
   for (const f of facs){
     const svg = critSVG[f.type] || critSVG.hospital;
