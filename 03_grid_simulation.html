@@ -3482,6 +3482,79 @@ function _generateSimulationReport(){
   r += `Avg Restoration Rate: ${(totalCust/totalTime).toFixed(0)} customers/hour\n`;
   r += `Crews per 100 Jobs:   ${totalJobs > 0 ? (M*100/totalJobs).toFixed(1) : '—'}\n`;
   r += `Job Completion Rate:  ${totalJobs > 0 ? (totalJobs/N*100).toFixed(1) : '—'}%\n\n`;
+
+  // CREW PERFORMANCE
+  r += 'CREW PERFORMANCE\n';
+  r += '-'.repeat(80) + '\n';
+  const crewsWithJobs = plan.crews.filter(c => c.jobs?.length > 0).length;
+  const avgJobsPerCrew = totalJobs > 0 ? (totalJobs / crewsWithJobs).toFixed(1) : 0;
+  const totalCrewHours = plan.crews.reduce((s,c) => {
+    if (!c.jobs?.length) return s;
+    const lastJob = c.jobs[c.jobs.length - 1];
+    return s + (lastJob.etaFinish - (c.arrival || 0));
+  }, 0);
+  r += `Active Crews:         ${crewsWithJobs} of ${M}\n`;
+  r += `Avg Jobs per Crew:    ${avgJobsPerCrew}\n`;
+  r += `Total Crew-Hours:     ${Math.round(totalCrewHours)}\n`;
+  r += `Avg Hours per Job:    ${totalJobs > 0 ? (totalCrewHours / totalJobs).toFixed(1) : '—'}\n\n`;
+
+  // TOP SUBSTATIONS
+  r += 'TOP AFFECTED SUBSTATIONS\n';
+  r += '-'.repeat(80) + '\n';
+  const subOutages = {};
+  storm.outages?.forEach(o => {
+    const subId = o.sub_id || 0;
+    if (!subOutages[subId]) subOutages[subId] = 0;
+    subOutages[subId]++;
+  });
+  const topSubs = Object.entries(subOutages)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+  topSubs.forEach(([subId, count], i) => {
+    const sub = substations?.[parseInt(subId)];
+    const name = sub?.name || `Substation ${parseInt(subId)+1}`;
+    r += `  ${i+1}. ${name.padEnd(35)} ${count} outages\n`;
+  });
+  r += '\n';
+
+  // COST ESTIMATE
+  r += 'COST ESTIMATE\n';
+  r += '-'.repeat(80) + '\n';
+  const BASE_RATE = 50;
+  const OT_MULT = 2.0;
+  const PER_DIEM = 150;
+  const totalCrewDays = totalCrewHours / 16;
+  const laborCost = totalCrewHours * BASE_RATE * 1.5;
+  const perDiemCost = totalCrewDays * PER_DIEM * M;
+  const totalCost = laborCost + perDiemCost;
+  r += `Labor Cost (avg $${BASE_RATE}/hr × 1.5× OT): $${Math.round(laborCost).toLocaleString()}\n`;
+  r += `Per Diem (${Math.round(totalCrewDays)} crew-days × $${PER_DIEM}):  $${Math.round(perDiemCost).toLocaleString()}\n`;
+  r += `Estimated Total:                      $${Math.round(totalCost).toLocaleString()}\n\n`;
+
+  // TIMELINE MILESTONES
+  r += 'RESTORATION TIMELINE MILESTONES\n';
+  r += '-'.repeat(80) + '\n';
+  const milestones = [25, 50, 75, 90];
+  milestones.forEach(pct => {
+    const targetCust = totalCust * (pct / 100);
+    let cumCust = 0;
+    let timeToReach = totalTime;
+    for (const c of plan.crews) {
+      for (const j of c.jobs || []) {
+        cumCust += (storm.outages?.[j.outageIdx]?.popLoss || 0);
+        if (cumCust >= targetCust) {
+          timeToReach = j.etaFinish;
+          break;
+        }
+      }
+      if (cumCust >= targetCust) break;
+    }
+    const days = Math.floor(timeToReach / 24);
+    const hours = Math.round(timeToReach % 24);
+    r += `  ${pct}% restored:  ${days}d ${hours}h\n`;
+  });
+  r += '\n';
+
   r += '═'.repeat(80) + '\n';
   r += 'END OF REPORT\n';
   r += '═'.repeat(80) + '\n';
