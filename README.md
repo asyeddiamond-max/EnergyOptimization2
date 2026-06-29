@@ -15,9 +15,6 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
 - [`/health`](https://hartford-grid-server.onrender.com/health) — server health check
 - [`/version`](https://hartford-grid-server.onrender.com/version) — running commit + backend mode
 
-For a lighter standalone preview (single SVG, no Leaflet basemap):
-[**Open the inline preview →**](https://asyeddiamond-max.github.io/EnergyOptimization2/03_grid_inline_preview.html)
-
 ---
 
 ## What's in the simulator
@@ -103,8 +100,7 @@ For a lighter standalone preview (single SVG, no Leaflet basemap):
 .
 ├── 01_fetch_county_boundary.py    # cache Hartford polygon from OSM
 ├── 02_fetch_town_boundaries.py    # cache the 29 town polygons from OSM
-├── 03_grid_simulation.html        # the main interactive (~3k LOC, runs in any browser)
-├── 03_grid_inline_preview.html    # lighter standalone SVG preview
+├── 03_grid_simulation.html        # the main interactive (~4k LOC, runs in any browser)
 ├── 04_geojson_to_shapefile.py     # offline GeoJSON → shapefile converter (optional)
 ├── 05_generate_artifacts.py       # offline matplotlib PNG generator (used by scenario precomputer)
 ├── 06_precompute_scenarios.py     # batches scenario library JSON for the Alternative #2 dropdown
