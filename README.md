@@ -1,6 +1,6 @@
 # Hartford County Power-Grid Resilience Simulation
 
-A browser-first, server-augmented, Connecticut-scale interactive simulator for distribution-grid storm restoration. Models 100 000+ outages and 5 000+ crews per scenario in under a second, with seven realism factors, a calibration framework for future tuning against real Eversource data, customer-impact-weighted dispatch, and Monte Carlo ensemble analysis.
+A browser-first, server-augmented interactive simulator for distribution-grid storm restoration in Hartford County, Connecticut. Models up to 25,000 outages and 5,000 crews per scenario in under a second, with seven realism factors, a calibration framework for future tuning against real Eversource data, customer-impact-weighted dispatch, and Monte Carlo ensemble analysis.
 
 Designed as a research instrument for the **restoration side** of the distribution-grid resilience problem — a downstream complement to the UConn Eversource Energy Center group's outage-prediction work.
 
