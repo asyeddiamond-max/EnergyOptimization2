@@ -3439,39 +3439,53 @@ function generateSimulationReport(){
   }
 }
 function _generateSimulationReport(){
-  if (!substations || !substations.length) throw new Error('No grid generated');
-  if (!storm || !storm.outages || !storm.outages.length) throw new Error('No storm simulated');
-  if (!plan || !plan.crews || !plan.crews.length) throw new Error('No restoration plan computed');
+  if (!substations?.length) throw new Error('No grid generated');
+  if (!storm?.outages?.length) throw new Error('No storm simulated');
+  if (!plan?.crews?.length) throw new Error('No restoration plan computed');
 
   const seed = +seedI.value|0;
   const now = new Date().toISOString();
-  const realistic = document.getElementById('realisticMode').checked;
-  function fmtH(h){
-    if (h < 1) return (h*60).toFixed(0) + ' minutes';
-    if (h < 24) return h.toFixed(1) + ' hours';
-    return Math.floor(h/24) + ' days ' + Math.round(h%24) + ' hours';
-  }
-  function pct(n,d){ return d>0 ? (100*n/d).toFixed(1)+'%' : '0%'; }
-  function bar(frac, w=30){ const f=Math.round(frac*w); return '█'.repeat(f)+'░'.repeat(w-f)+' '+pct(frac*100,100); }
+  const N = storm.outages.length;
+  const M = plan.crews.length;
+  const totalTime = plan.totalTime;
+  const totalCust = storm.totalCust;
 
-  let r = '';
-  r += '╔═══════════════════════════════════════════════════════════════════════════════════╗\n';
-  r += '║           HARTFORD COUNTY STORM & RESTORATION SIMULATION — FULL REPORT          ║\n';
-  r += '║                          Comprehensive Analysis Document                         ║\n';
-  r += '╚═══════════════════════════════════════════════════════════════════════════════════╝\n\n';
-  r += `Report Generated:   ${now}\n`;
-  r += `Simulation Engine:  Hartford Grid Simulator v3.0 (browser + Numba server)\n`;
-  r += `Random Seed:        ${seed}\n`;
-  r += `Mode:               ${realistic ? 'REALISTIC (multi-factor model)' : 'Optimistic baseline (no realism factors)'}\n`;
-  r += `County:             Hartford County, Connecticut\n`;
-  r += `State FIPS:         09-003\n`;
-  r += `County Area:        751 sq mi (1,945 km²)\n`;
-  r += `Population (2020):  ${TOTAL_POP.toLocaleString()}\n`;
-  r += `Households (est):   ~${Math.round(TOTAL_POP/2.5).toLocaleString()} (avg 2.5 persons/household)\n\n`;
+  let r = 'HARTFORD COUNTY STORM & RESTORATION SIMULATION REPORT\n';
+  r += '='.repeat(80) + '\n\n';
+  r += `Generated:  ${now}\n`;
+  r += `Seed:       ${seed}\n`;
+  r += `Mode:       ${document.getElementById('realisticMode')?.checked ? 'REALISTIC' : 'OPTIMISTIC'}\n\n`;
 
-  // TABLE OF CONTENTS
-  r += '─── TABLE OF CONTENTS ──────────────────────────────────────────────────────────────\n\n';
-  r += '  1.  Distribution Grid Configuration & Topology\n';
+  r += 'DISTRIBUTION GRID\n';
+  r += '-'.repeat(80) + '\n';
+  r += `Substations:        ${substations.length}\n`;
+  r += `Feeders:            ${feeders.length}\n`;
+  r += `Laterals:           ${laterals.length}\n`;
+  r += `County Population:  ${TOTAL_POP.toLocaleString()}\n\n`;
+
+  r += 'STORM IMPACT\n';
+  r += '-'.repeat(80) + '\n';
+  r += `Outage Locations:   ${N.toLocaleString()}\n`;
+  r += `Customers Affected: ${Math.round(totalCust).toLocaleString()} (${(100*totalCust/TOTAL_POP).toFixed(1)}% of county)\n`;
+  r += `Avg per Outage:     ${(totalCust/N).toFixed(0)} customers\n\n`;
+
+  r += 'RESTORATION PLAN\n';
+  r += '-'.repeat(80) + '\n';
+  r += `Crews Deployed:     ${M.toLocaleString()}\n`;
+  r += `Total Jobs:         ${plan.crews.reduce((s,c)=>s+c.jobs.length,0).toLocaleString()}\n`;
+  r += `Restoration Time:   ${Math.floor(totalTime/24)} days ${Math.round(totalTime%24)} hours (${totalTime.toFixed(1)} hours)\n`;
+  r += `Est. Completion:    ${new Date(Date.now() + totalTime*3600000).toISOString()}\n\n`;
+
+  r += 'KEY METRICS\n';
+  r += '-'.repeat(80) + '\n';
+  r += `Avg Restoration Rate: ${(totalCust/totalTime).toFixed(0)} customers/hour\n`;
+  r += `Crews per 100 Jobs:   ${(M*100/plan.crews.reduce((s,c)=>s+c.jobs.length,0)).toFixed(1)}\n`;
+  r += `Job Completion Rate:  ${(plan.crews.reduce((s,c)=>s+c.jobs.length,0)/N*100).toFixed(1)}%\n\n`;
+
+  r += '═'.repeat(80) + '\n';
+  r += 'END OF REPORT\n';
+  r += '═'.repeat(80) + '\n';
+  // Old report sections removed - using minimal report
   r += '  2.  Substation-Level Detail (HIFLD)\n';
   r += '      2.1 Full substation table  |  2.2 Vulnerability ranking  |  2.3 Population ranking\n';
   r += '  3.  Critical Infrastructure Inventory\n';
@@ -4975,7 +4989,6 @@ function _generateSimulationReport(){
   r += '╚═══════════════════════════════════════════════════════════════════════════════════╝\n';
 
   downloadBlob(new Blob([r], {type:'text/plain'}), `hartford_simulation_report_seed${seed}_${new Date().toISOString().replace(/[:.]/g,'-')}.txt`);
-  status.textContent = 'Simulation report downloaded.';
 }
 document.getElementById('exportReport').onclick = generateSimulationReport;
 
