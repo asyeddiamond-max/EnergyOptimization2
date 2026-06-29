@@ -1016,6 +1016,8 @@ updateEstimate();
   const panel = document.getElementById('realisticSubToggles');
   const countEl = document.getElementById('realisticActiveCount');
   const expandBtn = document.getElementById('realisticExpandBtn');
+  const boxes = panel.querySelectorAll('input[type=checkbox]');
+  boxes.forEach(b => { b.checked = true; });
   expandBtn.addEventListener('click', () => {
     const open = panel.classList.toggle('rf-open');
     expandBtn.innerHTML = open ? 'Advanced features &#9652;' : 'Advanced features &#9662;';
@@ -1027,7 +1029,6 @@ updateEstimate();
       name.closest('.rf-item').classList.toggle('rf-expanded');
     });
   });
-  const boxes = panel.querySelectorAll('input[type=checkbox]');
   function updateCount(){
     const on = [...boxes].filter(b=>b.checked).length;
     countEl.textContent = on + '/' + boxes.length;
