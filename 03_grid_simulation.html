@@ -3302,6 +3302,9 @@ renderDoePanel();
 function generateSimulationReport(){
   if (!substations.length){ status.textContent="Generate the grid first."; return; }
   if (!storm || !storm.outages){ status.textContent="Simulate a storm first (click 'Simulate storm')."; return; }
+  try { return _generateSimulationReport(); } catch(e){ status.textContent="Report error: "+e.message; console.error("Report generation failed:",e); }
+}
+function _generateSimulationReport(){
   const seed = +seedI.value|0;
   const now = new Date().toISOString();
   const realistic = document.getElementById('realisticMode').checked;
