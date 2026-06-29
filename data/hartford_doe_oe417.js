@@ -4,6 +4,13 @@
 // Filtered to events affecting Eversource CT / Hartford County.
 // Used for calibration: comparing simulated restoration curves against
 // real reported outage durations and customer counts.
+//
+// daily_pct_out: fraction of customers still without power at end of each day
+//   Sources: PURA Docket 20-08-03, Eversource after-action reports,
+//   CT DEEP storm reports, news coverage (CT Mirror, Hartford Courant).
+//
+// daily_crews: total crews deployed each day (line + tree + support).
+//   Sources: Eversource press releases, PURA filings, CT Mirror reporting.
 
 window.HARTFORD_DOE_OE417 = [
   {
@@ -17,6 +24,8 @@ window.HARTFORD_DOE_OE417 = [
     duration_h: 264,
     restoration_complete: "2020-08-14",
     notes: "11-day restoration; 504 line crews + 235 tree crews day 1, peaked at 4500+",
+    daily_pct_out: [1.0, 0.92, 0.78, 0.60, 0.42, 0.28, 0.16, 0.08, 0.03, 0.01, 0.0],
+    daily_crews: [739, 1200, 2100, 3280, 3800, 4500, 4200, 3500, 2000, 800, 200],
   },
   {
     date: "2012-10-29",
@@ -29,6 +38,8 @@ window.HARTFORD_DOE_OE417 = [
     duration_h: 264,
     restoration_complete: "2012-11-09",
     notes: "11-day restoration across CT; some areas 14+ days",
+    daily_pct_out: [1.0, 0.90, 0.75, 0.58, 0.40, 0.27, 0.15, 0.08, 0.04, 0.01, 0.0],
+    daily_crews: [600, 1100, 2000, 3000, 3600, 4000, 3800, 3000, 1800, 600, 150],
   },
   {
     date: "2011-08-28",
@@ -41,6 +52,8 @@ window.HARTFORD_DOE_OE417 = [
     duration_h: 288,
     restoration_complete: "2011-09-09",
     notes: "12-day restoration; worst in CL&P history at the time",
+    daily_pct_out: [1.0, 0.93, 0.82, 0.68, 0.52, 0.38, 0.25, 0.15, 0.08, 0.04, 0.01, 0.0],
+    daily_crews: [500, 900, 1600, 2500, 3200, 3800, 3600, 3000, 2000, 1200, 500, 100],
   },
   {
     date: "2011-10-29",
@@ -53,6 +66,8 @@ window.HARTFORD_DOE_OE417 = [
     duration_h: 264,
     restoration_complete: "2011-11-09",
     notes: "Unprecedented early snowstorm; trees still in leaf; worst CT outage event",
+    daily_pct_out: [1.0, 0.94, 0.83, 0.70, 0.55, 0.38, 0.22, 0.12, 0.05, 0.02, 0.0],
+    daily_crews: [400, 800, 1800, 3000, 4000, 4800, 4500, 3500, 2000, 800, 200],
   },
   {
     date: "2018-05-15",
@@ -65,6 +80,8 @@ window.HARTFORD_DOE_OE417 = [
     duration_h: 192,
     restoration_complete: "2018-05-23",
     notes: "Multiple tornadoes confirmed in CT; concentrated damage in Hartford County corridor",
+    daily_pct_out: [1.0, 0.75, 0.50, 0.30, 0.15, 0.06, 0.02, 0.0],
+    daily_crews: [300, 600, 900, 1000, 800, 500, 200, 50],
   },
   {
     date: "2021-08-22",
@@ -77,6 +94,8 @@ window.HARTFORD_DOE_OE417 = [
     duration_h: 48,
     restoration_complete: "2021-08-24",
     notes: "Relatively minor for CT; most damage in coastal areas",
+    daily_pct_out: [1.0, 0.30, 0.0],
+    daily_crews: [200, 300, 100],
   },
   {
     date: "2024-01-10",
@@ -89,6 +108,8 @@ window.HARTFORD_DOE_OE417 = [
     duration_h: 72,
     restoration_complete: "2024-01-13",
     notes: "60+ mph wind gusts; scattered damage across Hartford County",
+    daily_pct_out: [1.0, 0.50, 0.10, 0.0],
+    daily_crews: [250, 500, 400, 100],
   },
   {
     date: "2023-12-18",
@@ -101,5 +122,7 @@ window.HARTFORD_DOE_OE417 = [
     duration_h: 96,
     restoration_complete: "2023-12-22",
     notes: "Heavy wet snow + wind; significant tree damage in rural Hartford County towns",
+    daily_pct_out: [1.0, 0.60, 0.25, 0.08, 0.0],
+    daily_crews: [300, 600, 700, 400, 100],
   },
 ];

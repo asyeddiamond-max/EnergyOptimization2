@@ -2214,20 +2214,28 @@ function renderRestorationCurve(crews, totalTime, fmtDuration){
   }
   d += ` L ${W} ${H} L 0 ${H} Z`;
 
-  // Overlay real DOE restoration curve if available
+  // Overlay real DOE restoration curve if available (uses daily_pct_out when present)
   let doeOverlay = '';
+  let doeLegend = '';
   const doeEvents = window.HARTFORD_DOE_OE417 || [];
+  let matchedEvent = null;
   if (doeEvents.length && tMax > 0){
     const bestMatch = doeEvents.reduce((best, e) => {
       const diff = Math.abs(e.customers_affected - totalCust);
       return diff < best.diff ? {e, diff} : best;
     }, {e:null, diff:Infinity});
     if (bestMatch.e && bestMatch.diff < totalCust * 2){
-      const re = bestMatch.e;
+      matchedEvent = bestMatch.e;
+      const re = matchedEvent;
       const rH = re.duration_h;
-      const rPts = [[0,1],[rH*0.08,0.92],[rH*0.15,0.80],[rH*0.25,0.60],
-                     [rH*0.40,0.40],[rH*0.55,0.25],[rH*0.70,0.12],
-                     [rH*0.85,0.05],[rH,0]];
+      let rPts;
+      if (re.daily_pct_out && re.daily_pct_out.length){
+        rPts = re.daily_pct_out.map((frac, i) => [i * 24, frac]);
+      } else {
+        rPts = [[0,1],[rH*0.08,0.92],[rH*0.15,0.80],[rH*0.25,0.60],
+                       [rH*0.40,0.40],[rH*0.55,0.25],[rH*0.70,0.12],
+                       [rH*0.85,0.05],[rH,0]];
+      }
       let rd = '';
       for (const [rt, frac] of rPts){
         const rx = (rt / tMax) * W;
@@ -2235,7 +2243,17 @@ function renderRestorationCurve(crews, totalTime, fmtDuration){
         if (rx > W) break;
         rd += rd ? ` L ${rx.toFixed(1)} ${ry.toFixed(1)}` : `M ${rx.toFixed(1)} ${ry.toFixed(1)}`;
       }
-      doeOverlay = `<path d="${rd}" fill="none" stroke="#dc2626" stroke-width="1.2" stroke-dasharray="4,3"/>`;
+      doeOverlay = `<path d="${rd}" fill="none" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5,3"/>`;
+      for (const [rt, frac] of rPts){
+        const rx = (rt / tMax) * W;
+        const ry = 4 + (1 - frac) * (H - 8);
+        if (rx > W) break;
+        doeOverlay += `<circle cx="${rx.toFixed(1)}" cy="${ry.toFixed(1)}" r="2" fill="#2563eb"/>`;
+      }
+      doeLegend = `<div style="font-size:9px;color:#64748b;margin-top:3px;display:flex;gap:10px;align-items:center;">` +
+        `<span><span style="display:inline-block;width:16px;height:2px;background:#dc2626;vertical-align:middle;margin-right:3px;"></span>Simulated</span>` +
+        `<span><span style="display:inline-block;width:16px;height:0;border-top:2px dashed #2563eb;vertical-align:middle;margin-right:3px;"></span>Real: ${re.event} (${re.customers_affected.toLocaleString()} cust)</span>` +
+        `</div>`;
     }
   }
 
@@ -2249,6 +2267,80 @@ function renderRestorationCurve(crews, totalTime, fmtDuration){
     `<span>0h</span>` +
     `<span style="color:#dc2626">${totalCust.toLocaleString(undefined,{maximumFractionDigits:0})} without power</span>` +
     `<span>${fmtDuration(tMax)}</span>`;
+
+  // Remove old legend/crew chart if present
+  const oldLegend = box.querySelector('.doe-legend');
+  if (oldLegend) oldLegend.remove();
+  const oldCrewChart = box.querySelector('.crew-ramp-chart');
+  if (oldCrewChart) oldCrewChart.remove();
+
+  if (doeLegend){
+    const legendDiv = document.createElement('div');
+    legendDiv.className = 'doe-legend';
+    legendDiv.innerHTML = doeLegend;
+    box.appendChild(legendDiv);
+  }
+
+  // Crew mobilization chart: simulated ramp vs real daily_crews
+  if (plan && plan.crews && plan.crews.length){
+    const crewDiv = document.createElement('div');
+    crewDiv.className = 'crew-ramp-chart';
+    const maxDay = Math.ceil(tMax / 24);
+    const simCrewsByDay = new Array(maxDay + 1).fill(0);
+    for (const c of plan.crews){
+      const arrDay = Math.max(0, Math.floor((c.arrival || 0) / 24));
+      if (arrDay <= maxDay) simCrewsByDay[arrDay]++;
+    }
+    const simCum = [];
+    let cumC = 0;
+    for (let d = 0; d <= maxDay; d++){ cumC += simCrewsByDay[d]; simCum.push(cumC); }
+    const peakSim = Math.max(...simCum);
+    let peakReal = 0;
+    let realCrews = null;
+    if (matchedEvent && matchedEvent.daily_crews){
+      realCrews = matchedEvent.daily_crews;
+      peakReal = Math.max(...realCrews);
+    }
+    const peak = Math.max(peakSim, peakReal, 1);
+    const CW = 280, CH = 60;
+    let simPath = '';
+    for (let d = 0; d <= maxDay; d++){
+      const x = (d / Math.max(maxDay, 1)) * CW;
+      const y = CH - 4 - (simCum[d] / peak) * (CH - 8);
+      simPath += simPath ? ` L ${x.toFixed(1)} ${y.toFixed(1)}` : `M ${x.toFixed(1)} ${y.toFixed(1)}`;
+    }
+    let realPath = '';
+    let realDots = '';
+    if (realCrews){
+      for (let d = 0; d < realCrews.length && d <= maxDay; d++){
+        const x = (d / Math.max(maxDay, 1)) * CW;
+        const y = CH - 4 - (realCrews[d] / peak) * (CH - 8);
+        realPath += realPath ? ` L ${x.toFixed(1)} ${y.toFixed(1)}` : `M ${x.toFixed(1)} ${y.toFixed(1)}`;
+        realDots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2" fill="#2563eb"/>`;
+      }
+    }
+    let dayLabels = '';
+    for (let d = 0; d <= maxDay && d <= 14; d += Math.max(1, Math.floor(maxDay / 5))){
+      const x = (d / Math.max(maxDay, 1)) * CW;
+      dayLabels += `<text x="${x.toFixed(1)}" y="${CH}" font-size="7" fill="#94a3b8" text-anchor="middle">D${d}</text>`;
+    }
+    crewDiv.innerHTML = `
+      <div style="font-size:10px;color:#059669;margin-top:8px;margin-bottom:2px;font-weight:600;">Crew mobilization</div>
+      <svg viewBox="0 0 ${CW} ${CH}" preserveAspectRatio="none"
+           style="width:100%;height:60px;background:#fff;border:1px solid #e2e8f0;border-radius:3px;display:block;">
+        <path d="${simPath}" fill="none" stroke="#059669" stroke-width="1.5"/>
+        ${realPath ? `<path d="${realPath}" fill="none" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5,3"/>${realDots}` : ''}
+        <line x1="0" y1="${CH-4}" x2="${CW}" y2="${CH-4}" stroke="#cbd5e1" stroke-width="0.5"/>
+        ${dayLabels}
+      </svg>
+      <div style="font-size:9px;color:#64748b;margin-top:2px;display:flex;justify-content:space-between;">
+        <span>${peakSim} sim crews</span>
+        ${realCrews ? `<span style="color:#2563eb">${peakReal} real crews (${matchedEvent.event})</span>` : ''}
+      </div>
+    `;
+    box.appendChild(crewDiv);
+  }
+
   box.style.display = 'block';
 }
 
