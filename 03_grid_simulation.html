@@ -3425,9 +3425,18 @@ renderDoePanel();
 
 // --- Simulation Report Download ---
 function generateSimulationReport(){
-  if (!substations.length){ status.textContent="Generate the grid first."; return; }
-  if (!storm || !storm.outages){ status.textContent="Simulate a storm first (click 'Simulate storm')."; return; }
-  try { return _generateSimulationReport(); } catch(e){ status.textContent="Report error: "+e.message; console.error("Report generation failed:",e); }
+  try {
+    console.log('generateSimulationReport called. substations:', substations?.length, 'storm:', !!storm, 'plan:', !!plan);
+    if (!substations.length){ status.textContent="Generate the grid first."; console.warn('No substations'); return; }
+    if (!storm || !storm.outages){ status.textContent="Simulate a storm first (click 'Simulate storm')."; console.warn('No storm or plan'); return; }
+    if (!plan){ status.textContent="Plan restoration first (click 'Plan restoration')."; console.warn('No plan'); return; }
+    status.textContent="Generating report...";
+    _generateSimulationReport();
+    status.textContent="Simulation report downloaded.";
+  } catch(e) {
+    console.error("Report error:", e.message, e.stack);
+    status.textContent="Report error: "+e.message;
+  }
 }
 function _generateSimulationReport(){
   const seed = +seedI.value|0;
