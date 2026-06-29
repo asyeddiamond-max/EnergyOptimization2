@@ -1288,12 +1288,20 @@ let territoryLayer = null;
 function renderTerritories(){
   if (territoryLayer){ map.removeLayer(territoryLayer); territoryLayer = null; }
   if (!substations.length || !_bitmapReady) return;
-  territoryLayer = L.layerGroup();
-  const step = 0.006;
-  const polys = substations.map(() => []);
-  for (let lat = _gLatMin; lat <= _gLatMax; lat += step){
-    for (let lon = _gLonMin; lon <= _gLonMax; lon += step){
-      if (!insideFast(lon, lat)) continue;
+  const step = 0.008;
+  const rows = Math.ceil((_gLatMax - _gLatMin) / step);
+  const cols = Math.ceil((_gLonMax - _gLonMin) / step);
+  const can = document.createElement('canvas');
+  can.width = cols; can.height = rows;
+  const ctx = can.getContext('2d');
+  const hex2rgb = h => { const n = parseInt(h.slice(1),16); return [(n>>16)&255,(n>>8)&255,n&255]; };
+  const img = ctx.createImageData(cols, rows);
+  for (let r = 0; r < rows; r++){
+    const lat = _gLatMax - r * step;
+    for (let c = 0; c < cols; c++){
+      const lon = _gLonMin + c * step;
+      const idx = (r * cols + c) * 4;
+      if (!insideFast(lon, lat)){ img.data[idx+3] = 0; continue; }
       let best = 0, bestD = Infinity;
       for (let i = 0; i < substations.length; i++){
         const dx = (substations[i].lat - lat) * 69;
@@ -1301,17 +1309,14 @@ function renderTerritories(){
         const d = dx*dx + dy*dy;
         if (d < bestD){ bestD = d; best = i; }
       }
-      polys[best].push([lat, lon]);
+      const rgb = hex2rgb(substations[best].color || '#888888');
+      img.data[idx] = rgb[0]; img.data[idx+1] = rgb[1]; img.data[idx+2] = rgb[2];
+      img.data[idx+3] = 25;
     }
   }
-  for (let i = 0; i < substations.length; i++){
-    if (!polys[i].length) continue;
-    polys[i].forEach(p => {
-      L.rectangle([[p[0]-step/2, p[1]-step/2],[p[0]+step/2, p[1]+step/2]],
-        {fillColor: substations[i].color, fillOpacity: 0.08, stroke: false, interactive: false, renderer: gridCanvas}
-      ).addTo(territoryLayer);
-    });
-  }
+  ctx.putImageData(img, 0, 0);
+  const bounds = [[_gLatMax, _gLonMin],[_gLatMin, _gLonMax]];
+  territoryLayer = L.imageOverlay(can.toDataURL(), bounds, {opacity: 1, interactive: false});
   territoryLayer.addTo(map);
   territoryLayer.bringToBack();
 }
