@@ -1318,7 +1318,7 @@ function renderTerritories(){
 
 function renderGrid(){
   lateralLayer.clearLayers(); feederLayer.clearLayers(); subLayer.clearLayers();
-  renderTerritories();
+  try { renderTerritories(); } catch(e){ console.error('Territory render failed:', e); }
   laterals.forEach(l=>L.polyline(l.pts,{renderer:gridCanvas,color:"#bfc4cb",weight:0.6,opacity:0.75,interactive:false}).addTo(lateralLayer));
   feeders.forEach(f=>L.polyline(f.pts,{renderer:gridCanvas,color:f.color,weight:1.3,opacity:0.95,interactive:false}).addTo(feederLayer));
   substations.forEach((s,i)=>{
