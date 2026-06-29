@@ -39,7 +39,11 @@ For a lighter standalone preview (single SVG, no Leaflet basemap):
 | Multi-server batch sweeps | `/api/batch` fans scenarios out across worker URLs |
 | Customers-restored-over-time curve | inline SVG overlay after each Plan restoration |
 | Pre-computed scenario library | 12 canned storms in `scenarios/`, loadable without compute |
-| Simulation report download | detailed text report with per-town breakdowns, restoration timelines, crew dispatch log, and DOE benchmarks |
+| Simulation report download | comprehensive text report with grid stats, storm impact, crew performance, top substations, cost estimates, restoration timeline milestones, and academic references (Wanik, Journal of Homeland Security, IBEW) |
+| Real restoration curve overlay | DOE OE-417 events (Sandy, Isaias, Irene, etc.) overlaid on simulated restoration curve for direct comparison |
+| Crew mobilization chart | Time-series chart showing simulated crew arrivals vs. real daily crew counts from Isaias 2020 |
+| Behavioral overtime analysis | Triple-time pay effect: models reduced urgency on non-critical repairs (15–30% productivity loss by day 5) |
+| Academic references | Full citations: Wanik et al. (2015) storm outage modeling, Journal of Homeland Security infrastructure resilience, IBEW/Circadian crew fatigue research |
 | Flood-zone road closures | FEMA NFHL river corridors add +35% road impedance for outages near flood zones |
 | Equipment/material shortage | progressive repair delay after 60% completion in major events (Eversource Isaias model) |
 | Customer callback lag | 2–8h discovery delay for ~15% of rural lateral outages not covered by SCADA |
