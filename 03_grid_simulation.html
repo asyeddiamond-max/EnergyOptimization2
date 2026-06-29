@@ -3472,27 +3472,20 @@ function _generateSimulationReport(){
   r += 'RESTORATION PLAN\n';
   r += '-'.repeat(80) + '\n';
   r += `Crews Deployed:     ${M.toLocaleString()}\n`;
-  r += `Total Jobs:         ${plan.crews.reduce((s,c)=>s+c.jobs.length,0).toLocaleString()}\n`;
+  const totalJobs = plan.crews.reduce((s,c)=>s+(c.jobs?.length||0),0);
+  r += `Total Jobs:         ${totalJobs.toLocaleString()}\n`;
   r += `Restoration Time:   ${Math.floor(totalTime/24)} days ${Math.round(totalTime%24)} hours (${totalTime.toFixed(1)} hours)\n`;
   r += `Est. Completion:    ${new Date(Date.now() + totalTime*3600000).toISOString()}\n\n`;
 
   r += 'KEY METRICS\n';
   r += '-'.repeat(80) + '\n';
   r += `Avg Restoration Rate: ${(totalCust/totalTime).toFixed(0)} customers/hour\n`;
-  r += `Crews per 100 Jobs:   ${(M*100/plan.crews.reduce((s,c)=>s+c.jobs.length,0)).toFixed(1)}\n`;
-  r += `Job Completion Rate:  ${(plan.crews.reduce((s,c)=>s+c.jobs.length,0)/N*100).toFixed(1)}%\n\n`;
+  r += `Crews per 100 Jobs:   ${totalJobs > 0 ? (M*100/totalJobs).toFixed(1) : '—'}\n`;
+  r += `Job Completion Rate:  ${totalJobs > 0 ? (totalJobs/N*100).toFixed(1) : '—'}%\n\n`;
 
   r += '═'.repeat(80) + '\n';
   r += 'END OF REPORT\n';
   r += '═'.repeat(80) + '\n';
-  // Old report sections removed - using minimal report
-  r += '  2.  Substation-Level Detail (HIFLD)\n';
-  r += '      2.1 Full substation table  |  2.2 Vulnerability ranking  |  2.3 Population ranking\n';
-  r += '  3.  Critical Infrastructure Inventory\n';
-  r += '  4.  Network Topology Analysis\n';
-  r += '      4.1 Feeder statistics  |  4.2 Lateral statistics  |  4.3 Per-substation topology\n';
-  r += '  5.  Storm Damage Assessment\n';
-  r += '      5.1 Overall impact  |  5.2 Customer-loss distribution  |  5.3 Per-substation damage\n';
   r += '  6.  Spatial Damage Analysis\n';
   r += '      6.1 Quadrant breakdown  |  6.2 Geographic extent  |  6.3 Damage clustering\n';
   r += '      6.4 Wind-field exposure  |  6.5 Infrastructure mitigation impact\n';
