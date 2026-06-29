@@ -3439,6 +3439,10 @@ function generateSimulationReport(){
   }
 }
 function _generateSimulationReport(){
+  if (!substations || !substations.length) throw new Error('No grid generated');
+  if (!storm || !storm.outages || !storm.outages.length) throw new Error('No storm simulated');
+  if (!plan || !plan.crews || !plan.crews.length) throw new Error('No restoration plan computed');
+
   const seed = +seedI.value|0;
   const now = new Date().toISOString();
   const realistic = document.getElementById('realisticMode').checked;
