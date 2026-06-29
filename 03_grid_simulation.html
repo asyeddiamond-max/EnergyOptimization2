@@ -150,7 +150,7 @@
         </label>
         <span id="realisticActiveCount" style="font-size:10px;color:#64748b;font-weight:600;"></span>
       </div>
-      <div style="font-size:10px;color:#64748b;margin:3px 0 0 26px;line-height:1.35;">7 base factors + 17 advanced features for full-fidelity storm restoration modeling.</div>
+      <div style="font-size:10px;color:#64748b;margin:3px 0 0 26px;line-height:1.35;">7 base factors + 18 advanced features for full-fidelity storm restoration modeling.</div>
       <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
         <button type="button" id="realisticExpandBtn" style="background:#f1f5f9;border:1px solid #cbd5e1;color:#475569;font-size:10px;padding:2px 10px;border-radius:4px;cursor:pointer;">Advanced features &#9662;</button>
         <button type="button" id="rfSelectAll" style="background:none;border:none;color:#3b82f6;font-size:10px;cursor:pointer;padding:0;text-decoration:underline;">all</button>
@@ -1771,10 +1771,49 @@ async function planRestoration(){
     crewArrivals.sort((a,b)=>a-b);
   }
 
+  // --- Out-of-town crew inefficiency (Wanik ABM / PURA Docket 20-08-03) ---
+  // Mutual-aid crews from out of state are unfamiliar with local territory,
+  // work ~25% slower on average (wrong turns, unfamiliar switching procedures,
+  // communication overhead with local dispatch).
+  const outOfTownOn = realistic && mutualAidOn;
+  const nLocalCrews = Math.ceil(M * 0.5);
+
+  // --- Mobile response teams (improvement #4) ---
+  // 15% of crews designated as roving teams that can cross territory boundaries
+  // when a territory finishes early. These crews travel to the nearest overloaded
+  // territory instead of going idle.
+  const mobileTeamCount = realistic ? Math.max(1, Math.floor(M * 0.15)) : 0;
+
   const crews=depots.map((d,i)=>({
     depot:d, color:PALETTE[i%PALETTE.length], jobs:[],
     time:crewArrivals[i], curLat:d.lat, curLon:d.lon, arrival:crewArrivals[i],
+    isOutOfTown: outOfTownOn && i >= nLocalCrews,
+    isMobileTeam: i < mobileTeamCount,
+    territory: -1,
   }));
+
+  // --- Road closure & debris clearing (new feature) ---
+  // ~30% of outages are tree-blocked requiring road clearing before line work.
+  // A subset of outages get a "road_clear_delay" representing time for tree crews
+  // + police to close road, clear debris, reopen. Source: Wanik ABM repair time 1-8h,
+  // PURA testimony on Eversource detection/clearing gaps.
+  const roadClosureOn = realistic && document.getElementById('roadClosure') &&
+    document.getElementById('roadClosure').checked;
+  const roadClearDelay = new Float64Array(N);
+  if (roadClosureOn){
+    const rndRoad = mulberry32(seed * 7331 + 53);
+    for (let i = 0; i < N; i++){
+      if (storm.outages[i].tree_blocked){
+        // Road clearing: 0.5–4h depending on severity.
+        // Major blockages (downed trunk across road): 2-4h (need chainsaw crew + police detail)
+        // Minor blockages (limbs in road): 0.5-1.5h
+        const severity = rndRoad();
+        roadClearDelay[i] = severity < 0.6 ? 0.5 + rndRoad() * 1.0  // minor: 0.5-1.5h
+                          : severity < 0.9 ? 1.5 + rndRoad() * 1.5  // moderate: 1.5-3h
+                          :                  2.5 + rndRoad() * 1.5;  // major: 2.5-4h
+      }
+    }
+  }
 
   const done=new Uint8Array(N);
   // Pre-mark switch-restored outages as already done (auto-fixed via FLISR)
@@ -1844,11 +1883,57 @@ async function planRestoration(){
     return Infinity;
   }
 
+  // --- Dynamic crew rebalancing (improvement #1) ---
+  // Every 12h of sim time, crews that have been idle for >2h get relocated
+  // to the centroid of remaining undone outages in the busiest territory.
+  let lastRebalanceTime = ASSESSMENT_DELAY;
+  const REBALANCE_INTERVAL = 12; // hours
+
+  const fairShare = Math.max(1, Math.ceil(N / M));
+
   while (remaining>0){
     const top=hPop(heap);
     const cTime = top[0], ci=top[1];
     const crew=crews[ci];
+
+    // Load-balance: if this crew has >2× fair share, yield to a less-loaded crew
+    if (realistic && crew.jobs.length > fairShare * 2 && heap.length > 0){
+      let hasLighter = false;
+      for (let hi = 0; hi < heap.length; hi++){
+        if (crews[heap[hi][1]].jobs.length < crew.jobs.length * 0.8){ hasLighter = true; break; }
+      }
+      if (hasLighter){
+        hPush(heap, [cTime + 0.5, ci]);
+        continue;
+      }
+    }
+
     const cLat=crew.curLat, cLon=crew.curLon;
+
+    // Dynamic rebalancing check
+    if (realistic && cTime - lastRebalanceTime >= REBALANCE_INTERVAL){
+      lastRebalanceTime = cTime;
+      // Find centroid of remaining undone outages (target for idle mobile crews)
+      let sumLat = 0, sumLon = 0, undoneCount = 0;
+      for (let i = 0; i < N; i++){
+        if (!done[i]){ sumLat += oLat[i]; sumLon += oLon[i]; undoneCount++; }
+      }
+      if (undoneCount > 0 && mobileTeamCount > 0){
+        const centLat = sumLat / undoneCount, centLon = sumLon / undoneCount;
+        // Relocate mobile teams that are idle (their heap time == cTime)
+        // toward the work centroid — reduces dead travel time
+        for (let mi = 0; mi < mobileTeamCount; mi++){
+          if (crews[mi].time <= cTime && crews[mi].jobs.length > 0){
+            const lastJob = crews[mi].jobs[crews[mi].jobs.length - 1];
+            const idleFor = cTime - lastJob.etaFinish;
+            if (idleFor > 2){
+              crews[mi].curLat = centLat;
+              crews[mi].curLon = centLon;
+            }
+          }
+        }
+      }
+    }
 
     // Feeder-circuit stickiness: if the crew has an assigned feeder,
     // first try to find an undone outage on that same feeder.
@@ -1933,6 +2018,16 @@ async function planRestoration(){
     let startDelay = 0;
     if (realistic && document.getElementById('customerCallbackLag').checked && o.callback_lag_h > 0){
       startDelay = Math.max(0, o.callback_lag_h - (cTime - ASSESSMENT_DELAY));
+    }
+    // Road closure delay: tree-blocked outages need road clearing before line work
+    if (roadClosureOn && roadClearDelay[bestI] > 0){
+      startDelay += roadClearDelay[bestI];
+    }
+    // Out-of-town crew penalty: unfamiliar crews work ~25% slower
+    // (wrong turns, unfamiliar switching, communication overhead)
+    // Source: PURA Docket 20-08-03, Wanik ABM validation
+    if (crew.isOutOfTown){
+      repairH *= 1.25;
     }
     let eta = cTime + startDelay + driveMiles/TRAVEL_MPH + repairH;
     eta = clampToWorkday(eta);
@@ -4525,7 +4620,11 @@ function generateSimulationReport(){
     ['Crew compensation','IBEW Outside Construction agreements','https://ibew1245.com/','Double-time storm rates, per diem, shift structure'],
     ['Crew productivity','Circadian workforce studies, SHRM','https://circadian.com/blog/excessive-overtime','OT→productivity decline research'],
     ['Flood zones','FEMA National Flood Hazard Layer (NFHL)','https://www.fema.gov/flood-maps/national-flood-hazard-layer','Hartford County river corridors'],
-    ['Outage prediction','Wanik et al. 2015, Natural Hazards','https://doi.org/10.1007/s11069-015-1855-1','WRF + land cover + infrastructure model'],
+    ['Outage prediction','Wanik et al. 2015, Natural Hazards 79(2):1359-1384','https://doi.org/10.1007/s11069-015-1855-1','ENS model: 89 storms, 2851 grid cells, WRF + land cover + infrastructure'],
+    ['Restoration ABM','Wanik et al. 2018, Infrastructures 3(3):33','https://doi.org/10.3390/infrastructures3030033','Agent-Based Model: 190 crews, repair 1-8h, 25-50 mph travel, validated on Irene/Sandy/Nor\'easter'],
+    ['Restoration prediction','Guikema et al. 2014, IEEE Access','https://doi.org/10.1109/ACCESS.2014.2365716','SGHOPM customer outage prediction, hurricane damage spatial distribution'],
+    ['Road clearing','PURA Two Storm Panel Report (McGee et al. 2012)','https://portal.ct.gov/','Road closure + debris clearing timelines, crew deployment recommendations'],
+    ['Crew inefficiency','Davies Consulting 2012, CL&P Emergency Preparedness Report','CT PURA','Out-of-state crew unfamiliarity penalty, communication overhead analysis'],
     ['Eversource reliability','Eversource CT Reliability Scorecards (2025)','https://www.eversource.com/residential/outages/connecticut-reliability-scorecards','SAIDI, SAIFI, 149 town scorecards, outage causes'],
     ['CT grid analysis','RPA "State of the Grid in Connecticut" (2025)','https://rpa.org/news/lab/the-state-of-the-grid-in-connecticut','SAIDI 164.6 min, SAIFI 0.872, peak load, gen mix'],
     ['Smart switch data','Fox Weather / Eversource FLISR deployment','https://www.foxweather.com/lifestyle/smarter-grids-shorter-outages-new-england-power-restoration-technology','8,500 switches, 1.5M interruptions avoided/yr CT'],
