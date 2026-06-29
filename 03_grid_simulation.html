@@ -246,30 +246,45 @@
 
     <!-- Multi-server batch sweep -->
     <div class="ctrl" style="background:#fef2f2;border-color:#fca5a5;margin-top:8px;">
-      <div style="font-size:11px;color:#7f1d1d;font-weight:600;margin-bottom:6px;">Batch storm sweep (multi-server)</div>
-      <div style="font-size:10px;color:#7f1d1d;line-height:1.4;margin-bottom:6px;">
-        Run N variations of the current scenario (varying seeds + crew counts) in parallel across worker URLs. Each worker is a separate free Render service. With no workers listed, runs serially in-process.
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <div style="font-size:11px;color:#7f1d1d;font-weight:600;">Batch storm sweep</div>
+        <button type="button" id="batchAdvancedToggle" style="font-size:10px;color:#b91c1c;background:none;border:none;cursor:pointer;padding:0;text-decoration:underline;">workers ▾</button>
       </div>
-      <label style="font-size:10px;color:#7f1d1d;">Worker URLs (one per line, leave blank for local-only)</label>
-      <textarea id="batchWorkers" rows="3"
-                placeholder="https://hartford-grid-server.onrender.com"
-                style="width:100%;font-family:ui-monospace,monospace;font-size:10px;border:1px solid #fca5a5;border-radius:4px;padding:4px;margin-bottom:6px;"></textarea>
-      <div style="display:flex;gap:6px;margin-bottom:6px;">
+      <div style="font-size:10px;color:#9f1239;line-height:1.4;margin-bottom:8px;">
+        Run N scenarios varying seed or crew count. Leaves browser free — results appear below when done.
+      </div>
+      <div id="batchAdvanced" style="display:none;margin-bottom:6px;">
+        <label style="font-size:10px;color:#7f1d1d;">Worker URLs (one per line, blank = local-only)</label>
+        <textarea id="batchWorkers" rows="2"
+                  placeholder="https://hartford-grid-server.onrender.com"
+                  style="width:100%;font-family:ui-monospace,monospace;font-size:10px;border:1px solid #fca5a5;border-radius:4px;padding:4px;margin-top:2px;"></textarea>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
         <div style="flex:1">
-          <label style="font-size:10px;color:#7f1d1d;">Scenarios</label>
+          <label style="font-size:10px;color:#7f1d1d;display:block;margin-bottom:2px;">Scenarios</label>
           <input type="number" id="batchN" value="10" min="2" max="200"
                  style="width:100%;font-family:ui-monospace,monospace;font-size:11px;border:1px solid #fca5a5;border-radius:4px;padding:4px;" />
         </div>
         <div style="flex:1">
-          <label style="font-size:10px;color:#7f1d1d;">Vary</label>
+          <label style="font-size:10px;color:#7f1d1d;display:block;margin-bottom:2px;">Vary</label>
           <select id="batchVary" style="width:100%;font-size:11px;border:1px solid #fca5a5;border-radius:4px;padding:4px;">
             <option value="seed">seed</option>
             <option value="crews">crew count</option>
           </select>
         </div>
       </div>
-      <button id="batchRunBtn" style="width:100%;padding:8px;border:1px solid #b91c1c;background:#fff;color:#7f1d1d;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">Run batch sweep</button>
-      <div id="batchStatus" style="font-size:10px;color:#7f1d1d;margin-top:4px;padding:6px;background:#fff;border-radius:4px;font-family:ui-monospace,monospace;display:none;white-space:pre-line;max-height:160px;overflow-y:auto;"></div>
+      <button id="batchRunBtn" style="width:100%;padding:8px;border:1px solid #b91c1c;background:#b91c1c;color:#fff;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">Run batch sweep</button>
+      <!-- Progress bar -->
+      <div id="batchProgressWrap" style="display:none;margin-top:6px;">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:#7f1d1d;margin-bottom:3px;">
+          <span id="batchProgressLabel">Running…</span>
+          <span id="batchProgressPct">0%</span>
+        </div>
+        <div style="background:#fecaca;border-radius:4px;height:6px;overflow:hidden;">
+          <div id="batchProgressBar" style="height:100%;width:0%;background:#b91c1c;border-radius:4px;transition:width 0.3s ease;"></div>
+        </div>
+      </div>
+      <div id="batchStatus" style="font-size:10px;color:#7f1d1d;margin-top:6px;padding:6px;background:#fff;border:1px solid #fecaca;border-radius:4px;font-family:ui-monospace,monospace;display:none;white-space:pre-line;max-height:160px;overflow-y:auto;"></div>
     </div>
 
     <!-- Alternative #4: Server-side compute -->
@@ -2764,56 +2779,96 @@ async function runServerPlan(){
     stopServerProgress(timer);
   }
 }
+document.getElementById('batchAdvancedToggle').onclick = function(){
+  const el = document.getElementById('batchAdvanced');
+  const open = el.style.display === 'block';
+  el.style.display = open ? 'none' : 'block';
+  this.textContent = open ? 'workers ▾' : 'workers ▴';
+};
+
 document.getElementById('batchRunBtn').onclick = async function(){
   const statusEl = document.getElementById('batchStatus');
+  const progressWrap = document.getElementById('batchProgressWrap');
+  const progressBar = document.getElementById('batchProgressBar');
+  const progressLabel = document.getElementById('batchProgressLabel');
+  const progressPct = document.getElementById('batchProgressPct');
+  const btn = this;
+
   function show(text, isError){
     statusEl.style.display = 'block';
     statusEl.style.color = isError ? '#b91c1c' : '#7f1d1d';
     statusEl.textContent = text;
   }
+  function setProgress(done, total, label){
+    const pct = Math.round(100 * done / total);
+    progressWrap.style.display = 'block';
+    progressBar.style.width = pct + '%';
+    progressPct.textContent = pct + '%';
+    progressLabel.textContent = label || `${done} / ${total} complete`;
+  }
+  function resetProgress(){
+    progressWrap.style.display = 'none';
+    progressBar.style.width = '0%';
+    progressPct.textContent = '0%';
+  }
+
   if (!storm){ show('Simulate a storm first.', true); return; }
+
   const workers = document.getElementById('batchWorkers').value
     .split('\n').map(s => s.trim()).filter(Boolean);
   const N = Math.max(2, Math.min(200, +document.getElementById('batchN').value || 10));
   const vary = document.getElementById('batchVary').value;
   const base = buildServerPayload();
-  // Build N scenarios varying either seed or crew count.
+
   const scenarios = [];
   for (let i = 0; i < N; i++){
     const s = {...base, label: `${vary}=${i}`};
     if (vary === 'seed'){
       s.seed = (base.seed + i * 9973) & 0xFFFFFFFF;
     } else {
-      // Vary crews from 10% to 200% of the slider value.
       const frac = 0.1 + 1.9 * (i / Math.max(1, N - 1));
       s.crews = Math.max(1, Math.round(base.crews * frac));
       s.label = `crews=${s.crews}`;
     }
     scenarios.push(s);
   }
-  // Pick a coordinator URL: prefer the existing server URL if it's healthy
-  // and reachable, else fall back to the first worker URL.
+
   const coordinator = (_serverHealthy && getServerUrl()) || workers[0];
   if (!coordinator){
     show('No coordinator available — set a Server URL above or list workers.', true);
     return;
   }
-  show(`Dispatching ${N} scenarios across ${workers.length || 1} worker(s)…`);
+
+  btn.disabled = true;
+  btn.textContent = 'Running…';
+  statusEl.style.display = 'none';
+  setProgress(0, N, `Dispatching ${N} scenarios…`);
+
   const t0 = performance.now();
   try {
+    // Animate progress bar while waiting (server processes as batch, no streaming)
+    let fakeProgress = 0;
+    const fakeInterval = setInterval(() => {
+      fakeProgress = Math.min(fakeProgress + 1, N - 1);
+      setProgress(fakeProgress, N, `Running scenario ${fakeProgress} / ${N}…`);
+    }, Math.max(200, (N * 800) / N));
+
     const r = await fetch(coordinator + '/api/batch', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({scenarios, workers}),
     });
+    clearInterval(fakeInterval);
+
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
     const elapsed = (performance.now() - t0).toFixed(0);
+
+    setProgress(N, N, `Done — ${N} scenarios in ${elapsed} ms`);
+
     const lines = [`Done: ${data.results.length} scenarios in ${elapsed} ms ` +
-                   `(server total ${data.total_elapsed_ms.toFixed(0)} ms, ` +
-                   `${data.n_workers} worker${data.n_workers===1?'':'s'})`,
-                   ''];
-    // Compute summary stats.
+                   `(server ${data.total_elapsed_ms.toFixed(0)} ms, ` +
+                   `${data.n_workers} worker${data.n_workers===1?'':'s'})`, ''];
     const times = data.results.filter(x => !x.error).map(x => x.total_time_h);
     if (times.length){
       const mean = times.reduce((a,b)=>a+b,0) / times.length;
@@ -2829,7 +2884,11 @@ document.getElementById('batchRunBtn').onclick = async function(){
     }
     show(lines.join('\n'));
   } catch (e) {
+    resetProgress();
     show(`Batch failed: ${e.message}\nCheck worker URLs and that they're awake.`, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Run batch sweep';
   }
 };
 
