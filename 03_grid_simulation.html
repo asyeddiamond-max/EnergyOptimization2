@@ -177,6 +177,7 @@
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="switchingBackfeed" checked /><span class="rf-name">Switching / back-feed</span></label><div class="rf-desc">~20% of feeder outages restored via tie switches in ~30 min. Eversource FLISR deployment.</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="amiCoverage" checked /><span class="rf-name">AMI smart meters</span></label><div class="rf-desc">Instant outage detection in urban areas (~70% AMI). Rural areas fall back to callbacks. Eversource AMI reports.</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="mutualAidTravel" checked /><span class="rf-name">Mutual-aid travel time</span></label><div class="rf-desc">Out-of-state crews: MA/RI +2h, NY +4h, PA/OH +6h travel before work starts. IBEW protocols.</div></div>
+        <div class="rf-item"><label class="rf-label"><input type="checkbox" id="roadClosure" checked /><span class="rf-name">Road closure & debris clearing</span></label><div class="rf-desc">30% of outages blocked by downed trees/debris. Specialized crews clear roads (2.5h per major blockage) before line crews can access. ~60 blockages per 1000 outages. Happens in parallel with phase 1.</div></div>
       </div>
     </div>
 
@@ -944,41 +945,70 @@ cS.oninput=()=>{cV.textContent=cS.value; updateEstimate();};
 function estimateRestorationTime(N, M, realistic){
   if (N === 0 || M === 0) return 0;
   if (!realistic){
-    // Optimistic baseline: fixed 1.5h repair, ~0.2h travel between adjacent
-    // jobs (k-means depots place crews near outage clusters).
     const T_PER_JOB = 1.5 + 0.2;
     return Math.max(T_PER_JOB, N * T_PER_JOB / M);
   }
-  // Realistic mode constants — matched to the scheduler's actual settings.
-  const ASSESSMENT_DELAY = 12;          // hours before any crew dispatches
-  const DISCOVERY_RAMP   = 36;          // h12 (1h after dispatch) to h48 (last outage discovered)
-  const WORKDAY_HOURS    = 14;          // 6am-8pm daylight ops
-  const WORKDAY_OVERHEAD = 24 / WORKDAY_HOURS;  // ≈1.71 (only 14 of 24 hours productive)
-  // Log-normal repair: median 2h, sigma 0.857. Actual mean = exp(mu + sigma²/2)
-  // ≈ exp(0.693 + 0.367) ≈ 2.88 h
+  // **IMPROVED REALISTIC ESTIMATE** — accounts for:
+  // - Tree blockage (30% of outages need road clearing first)
+  // - Priority phases (P1 + P2 before P3)
+  // - Crew territory overhead
+  // - Discovery ramp
+  // - Mutual-aid waves
+  // - Daylight workday constraint
+  // - Fatigue penalty after day 2
+
+  const ASSESSMENT_DELAY = 12;
+  const DISCOVERY_RAMP = 36;
+  const WORKDAY_HOURS = 14;
+  const WORKDAY_OVERHEAD = 24 / WORKDAY_HOURS;  // ~1.71x
   const T_REPAIR_MEAN = 2.88;
-  const T_TRAVEL_MEAN = 0.4;            // 25 mph × 1.5 road multiplier, ~5 mi avg hop
+  const T_TRAVEL_MEAN = 0.4;
   const T_PER_JOB = T_REPAIR_MEAN + T_TRAVEL_MEAN;
 
-  // Iterative M_effective: depends on total time T which depends on M_effective.
-  // Two iterations converge fine for this problem.
+  // Road clearance: 30% of outages are tree-blocked; ~5 crews needed to clear roads in parallel
+  // Each cleared road enables ~3-5 repairs. Estimate: 2.5h per major road blockage, ~30 blockages for 500 outages
+  const TREE_BLOCKED_PCT = 0.30;
+  const BLOCKAGES_PER_1000 = 60;  // major road blockages needing clearing
+  const T_CLEAR_PER_BLOCKAGE = 2.5;
+  const ROAD_CLEAR_CREWS = 3;
+  const road_blockages = Math.max(1, Math.round(N * BLOCKAGES_PER_1000 / 1000));
+  const T_ROAD_CLEAR = (road_blockages * T_CLEAR_PER_BLOCKAGE) / ROAD_CLEAR_CREWS;
+
+  // Phase breakdown: P1 ~3%, P2 ~2%, P3 ~95%
+  const P1_PCT = 0.03, P2_PCT = 0.02, P3_PCT = 0.95;
+  const N_P1 = Math.ceil(N * P1_PCT), N_P2 = Math.ceil(N * P2_PCT), N_P3 = N - N_P1 - N_P2;
+
   function computeT(M_eff){
-    const work_throughput = M_eff / (WORKDAY_OVERHEAD * T_PER_JOB);   // jobs per hour
-    const time_to_clear   = N / work_throughput;
-    // Plus the ramp-tail: even if crews are fast, the last outage can't be
-    // worked until it's discovered.
-    const ramp_tail = ASSESSMENT_DELAY + DISCOVERY_RAMP + T_PER_JOB;
-    return ASSESSMENT_DELAY + Math.max(ramp_tail - ASSESSMENT_DELAY, time_to_clear);
+    const M_eff_adj = Math.max(1, M_eff);
+    // Phase 1: small, prioritized. Fast.
+    const T_P1 = (N_P1 * T_PER_JOB) / (M_eff_adj * WORKDAY_OVERHEAD);
+    // Phase 2: critical facilities. Slightly faster (better routing).
+    const T_P2 = (N_P2 * T_PER_JOB * 0.9) / (M_eff_adj * WORKDAY_OVERHEAD);
+    // Phase 3: bulk. Slower (territory spread-out, fatigue after day 2).
+    const T_P3_base = (N_P3 * T_PER_JOB) / (M_eff_adj * WORKDAY_OVERHEAD);
+    // Fatigue: +5%/day after day 2. If T_P3_base > 48h, apply penalty.
+    const days_P3 = T_P3_base / 24;
+    const fatigue_mult = days_P3 > 2 ? (1 + 0.05 * (days_P3 - 2)) : 1.0;
+    const T_P3 = T_P3_base * fatigue_mult;
+
+    // Crew territory overhead: each substation territory has independent crew queues
+    // Adds ~10-20% to response time due to imbalance. Estimate conservatively:
+    const territory_overhead = M_eff_adj > 50 ? 1.15 : (M_eff_adj > 10 ? 1.12 : 1.08);
+
+    const total_work_time = (T_P1 + T_P2 + T_P3) * territory_overhead;
+    // Road clearance happens in parallel with phase 1; don't double-count
+    const effective_work_time = Math.max(T_ROAD_CLEAR, total_work_time);
+    const T_DISCOVERY_TAIL = ASSESSMENT_DELAY + DISCOVERY_RAMP + T_PER_JOB;
+
+    return ASSESSMENT_DELAY + Math.max(T_DISCOVERY_TAIL - ASSESSMENT_DELAY, effective_work_time);
   }
+
   function effectiveM(T){
-    // Mutual-aid waves: 50% at h12 (immediately after assessment), +30% at h36,
-    // +20% at h60. Effective crew-hours is the weighted area under the staffing
-    // curve divided by elapsed time.
-    if (T <= 12) return 0;                                // crews not dispatched yet
-    if (T <= 36) return M * 0.5 * (T - 12) / T;           // only initial wave
+    if (T <= 12) return 0;
+    if (T <= 36) return M * 0.5 * (T - 12) / T;
     if (T <= 60){
       const initial = M * 0.5 * (T - 12);
-      const wave1   = M * 0.3 * (T - 36);
+      const wave1 = M * 0.3 * (T - 36);
       return (initial + wave1) / T;
     }
     const initial = M * 0.5 * (T - 12);
@@ -3176,6 +3206,7 @@ renderDoePanel();
 // --- Simulation Report Download ---
 function generateSimulationReport(){
   if (!substations.length){ status.textContent="Generate the grid first."; return; }
+  if (!storm || !storm.outages){ status.textContent="Simulate a storm first (click 'Simulate storm')."; return; }
   const seed = +seedI.value|0;
   const now = new Date().toISOString();
   const realistic = document.getElementById('realisticMode').checked;
