@@ -1284,8 +1284,41 @@ function generateGrid(){
   const _curveBox = document.getElementById('restoreCurveBox'); if (_curveBox) _curveBox.style.display = 'none';
 }
 
+let territoryLayer = null;
+function renderTerritories(){
+  if (territoryLayer){ map.removeLayer(territoryLayer); territoryLayer = null; }
+  if (!substations.length || !_bitmapReady) return;
+  territoryLayer = L.layerGroup();
+  const step = 0.006;
+  const polys = substations.map(() => []);
+  for (let lat = _gLatMin; lat <= _gLatMax; lat += step){
+    for (let lon = _gLonMin; lon <= _gLonMax; lon += step){
+      if (!insideFast(lon, lat)) continue;
+      let best = 0, bestD = Infinity;
+      for (let i = 0; i < substations.length; i++){
+        const dx = (substations[i].lat - lat) * 69;
+        const dy = (substations[i].lon - lon) * 51;
+        const d = dx*dx + dy*dy;
+        if (d < bestD){ bestD = d; best = i; }
+      }
+      polys[best].push([lat, lon]);
+    }
+  }
+  for (let i = 0; i < substations.length; i++){
+    if (!polys[i].length) continue;
+    polys[i].forEach(p => {
+      L.rectangle([[p[0]-step/2, p[1]-step/2],[p[0]+step/2, p[1]+step/2]],
+        {fillColor: substations[i].color, fillOpacity: 0.08, stroke: false, interactive: false, renderer: gridCanvas}
+      ).addTo(territoryLayer);
+    });
+  }
+  territoryLayer.addTo(map);
+  territoryLayer.bringToBack();
+}
+
 function renderGrid(){
   lateralLayer.clearLayers(); feederLayer.clearLayers(); subLayer.clearLayers();
+  renderTerritories();
   laterals.forEach(l=>L.polyline(l.pts,{renderer:gridCanvas,color:"#bfc4cb",weight:0.6,opacity:0.75,interactive:false}).addTo(lateralLayer));
   feeders.forEach(f=>L.polyline(f.pts,{renderer:gridCanvas,color:f.color,weight:1.3,opacity:0.95,interactive:false}).addTo(feederLayer));
   substations.forEach((s,i)=>{
@@ -1295,7 +1328,6 @@ function renderGrid(){
     L.marker([s.lat,s.lon],{icon,interactive:true}).addTo(subLayer)
       .bindTooltip(`${label}${volt} — ${Math.round(s.popServed).toLocaleString()} customers`);
   });
-  // Layer order after re-render: mask hides outside-county; boundary lives on its own top pane.
   if (window._mask) window._mask.bringToFront();
 }
 
