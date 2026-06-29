@@ -3445,10 +3445,10 @@ function _generateSimulationReport(){
 
   const seed = +seedI.value|0;
   const now = new Date().toISOString();
-  const N = storm.outages.length;
-  const M = plan.crews.length;
-  const totalTime = plan.totalTime;
-  const totalCust = storm.totalCust;
+  const N = storm.outages?.length || 0;
+  const M = plan.crews?.length || 0;
+  const totalTime = plan.totalTime || 0;
+  const totalCust = storm.totalCust || 0;
 
   let r = 'HARTFORD COUNTY STORM & RESTORATION SIMULATION REPORT\n';
   r += '='.repeat(80) + '\n\n';
@@ -3458,10 +3458,10 @@ function _generateSimulationReport(){
 
   r += 'DISTRIBUTION GRID\n';
   r += '-'.repeat(80) + '\n';
-  r += `Substations:        ${substations.length}\n`;
-  r += `Feeders:            ${feeders.length}\n`;
-  r += `Laterals:           ${laterals.length}\n`;
-  r += `County Population:  ${TOTAL_POP.toLocaleString()}\n\n`;
+  r += `Substations:        ${substations?.length || 0}\n`;
+  r += `Feeders:            ${feeders?.length || 0}\n`;
+  r += `Laterals:           ${laterals?.length || 0}\n`;
+  r += `County Population:  ${TOTAL_POP?.toLocaleString() || '—'}\n\n`;
 
   r += 'STORM IMPACT\n';
   r += '-'.repeat(80) + '\n';
