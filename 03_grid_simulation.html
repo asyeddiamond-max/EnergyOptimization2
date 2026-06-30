@@ -2084,13 +2084,14 @@ function renderPlan(crews, totalTime, N, realistic){
       .bindTooltip(`Crew depot (${c.color})`);
   }
 
-  const NUMBERED_BUDGET = crews.length > 500 ? 500 : 1500;
-  let numbered = 0;
+  // Only number repair jobs when the outage count is small enough to be readable.
+  const showNumbers = N < 500;
   const cloudPts = [];
+  let numbered = 0;
   for (const c of crews){
     for (let order=0; order<c.jobs.length; order++){
       const j = c.jobs[order];
-      if (order < 30 && numbered < NUMBERED_BUDGET) {
+      if (showNumbers && order < 30 && numbered < 1500) {
         const html = `<div style="width:14px;height:14px;border-radius:50%;background:${c.color};color:white;font-size:9px;font-weight:bold;line-height:14px;text-align:center;border:1px solid #111">${order+1}</div>`;
         L.marker([j.o.lat,j.o.lon],{icon:L.divIcon({className:'',html,iconSize:[14,14],iconAnchor:[7,7]}),interactive:false}).addTo(repairLayer);
         numbered++;
