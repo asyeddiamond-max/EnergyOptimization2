@@ -3822,9 +3822,29 @@ async function recommendCrewCountServer(){
     _recProgressLabel.textContent = `server ${Math.round(pct)}%`;
   }, 100);
   try {
+    // Build full payload matching buildServerPayload so all realistic-mode
+    // flags are passed to the binary search — results now match the simulation.
+    const base = buildServerPayload();
     const payload = {
-      outages: storm.outages.map(o => ({lat:o.lat,lon:o.lon,critical:!!o.critical})),
-      seed, realistic,
+      outages: base.outages.map(o => ({
+        lat: o.lat, lon: o.lon, critical: o.critical,
+        customers: o.customers, feeder_id: o.feeder_id,
+        is_feeder: o.is_feeder, priority: o.priority,
+        sub_id: o.sub_id, tree_blocked: o.tree_blocked,
+      })),
+      seed,
+      realistic,
+      customer_weight:    base.customer_weight,
+      crew_specialization: base.crew_specialization,
+      tree_blocked_rate:  base.tree_blocked_rate,
+      tree_crew_share:    base.tree_crew_share,
+      hierarchical:       base.hierarchical,
+      tiered_priority:    base.tiered_priority,
+      storm_duration:     base.storm_duration,
+      crew_stickiness:    base.crew_stickiness,
+      storm_drag:         base.storm_drag,
+      soil_saturation:    base.soil_saturation,
+      pre_storm_staging:  base.pre_storm_staging,
     };
     const r = await fetch(getServerUrl() + '/api/recommend', {
       method: 'POST',

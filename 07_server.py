@@ -242,6 +242,18 @@ class RecommendRequest(BaseModel):
         description="Acceptable multiple of the floor restoration time")
     upper_bound: int | None = Field(default=None, description=
         "Override the upper-bound crew count tried; defaults to max(50, N/10)")
+    # Full scheduler flags — same as ScheduleRequest so results match the simulation
+    customer_weight: float = 0.0
+    crew_specialization: bool = False
+    tree_blocked_rate: float = 0.30
+    tree_crew_share: float = 0.20
+    hierarchical: bool = False
+    tiered_priority: bool = False
+    storm_duration: float = 0.0
+    crew_stickiness: bool = False
+    storm_drag: bool = False
+    soil_saturation: bool = False
+    pre_storm_staging: bool = False
 
 
 class RecommendEvaluation(BaseModel):
@@ -690,11 +702,30 @@ def schedule(req: ScheduleRequest) -> ScheduleResponse:
     return ScheduleResponse(total_time_h=total, crews=crews)
 
 
-def _scheduler_time_only(outage_tuples, m_crews, seed, realistic):
+def _scheduler_time_only(outage_tuples, m_crews, seed, realistic,
+                         req: "RecommendRequest | None" = None):
     """Run the scheduler and return only the total restoration time.
 
-    Skips the expensive per-job result construction — recommend search only
-    needs the makespan, not the dispatch sequence."""
+    If a full RecommendRequest is supplied, routes through _run_scheduler so
+    all realistic-mode flags (crew stickiness, specialization, hierarchy, etc.)
+    are applied — matching what the full simulation produces."""
+    if req is not None and (req.crew_specialization or req.crew_stickiness
+                            or req.hierarchical or req.tiered_priority
+                            or req.customer_weight or req.storm_duration):
+        # Convert outage_tuples back to Outage objects with full metadata
+        outages = [o for o in req.outages]
+        total, _ = _run_scheduler(
+            outages, m_crews, seed, realistic,
+            customer_weight=req.customer_weight,
+            crew_specialization=req.crew_specialization,
+            tree_blocked_rate=req.tree_blocked_rate,
+            tree_crew_share=req.tree_crew_share,
+            hierarchical=req.hierarchical,
+            tiered_priority=req.tiered_priority,
+            storm_duration=req.storm_duration,
+            crew_stickiness=req.crew_stickiness,
+        )
+        return float(total)
     if _NUMBA:
         _, total, _ = plan_restoration_numba(
             outage_tuples, m_crews, realistic=realistic, seed=seed
@@ -724,7 +755,8 @@ def recommend(req: RecommendRequest) -> RecommendResponse:
         )
 
     outage_tuples = [(o.lat, o.lon) for o in req.outages]
-    upper = req.upper_bound or max(50, (N + 9) // 10)
+    # Use 5× outages as upper bound (enough to find real floor) capped at 10k
+    upper = req.upper_bound or min(10000, max(50, N // 2))
     upper = min(upper, N)
 
     cache: dict[int, float] = {}
@@ -733,7 +765,7 @@ def recommend(req: RecommendRequest) -> RecommendResponse:
     def t_at(m: int) -> float:
         if m in cache:
             return cache[m]
-        t = _scheduler_time_only(outage_tuples, m, req.seed, req.realistic)
+        t = _scheduler_time_only(outage_tuples, m, req.seed, req.realistic, req)
         cache[m] = t
         evaluations.append(RecommendEvaluation(crews=m, total_time_h=t))
         return t
