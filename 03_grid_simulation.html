@@ -590,11 +590,11 @@ legend.onAdd=function(){
     <div class="ml-row"><span class="ml-line" style="border-color:#1f77b4"></span> Feeder backbone (colored by substation)</div>
     <div class="ml-row"><span class="ml-line" style="border-color:#bfc4cb;border-width:1px"></span> Lateral</div>
     <div class="ml-row"><svg width="14" height="14" viewBox="0 0 14 14"><line x1="2" y1="2" x2="12" y2="12" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round"/><line x1="12" y1="2" x2="2" y2="12" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round"/></svg> Storm outage</div>
-    <div class="ml-row"><span style="display:inline-block;width:14px;height:18px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#475569;vertical-align:middle;margin-right:2px"></span> Crew depot</div>
-    <div class="ml-row"><span style="display:inline-block;width:14px;height:18px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#c0312b;vertical-align:middle;margin-right:2px"></span> Hospital</div>
-    <div class="ml-row"><span style="display:inline-block;width:14px;height:18px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#e06c1a;vertical-align:middle;margin-right:2px"></span> Fire station</div>
-    <div class="ml-row"><span style="display:inline-block;width:14px;height:18px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#2563eb;vertical-align:middle;margin-right:2px"></span> EMS</div>
-    <div class="ml-row"><span style="display:inline-block;width:14px;height:18px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#0d7a6b;vertical-align:middle;margin-right:2px"></span> Water plant</div>
+    <div class="ml-row"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#475569;vertical-align:middle;margin-right:4px;"></span> Crew depot</div>
+    <div class="ml-row"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#c0312b;vertical-align:middle;margin-right:4px;"></span> Hospital</div>
+    <div class="ml-row"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#e06c1a;vertical-align:middle;margin-right:4px;"></span> Fire station</div>
+    <div class="ml-row"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#2563eb;vertical-align:middle;margin-right:4px;"></span> EMS</div>
+    <div class="ml-row"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#0d7a6b;vertical-align:middle;margin-right:4px;"></span> Water plant</div>
     <div class="ml-row"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="#fbbf24" stroke="#92400e" stroke-width="1.5"/></svg> Storm track point (wind speed)</div>
     <div class="ml-row ml-note">Colored dots on outages = crew assignment + repair order.</div>
   `;
@@ -2075,8 +2075,8 @@ function renderPlan(crews, totalTime, N, realistic){
   const DEPOT_SVG_LIMIT = 500;
   if (crews.length <= DEPOT_SVG_LIMIT) {
     crews.forEach(c=>{
-      const html=`<div style="width:18px;height:22px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${c.color};display:flex;align-items:center;justify-content:center;"><i class="ti ti-truck" style="transform:rotate(45deg);font-size:10px;color:#fff;"></i></div>`;
-      L.marker([c.depot.lat,c.depot.lon],{icon:L.divIcon({className:'crew-depot',html,iconSize:[18,22],iconAnchor:[9,22]})}).addTo(depotLayer)
+      const html=`<div style="width:20px;height:20px;border-radius:50%;background:${c.color};display:flex;align-items:center;justify-content:center;"><i class="ti ti-truck" style="font-size:11px;color:#fff;"></i></div>`;
+      L.marker([c.depot.lat,c.depot.lon],{icon:L.divIcon({className:'crew-depot',html,iconSize:[20,20],iconAnchor:[10,10]})}).addTo(depotLayer)
         .bindTooltip(`Crew ${c.color} depot`);
     });
   } else {
@@ -3264,9 +3264,9 @@ function renderCriticalFacilities(){
   };
   for (const f of facs){
     const cfg = critCfg[f.type] || critCfg.hospital;
-    const html = `<div style="width:22px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${cfg.color};display:flex;align-items:center;justify-content:center;"><i class="ti ${cfg.icon}" style="transform:rotate(45deg);font-size:12px;color:#fff;"></i></div>`;
+    const html = `<div style="width:26px;height:26px;border-radius:50%;background:${cfg.color};display:flex;align-items:center;justify-content:center;"><i class="ti ${cfg.icon}" style="font-size:14px;color:#fff;"></i></div>`;
     const tip = `<b>${f.name}</b><br>${f.type.toUpperCase()}${f.beds ? ' · '+f.beds+' beds' : ''}<br>${f.town}`;
-    L.marker([f.lat, f.lon], {icon: L.divIcon({className:'', html, iconSize:[22,28], iconAnchor:[11,28]})})
+    L.marker([f.lat, f.lon], {icon: L.divIcon({className:'', html, iconSize:[26,26], iconAnchor:[13,13]})})
       .bindTooltip(tip).addTo(critFacilityLayer);
   }
   critFacilityLayer.addTo(map);
