@@ -2823,6 +2823,10 @@ document.getElementById('batchRunBtn').onclick = async function(){
     show('No coordinator available — set a Server URL above or list workers.', true);
     return;
   }
+  if (!_serverHealthy && !workers.length){
+    show('⚠ Server is offline or cold-starting.\nClick "Wake server now" above, wait ~30s for the green dot, then try again.', true);
+    return;
+  }
 
   // Warn if payload will be too large for Render free tier (30s timeout)
   const outageCount = storm?.outages?.length || 0;
