@@ -351,6 +351,18 @@ class MonteCarloRequest(BaseModel):
     base_seed: int = 42
     n_runs: int = Field(default=30, ge=2, le=200,
                         description="Number of seeds to sample")
+    # Realistic sub-flags — same as ScheduleRequest so results match the simulation
+    customer_weight: float = 0.0
+    crew_specialization: bool = False
+    tree_blocked_rate: float = 0.30
+    tree_crew_share: float = 0.20
+    hierarchical: bool = False
+    tiered_priority: bool = False
+    storm_duration: float = 0.0
+    crew_stickiness: bool = False
+    storm_drag: bool = False
+    soil_saturation: bool = False
+    pre_storm_staging: bool = False
 
 
 class MonteCarloResponse(BaseModel):
@@ -1019,12 +1031,21 @@ def monte_carlo(req: MonteCarloRequest) -> MonteCarloResponse:
     statistics over the resulting restoration times. Parallelized across CPU
     cores via ProcessPoolExecutor so 30 seeds finish in ~30/n_cores the time."""
     outage_tuples = [(o.lat, o.lon) for o in req.outages]
-    # Numba is so fast (~tens of ms per run on typical scenarios) that the
-    # ProcessPoolExecutor overhead — Windows spawn + per-worker JIT cache
-    # load — costs more than the parallelism saves. Only use the pool when
-    # per-run cost is expected to dominate spawn overhead.
+    # Compute effective flags (mirrors schedule() logic).
+    eff_storm = req.storm_duration + (6.0 if req.storm_drag else 0.0)
+    eff_road  = 1.5 * (1.25 if req.soil_saturation else 1.0)
+    tree_mult = 1.3 if req.soil_saturation else 1.0
+    eff_assess = 0.0 if req.pre_storm_staging else 12.0
+    has_sub_flags = (
+        req.crew_specialization or req.crew_stickiness or req.hierarchical
+        or req.tiered_priority or req.customer_weight > 0 or req.storm_duration > 0
+        or req.storm_drag or req.soil_saturation or req.pre_storm_staging
+    )
+    # Only use the process pool when sub-flags are all off (the pool worker uses
+    # bare numba which ignores sub-flags). When any sub-flag is active, run
+    # serially through _run_scheduler so results match the main simulation.
     N = len(outage_tuples)
-    use_pool = (N * req.crews) > 10_000_000  # heuristic: ~1s+ per run
+    use_pool = not has_sub_flags and (N * req.crews) > 10_000_000
     if use_pool:
         jobs = [(outage_tuples, req.crews,
                  (req.base_seed + k * 9973) & 0xFFFFFFFF, req.realistic)
@@ -1035,7 +1056,20 @@ def monte_carlo(req: MonteCarloRequest) -> MonteCarloResponse:
         times = []
         for k in range(req.n_runs):
             seed = (req.base_seed + k * 9973) & 0xFFFFFFFF
-            total, _ = _run_scheduler(req.outages, req.crews, seed, req.realistic)
+            total, _ = _run_scheduler(
+                req.outages, req.crews, seed, req.realistic,
+                customer_weight=req.customer_weight,
+                crew_specialization=req.crew_specialization,
+                tree_blocked_rate=req.tree_blocked_rate,
+                tree_crew_share=req.tree_crew_share,
+                hierarchical=req.hierarchical,
+                tiered_priority=req.tiered_priority,
+                storm_duration=eff_storm,
+                crew_stickiness=req.crew_stickiness,
+                road_multiplier=eff_road,
+                assessment_delay=eff_assess,
+                tree_blocked_rate_multiplier=tree_mult,
+            )
             times.append(total)
     times_sorted = sorted(times)
     n = len(times_sorted)

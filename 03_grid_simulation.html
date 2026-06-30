@@ -2827,6 +2827,7 @@ document.getElementById('monteCarloBtn').onclick = async function(){
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
+    window._mcResult = d;
     const elapsed = (performance.now() - t0).toFixed(0);
     showServerStatus(
       `Monte Carlo: ${d.n_runs} runs in ${elapsed} ms\n` +
@@ -3435,6 +3436,92 @@ function _generateSimulationReport(){
     r += `  ${pct}% restored:  ${days}d ${hours}h\n`;
   });
   r += '\n';
+
+  // CRITICAL FACILITY RESTORATION
+  const critOutages = (storm.outages || []).filter(o => o.critical);
+  const nCrit = critOutages.length;
+  r += 'CRITICAL FACILITY RESTORATION\n';
+  r += '-'.repeat(80) + '\n';
+  if (nCrit === 0) {
+    r += 'No critical facility outages flagged in this scenario.\n\n';
+  } else {
+    const critFinish = [];
+    for (const c of plan.crews) {
+      for (const j of c.jobs || []) {
+        if (j.outageIdx !== undefined) {
+          const o = storm.outages?.[j.outageIdx];
+          if (o?.critical) critFinish.push(j.etaFinish);
+        }
+      }
+    }
+    critFinish.sort((a, b) => a - b);
+    const nPlanned = critFinish.length;
+    r += `Critical facility outages:   ${nCrit} flagged (hospitals, fire, EMS, water)\n`;
+    r += `In restoration plan:         ${nPlanned}\n`;
+    if (nPlanned > 0) {
+      const fh = t => `${Math.floor(t/24)}d ${Math.round(t%24)}h`;
+      r += `First critical restored:     ${fh(critFinish[0])}\n`;
+      r += `All critical restored:       ${fh(critFinish[nPlanned-1])}\n`;
+      [25, 50, 75, 100].forEach(pct => {
+        const idx = Math.min(nPlanned-1, Math.ceil(nPlanned * pct / 100) - 1);
+        r += `  ${pct}% of critical facilities: ${fh(critFinish[idx])}\n`;
+      });
+    } else {
+      r += '(Critical facility index unavailable — server-routed plan lacks outageIdx)\n';
+    }
+    r += '\n';
+  }
+
+  // CREW UTILIZATION
+  r += 'CREW UTILIZATION\n';
+  r += '-'.repeat(80) + '\n';
+  const activeCH = plan.crews.reduce((s, c) => {
+    if (!c.jobs?.length) return s;
+    return s + (c.jobs[c.jobs.length-1].etaFinish - (c.arrival || 0));
+  }, 0);
+  const totalPossibleCH = M * totalTime;
+  const utilRate = totalPossibleCH > 0 ? (activeCH / totalPossibleCH * 100).toFixed(1) : '—';
+  const idleCH = totalPossibleCH - activeCH;
+  const avgCrewSpan = crewsWithJobs > 0 ? (activeCH / crewsWithJobs).toFixed(1) : '—';
+  r += `Utilization Rate:     ${utilRate}% (active crew-span / M × total time)\n`;
+  r += `Active Crew-Hours:    ${Math.round(activeCH)} h (arrival → last job finish)\n`;
+  r += `Idle Crew-Hours:      ${Math.round(idleCH)} h (wave staging delays + gaps)\n`;
+  r += `Avg Span per Crew:    ${avgCrewSpan} h\n`;
+  r += `Jobs per Crew-Day:    ${(totalJobs / crewsWithJobs / (totalTime/24)).toFixed(1)}\n\n`;
+
+  // DOE OE-417 COMPARISON
+  const doeEvents = window.HARTFORD_DOE_OE417 || [];
+  if (doeEvents.length) {
+    r += 'COMPARISON TO HISTORICAL DOE OE-417 EVENTS\n';
+    r += '-'.repeat(80) + '\n';
+    const fh2 = t => `${Math.floor(t/24)}d ${Math.round(t%24)}h`;
+    r += `This simulation:  ${Math.round(totalCust).toLocaleString()} customers · ${fh2(totalTime)}\n\n`;
+    const sorted = [...doeEvents].sort((a, b) =>
+      Math.abs(a.customers_affected - totalCust) - Math.abs(b.customers_affected - totalCust)
+    );
+    r += `  ${'Event'.padEnd(32)} ${'Customers'.padStart(9)}    ${'Actual'.padEnd(10)}  ${'Sim ratio'}\n`;
+    r += `  ${'─'.repeat(65)}\n`;
+    sorted.forEach(e => {
+      const ratio = (totalTime / e.duration_h).toFixed(2);
+      const marker = Math.abs(e.customers_affected - totalCust) < totalCust ? ' ◀ closest' : '';
+      r += `  ${e.event.padEnd(32)} ${e.customers_affected.toLocaleString().padStart(9)}    ${fh2(e.duration_h).padEnd(10)}  ${ratio}×${marker}\n`;
+    });
+    r += '\nRatio < 1: simulation faster than historical. Ratio > 1: simulation slower.\n\n';
+  }
+
+  // MONTE CARLO ENSEMBLE
+  if (window._mcResult) {
+    const mc = window._mcResult;
+    const fh3 = t => `${Math.floor(t/24)}d ${Math.round(t%24)}h`;
+    r += 'MONTE CARLO ENSEMBLE STATISTICS\n';
+    r += '-'.repeat(80) + '\n';
+    r += `Seeds run:            ${mc.n_runs}\n`;
+    r += `Mean restoration:     ${fh3(mc.mean_h)} (${mc.mean_h.toFixed(1)} h)\n`;
+    r += `Median:               ${fh3(mc.median_h)}\n`;
+    r += `Std dev:              ${mc.stddev_h.toFixed(1)} h\n`;
+    r += `90% CI (5th–95th):    ${fh3(mc.p05_h)} – ${fh3(mc.p95_h)}\n`;
+    r += `Range (min–max):      ${fh3(mc.min_h)} – ${fh3(mc.max_h)}\n\n`;
+  }
 
   // BEHAVIORAL OT ANALYSIS
   r += 'BEHAVIORAL OVERTIME IMPACT\n';
