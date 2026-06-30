@@ -2839,54 +2839,60 @@ document.getElementById('batchRunBtn').onclick = async function(){
   btn.disabled = true;
   btn.textContent = 'Running…';
   statusEl.style.display = 'none';
-  setProgress(0, N, `Dispatching ${N} scenarios…`);
+  setProgress(0, N, `Starting ${N} scenarios…`);
 
   const t0 = performance.now();
+  const results = [];
+
   try {
-    // Animate progress bar while waiting (server processes as batch, no streaming)
-    let fakeProgress = 0;
-    const fakeInterval = setInterval(() => {
-      fakeProgress = Math.min(fakeProgress + 1, N - 1);
-      setProgress(fakeProgress, N, `Running scenario ${fakeProgress} / ${N}…`);
-    }, Math.max(200, (N * 800) / N));
+    // Run scenarios one at a time via /api/schedule — avoids giant batch payload
+    // and server-side timeouts. Browser drives the loop; real progress per scenario.
+    for (let i = 0; i < scenarios.length; i++){
+      const s = scenarios[i];
+      setProgress(i, N, `Running scenario ${i + 1} / ${N}…`);
+      const t1 = performance.now();
+      try {
+        const r = await fetch(coordinator + '/api/schedule', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(s),
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+        results.push({
+          label: s.label,
+          total_time_h: data.total_time_h,
+          n_crews: s.crews,
+          elapsed_ms: performance.now() - t1,
+          error: null,
+        });
+      } catch(e) {
+        results.push({ label: s.label, total_time_h: 0, n_crews: 0,
+                       elapsed_ms: performance.now() - t1, error: e.message });
+      }
+    }
 
-    const r = await fetch(coordinator + '/api/batch', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({scenarios, workers}),
-    });
-    clearInterval(fakeInterval);
-
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const data = await r.json();
     const elapsed = (performance.now() - t0).toFixed(0);
-
     setProgress(N, N, `Done — ${N} scenarios in ${elapsed} ms`);
 
-    const lines = [`Done: ${data.results.length} scenarios in ${elapsed} ms ` +
-                   `(server ${data.total_elapsed_ms.toFixed(0)} ms, ` +
-                   `${data.n_workers} worker${data.n_workers===1?'':'s'})`, ''];
-    const times = data.results.filter(x => !x.error).map(x => x.total_time_h);
-    if (times.length){
+    const good = results.filter(x => !x.error);
+    const lines = [`Done: ${results.length} scenarios in ${elapsed} ms`, ''];
+    if (good.length){
+      const times = good.map(x => x.total_time_h);
       const mean = times.reduce((a,b)=>a+b,0) / times.length;
       const min = Math.min(...times), max = Math.max(...times);
       lines.push(`mean: ${mean.toFixed(2)} h  min: ${min.toFixed(2)}  max: ${max.toFixed(2)}`);
       lines.push('');
     }
-    for (const res of data.results){
+    for (const res of results){
       const tag = res.error ? `ERR ${res.error}` :
                   `${res.total_time_h.toFixed(2)}h · ${res.n_crews} crews`;
-      const host = res.worker.replace(/^https?:\/\//, '').split('.')[0];
-      lines.push(`${res.label.padEnd(14)} ${tag}  [${host}, ${res.elapsed_ms.toFixed(0)}ms]`);
+      lines.push(`${res.label.padEnd(14)} ${tag}  [${res.elapsed_ms.toFixed(0)}ms]`);
     }
     show(lines.join('\n'));
   } catch (e) {
     resetProgress();
-    const isTimeout = e.message.includes('fetch') || e.message.includes('network');
-    const hint = isTimeout
-      ? `\nLikely cause: payload too large or server timed out.\nTry fewer outages (< 5,000) or fewer scenarios (< 5).`
-      : `\nCheck worker URLs and that the server is awake.`;
-    show(`Batch failed: ${e.message}${hint}`, true);
+    show(`Batch failed: ${e.message}\nCheck that the server is awake (green dot).`, true);
   } finally {
     btn.disabled = false;
     btn.textContent = 'Run batch sweep';
