@@ -762,31 +762,40 @@ def recommend(req: RecommendRequest) -> RecommendResponse:
     cache: dict[int, float] = {}
     evaluations: list[RecommendEvaluation] = []
 
-    # Binary search using fast bare Numba — finds the right crew COUNT quickly.
-    # (~12 iterations × ~500ms = ~6s). The exact restoration time is shown
-    # after the user clicks Apply → Plan restoration.
-    def t_fast(m: int) -> float:
+    # Round crew counts to nearest 50 — cuts binary search from ~12 to ~7 iterations
+    # (log2(5000/50) ≈ 7) while still being accurate to within 50 crews.
+    # Full realistic scheduler is used so the result matches Plan restoration flags.
+    # Most iterations hit low crew counts (~500-1500) which are fast (~0.3-0.7s);
+    # only the floor eval at 5000 crews is slow (~2s). Total: ~8-10s.
+    STEP = 50
+
+    def snap(m: int) -> int:
+        return max(STEP, round(m / STEP) * STEP)
+
+    def t_realistic(m: int) -> float:
+        m = snap(m)
         if m in cache:
             return cache[m]
-        t = _scheduler_time_only(outage_tuples, m, req.seed, req.realistic)
+        t = _scheduler_time_only(outage_tuples, m, req.seed, req.realistic, req)
         cache[m] = t
         evaluations.append(RecommendEvaluation(crews=m, total_time_h=t))
         return t
 
-    floor_t = t_fast(upper)
+    floor_t = t_realistic(upper)
     target  = floor_t * req.tolerance
 
-    lo, hi = 1, upper
+    lo, hi = STEP, upper
     while lo < hi:
-        mid = (lo + hi) // 2
-        if t_fast(mid) <= target:
+        mid = snap((lo + hi) // 2)
+        if t_realistic(mid) <= target:
             hi = mid
         else:
-            lo = mid + 1
+            lo = mid + STEP
 
+    best = snap(lo)
     return RecommendResponse(
-        recommended_crews=lo,
-        recommended_time_h=t_fast(lo),
+        recommended_crews=best,
+        recommended_time_h=t_realistic(best),
         floor_time_h=floor_t,
         upper_bound=upper,
         tolerance=req.tolerance,

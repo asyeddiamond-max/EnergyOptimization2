@@ -3866,7 +3866,7 @@ async function recommendCrewCountServer(){
     }
     document.getElementById('recCrewCount').textContent = recM.toLocaleString();
     document.getElementById('recCrewDetail').innerHTML =
-      `~${fmtH(recT)} restoration (fast estimate) · within ${Math.round((d.tolerance-1)*100)}% of ${fmtH(floorT)} floor · click Apply for exact time`;
+      `${fmtH(recT)} restoration · within ${Math.round((d.tolerance-1)*100)}% of ${fmtH(floorT)} floor · click Apply to set slider`;
     const applyBtn = document.getElementById('applyRecCrews');
     applyBtn.style.display = 'block';
     applyBtn.onclick = () => {
@@ -3875,7 +3875,7 @@ async function recommendCrewCountServer(){
       runPlanAutoRoute();
     };
     status.textContent =
-      `Server recommended ${recM.toLocaleString()} crews → ~${fmtH(recT)} (fast estimate; Apply sets slider + runs full simulation) ` +
+      `Server recommended ${recM.toLocaleString()} crews → ${fmtH(recT)} ` +
       `(floor ${fmtH(floorT)} at ${d.upper_bound.toLocaleString()} crews · ` +
       `${d.evaluations.length} evals · ${elapsed} ms).`;
     return true;
