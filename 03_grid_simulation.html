@@ -2824,6 +2824,14 @@ document.getElementById('batchRunBtn').onclick = async function(){
     return;
   }
 
+  // Warn if payload will be too large for Render free tier (30s timeout)
+  const outageCount = storm?.outages?.length || 0;
+  const payloadMB = (N * outageCount * 80) / 1e6; // ~80 bytes per outage record
+  if (payloadMB > 8){
+    show(`⚠ Payload too large for server (${N} scenarios × ${outageCount.toLocaleString()} outages ≈ ${payloadMB.toFixed(0)} MB).\nReduce outage count below ~5,000 or scenarios below ${Math.floor(8e6 / (outageCount * 80)) || 1} for batch sweep to work.`, true);
+    return;
+  }
+
   btn.disabled = true;
   btn.textContent = 'Running…';
   statusEl.style.display = 'none';
@@ -2870,7 +2878,11 @@ document.getElementById('batchRunBtn').onclick = async function(){
     show(lines.join('\n'));
   } catch (e) {
     resetProgress();
-    show(`Batch failed: ${e.message}\nCheck worker URLs and that they're awake.`, true);
+    const isTimeout = e.message.includes('fetch') || e.message.includes('network');
+    const hint = isTimeout
+      ? `\nLikely cause: payload too large or server timed out.\nTry fewer outages (< 5,000) or fewer scenarios (< 5).`
+      : `\nCheck worker URLs and that the server is awake.`;
+    show(`Batch failed: ${e.message}${hint}`, true);
   } finally {
     btn.disabled = false;
     btn.textContent = 'Run batch sweep';
