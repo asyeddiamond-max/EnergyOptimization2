@@ -395,6 +395,7 @@
 <script src="./data/hartford_census_tracts.js"></script>
 <script src="./data/hartford_storm_tracks.js"></script>
 <script src="./data/hartford_doe_oe417.js"></script>
+<script src="./data/hartford_storm_wind.js"></script>
 <script>
 const TOWNS = [
   {name:"Hartford",lat:41.7637,lon:-72.6851,pop:121054},
@@ -1301,6 +1302,25 @@ function renderGrid(){
   if (window._mask) window._mask.bringToFront();
 }
 
+// Bilinear interpolation of wind speed (mph) from the HRRR 15×21 Hartford grid.
+function getHrrrWindMph(lat, lon, hrrrStorm, grid) {
+  const wind = hrrrStorm.peak_wind_mph;
+  if (!wind) return 30;
+  const lats = grid.lats, lons = grid.lons;
+  const latC = Math.max(lats[0], Math.min(lats[lats.length-1], lat));
+  const lonC = Math.max(lons[0], Math.min(lons[lons.length-1], lon));
+  let r0 = 0;
+  for (let i = 1; i < lats.length - 1; i++) { if (lats[i] <= latC) r0 = i; }
+  let c0 = 0;
+  for (let i = 1; i < lons.length - 1; i++) { if (lons[i] <= lonC) c0 = i; }
+  const r1 = Math.min(r0 + 1, lats.length - 1);
+  const c1 = Math.min(c0 + 1, lons.length - 1);
+  const dr = (lats[r1] - lats[r0]) > 0 ? (latC - lats[r0]) / (lats[r1] - lats[r0]) : 0;
+  const dc = (lons[c1] - lons[c0]) > 0 ? (lonC - lons[c0]) / (lons[c1] - lons[c0]) : 0;
+  return wind[r0][c0]*(1-dr)*(1-dc) + wind[r0][c1]*(1-dr)*dc +
+         wind[r1][c0]*dr*(1-dc)     + wind[r1][c1]*dr*dc;
+}
+
 // --- Step 3: Storm — pick N outage points on the network ---
 function simulateStorm(){
   if (!feeders.length){status.textContent="Generate the grid first.";return;}
@@ -1326,15 +1346,36 @@ function simulateStorm(){
   feeders.forEach((f,fi)=>{for (let s=0;s<f.pts.length-1;s++) allSegs.push({kind:'f',fi,s,popServed:f.popServed/(f.pts.length-1)});});
   laterals.forEach((l,li)=>{for (let s=0;s<l.pts.length-1;s++) allSegs.push({kind:'l',li,s,popServed:l.popServed/(l.pts.length-1)});});
 
-  // Wind-field weighted placement: segments near the selected storm track
-  // get higher outage probability proportional to interpolated wind speed.
+  // Wind-field weighted outage placement.
+  // Priority: (1) HRRR gridded wind when populated, (2) Gaussian track-decay fallback.
   const useWindField = document.getElementById('windFieldWeighting').checked;
   const trackKey = document.getElementById('stormTrackSelect').value;
   const trackData = trackKey && window.HARTFORD_STORM_TRACKS && window.HARTFORD_STORM_TRACKS[trackKey];
+  const _hw = window.HARTFORD_STORM_WIND;
+  const _hrrrStorm = _hw?._populated && _hw.storms?.[trackKey];
+  const useHrrrGrid = !!(_hrrrStorm && _hrrrStorm.peak_wind_mph);
   let segWeights = null;
   let segCumWeights = null;
   let totalWeight = 0;
-  if (useWindField && trackData && trackData.track && trackData.track.length >= 2){
+  if (useHrrrGrid) {
+    // HRRR path: bilinear interpolation from 15×21 grid, weight ∝ wind² (kinetic energy).
+    const grid = _hw.grid;
+    segWeights = new Float64Array(allSegs.length);
+    for (let si = 0; si < allSegs.length; si++){
+      const seg = allSegs[si];
+      const arr = seg.kind==='f' ? feeders[seg.fi].pts : laterals[seg.li].pts;
+      const a = arr[seg.s], b = arr[seg.s+1];
+      const midLat = (a[0]+b[0])/2, midLon = (a[1]+b[1])/2;
+      const w = getHrrrWindMph(midLat, midLon, _hrrrStorm, grid);
+      segWeights[si] = Math.max(0.05, (w / 30) ** 2);
+      totalWeight += segWeights[si];
+    }
+    segCumWeights = new Float64Array(allSegs.length);
+    segCumWeights[0] = segWeights[0];
+    for (let si = 1; si < allSegs.length; si++)
+      segCumWeights[si] = segCumWeights[si-1] + segWeights[si];
+  } else if (useWindField && trackData && trackData.track && trackData.track.length >= 2){
+    // Gaussian track-decay fallback (HURDAT2 track + Gaussian spatial decay).
     const track = trackData.track;
     segWeights = new Float64Array(allSegs.length);
     for (let si = 0; si < allSegs.length; si++){
@@ -1342,27 +1383,19 @@ function simulateStorm(){
       const arr = seg.kind==='f' ? feeders[seg.fi].pts : laterals[seg.li].pts;
       const a = arr[seg.s], b = arr[seg.s+1];
       const midLat = (a[0]+b[0])/2, midLon = (a[1]+b[1])/2;
-      // Find closest track point and interpolate wind speed
       let minD2 = Infinity, windAtSeg = 30;
       for (let ti = 0; ti < track.length; ti++){
         const dlat = track[ti].lat - midLat, dlon = track[ti].lon - midLon;
         const d2 = dlat*dlat + dlon*dlon;
         if (d2 < minD2){ minD2 = d2; windAtSeg = track[ti].wind_kt; }
       }
-      // Distance in degrees → approximate miles (1° lat ≈ 69 mi)
       const distMi = Math.sqrt(minD2) * 69;
-      // Gaussian decay: σ = 30 miles (typical TC wind field radius for CT storms)
-      // Segments right on the track get full weight; 30mi away get ~37%; 60mi get ~14%
       const sigma = 30;
       const spatialWeight = Math.exp(-(distMi * distMi) / (2 * sigma * sigma));
-      // Wind factor: normalize to peak, so higher wind = more outages
-      const windFactor = windAtSeg / 50; // 50kt baseline
-      // Combined weight: spatial proximity × wind intensity, with a floor of 0.1
-      // so distant areas still get some outages (embedded failures, indirect effects)
+      const windFactor = windAtSeg / 50;
       segWeights[si] = Math.max(0.1, spatialWeight * windFactor);
       totalWeight += segWeights[si];
     }
-    // Build cumulative distribution for weighted sampling
     segCumWeights = new Float64Array(allSegs.length);
     segCumWeights[0] = segWeights[0];
     for (let si = 1; si < allSegs.length; si++){
@@ -1687,6 +1720,16 @@ async function planRestoration(){
     if (!realistic) return 1.5;
     return Math.max(0.25, Math.min(12, Math.exp(Math.log(2) + 0.857 * nextNormal())));
   }
+  // HRRR temperature + precipitation repair multiplier (constant per simulation call).
+  // Cold slows fieldwork; ice storms add re-sag risk and hazard time.
+  const _hrrS = window.HARTFORD_STORM_WIND?._populated
+    ? window.HARTFORD_STORM_WIND?.storms?.[document.getElementById('stormTrackSelect').value]
+    : null;
+  const _hrrTempF  = _hrrS?.avg_temp_f ?? 65;
+  const _hrrPrecip = _hrrS?.precip_type ?? 'rain';
+  const hrrrRepairMult = (_hrrTempF >= 50 ? 1.0 : _hrrTempF >= 32 ? 1.15 : 1.35) *
+                         (_hrrPrecip === 'ice' ? 1.45 : _hrrPrecip === 'snow' ? 1.20 :
+                          _hrrPrecip === 'mix' ? 1.10 : 1.0);
 
   // Item 3: damage-assessment ramp — discovery time per outage.
   //  - 30% of outages are visible within the first hour after dispatch.
@@ -2004,7 +2047,7 @@ async function planRestoration(){
       roadMult *= 1.35;
     }
     const driveMiles = dist({lat:cLat,lon:cLon},o) * roadMult;
-    let repairH = sampleRepairHours();
+    let repairH = sampleRepairHours() * hrrrRepairMult;
     if (realistic && document.getElementById('equipmentShortage').checked && N >= 5000){
       const pctDone = (N - remaining) / N;
       if (pctDone > 0.6) repairH *= 1.0 + 0.4 * ((pctDone - 0.6) / 0.4);
@@ -3281,6 +3324,15 @@ function renderStormTrack(){
 }
 document.getElementById('showStormTrack').onchange = renderStormTrack;
 document.getElementById('stormTrackSelect').onchange = renderStormTrack;
+// When HRRR data is populated, auto-set soil saturation based on measured soil moisture.
+document.getElementById('stormTrackSelect').addEventListener('change', function() {
+  const hw = window.HARTFORD_STORM_WIND;
+  if (!hw?._populated) return;
+  const s = hw.storms?.[this.value];
+  if (!s || s.soil_wetness == null) return;
+  const el = document.getElementById('soilSaturation');
+  if (el) el.checked = s.soil_wetness > 0.35;
+});
 
 // --- DOE OE-417 Events Panel ---
 function renderDoePanel(){
