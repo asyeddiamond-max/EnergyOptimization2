@@ -2332,43 +2332,18 @@ document.getElementById('simStorm').onclick=simulateStorm;
 // Each preset sets sliders + all realistic flags, then runs the full live
 // simulation so results always reflect the current scheduler (never stale JSON).
 
+// All presets run with every realistic toggle on.
+// Only storm duration varies — it's a property of the event, not a realism setting.
 const PRESET_DEFS = [
-  { value:'quiet_day',    label:'Quiet day · 100 outages · 5 crews',
-    outages:100,   crews:5,    dur:0,
-    drag:false, sat:false, wx:false, ramp:false, stage:false },
-  { value:'thunder_sm',   label:'Thunderstorm · 500 outages · 10 crews',
-    outages:500,   crews:10,   dur:6,
-    drag:false, sat:true,  wx:true,  ramp:true,  stage:false },
-  { value:'thunder_lg',   label:'Thunderstorm · 500 outages · 50 crews',
-    outages:500,   crews:50,   dur:6,
-    drag:false, sat:true,  wx:true,  ramp:true,  stage:false },
-  { value:'major_sm',     label:'Major storm · 2,000 outages · 20 crews',
-    outages:2000,  crews:20,   dur:12,
-    drag:true,  sat:true,  wx:true,  ramp:true,  stage:true  },
-  { value:'major_lg',     label:'Major storm · 2,000 outages · 100 crews',
-    outages:2000,  crews:100,  dur:12,
-    drag:true,  sat:true,  wx:true,  ramp:true,  stage:true  },
-  { value:'tropical',     label:'Tropical storm · 5,000 outages · 200 crews',
-    outages:5000,  crews:200,  dur:18,
-    drag:true,  sat:true,  wx:true,  ramp:true,  stage:true  },
-  { value:'sandy_sm',     label:'Sandy-scale · 10,000 outages · 500 crews',
-    outages:10000, crews:500,  dur:36,
-    drag:true,  sat:true,  wx:true,  ramp:true,  stage:true  },
-  { value:'sandy_lg',     label:'Sandy-scale · 10,000 outages · 1,000 crews',
-    outages:10000, crews:1000, dur:36,
-    drag:true,  sat:true,  wx:true,  ramp:true,  stage:true  },
-  { value:'worst_case',   label:'Worst case · 25,000 outages · 1,000 crews',
-    outages:25000, crews:1000, dur:48,
-    drag:true,  sat:true,  wx:true,  ramp:true,  stage:true  },
-  { value:'opt_thunder',  label:'Thunderstorm (optimistic) · 500 outages · 10 crews',
-    outages:500,   crews:10,   dur:3,
-    drag:false, sat:false, wx:true,  ramp:false, stage:true  },
-  { value:'opt_major',    label:'Major storm (optimistic) · 2,000 outages · 100 crews',
-    outages:2000,  crews:100,  dur:8,
-    drag:false, sat:false, wx:true,  ramp:false, stage:true  },
-  { value:'opt_sandy',    label:'Sandy-scale (optimistic) · 10,000 outages · 500 crews',
-    outages:10000, crews:500,  dur:18,
-    drag:false, sat:false, wx:true,  ramp:false, stage:true  },
+  { value:'quiet_day',  label:'Quiet day · 100 outages · 5 crews',             outages:100,   crews:5,    dur:0  },
+  { value:'thunder_sm', label:'Thunderstorm · 500 outages · 10 crews',          outages:500,   crews:10,   dur:6  },
+  { value:'thunder_lg', label:'Thunderstorm · 500 outages · 50 crews',          outages:500,   crews:50,   dur:6  },
+  { value:'major_sm',   label:'Major storm · 2,000 outages · 20 crews',         outages:2000,  crews:20,   dur:12 },
+  { value:'major_lg',   label:'Major storm · 2,000 outages · 100 crews',        outages:2000,  crews:100,  dur:12 },
+  { value:'tropical',   label:'Tropical storm · 5,000 outages · 200 crews',     outages:5000,  crews:200,  dur:18 },
+  { value:'sandy_sm',   label:'Sandy-scale · 10,000 outages · 500 crews',       outages:10000, crews:500,  dur:36 },
+  { value:'sandy_lg',   label:'Sandy-scale · 10,000 outages · 1,000 crews',     outages:10000, crews:1000, dur:36 },
+  { value:'worst_case', label:'Worst case · 25,000 outages · 1,000 crews',      outages:25000, crews:1000, dur:48 },
 ];
 
 function loadPresetList(){
@@ -2392,15 +2367,13 @@ async function loadPreset(name){
   cS.value = p.crews;   cV.textContent = p.crews;
 
   // Realistic mode on; core flags always on; storm-specific flags per preset
+  // Every realistic toggle on — only storm duration varies by event type.
   document.getElementById('realisticMode').checked = true;
-  ['customerPriority','crewSpecialization','hierarchicalMode','tieredPriority','crewStickiness']
+  ['customerPriority','crewSpecialization','hierarchicalMode','tieredPriority',
+   'crewStickiness','stormDrag','soilSaturation','weatherWindow',
+   'crewTimeSeriesRamp','preStormStaging']
     .forEach(id => { const el=document.getElementById(id); if(el) el.checked=true; });
-  document.getElementById('stormDrag').checked         = !!p.drag;
-  document.getElementById('soilSaturation').checked    = !!p.sat;
-  document.getElementById('weatherWindow').checked     = !!p.wx;
-  document.getElementById('crewTimeSeriesRamp').checked= !!p.ramp;
-  document.getElementById('preStormStaging').checked   = !!p.stage;
-  document.getElementById('stormDurationH').value      = p.dur ?? 18;
+  document.getElementById('stormDurationH').value = p.dur ?? 18;
 
   // Run full live simulation with these settings
   await generateGrid();
