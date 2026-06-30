@@ -2072,17 +2072,16 @@ function renderPlan(crews, totalTime, N, realistic){
   if (window._depotCloud){ map.removeLayer(window._depotCloud); window._depotCloud=null; }
   if (window._repairCloud){ map.removeLayer(window._repairCloud); window._repairCloud=null; }
 
-  const DEPOT_SVG_LIMIT = 500;
-  if (crews.length <= DEPOT_SVG_LIMIT) {
-    crews.forEach(c=>{
-      const html=`<div style="width:20px;height:20px;border-radius:50%;background:${c.color};display:flex;align-items:center;justify-content:center;"><i class="ti ti-truck" style="font-size:11px;color:#fff;"></i></div>`;
-      L.marker([c.depot.lat,c.depot.lon],{icon:L.divIcon({className:'crew-depot',html,iconSize:[20,20],iconAnchor:[10,10]})}).addTo(depotLayer)
-        .bindTooltip(`Crew ${c.color} depot`);
-    });
-  } else {
-    const depotPts = crews.map(c => ({lat:c.depot.lat, lon:c.depot.lon, color:c.color, r:5}));
-    window._depotCloud = new PointCloudLayer(depotPts, {stroke:"#111", lineWidth:1.2, fillOpacity:1});
-    window._depotCloud.addTo(map);
+  // Always use circle divIcon markers so depots are always visible.
+  // Sample evenly when fleet is large to keep the DOM manageable.
+  const MAX_DEPOT_MARKERS = 300;
+  const step = Math.ceil(crews.length / MAX_DEPOT_MARKERS);
+  for (let ci = 0; ci < crews.length; ci += step){
+    const c = crews[ci];
+    const html=`<div style="width:20px;height:20px;border-radius:50%;background:${c.color};border:2px solid rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;"><i class="ti ti-truck" style="font-size:11px;color:#fff;"></i></div>`;
+    L.marker([c.depot.lat,c.depot.lon],{icon:L.divIcon({className:'crew-depot',html,iconSize:[20,20],iconAnchor:[10,10]})})
+      .addTo(depotLayer)
+      .bindTooltip(`Crew depot (${c.color})`);
   }
 
   const NUMBERED_BUDGET = crews.length > 500 ? 500 : 1500;
