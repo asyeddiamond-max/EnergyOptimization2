@@ -755,15 +755,16 @@ def recommend(req: RecommendRequest) -> RecommendResponse:
         )
 
     outage_tuples = [(o.lat, o.lon) for o in req.outages]
-    upper = req.upper_bound or min(10000, max(50, N // 2))
+    # Cap upper at 5000 (slider max) — no point searching beyond what the UI allows
+    upper = req.upper_bound or min(5000, max(50, N // 5))
     upper = min(upper, N)
 
     cache: dict[int, float] = {}
     evaluations: list[RecommendEvaluation] = []
 
-    # Phase 1: Binary search using fast bare Numba (no realistic flags).
-    # This finds the approximate optimal crew count in ~17 × 0.5s = ~8s
-    # instead of ~17 × 5s = ~85s with full realistic mode.
+    # Binary search using fast bare Numba — finds the right crew COUNT quickly.
+    # (~12 iterations × ~500ms = ~6s). The exact restoration time is shown
+    # after the user clicks Apply → Plan restoration.
     def t_fast(m: int) -> float:
         if m in cache:
             return cache[m]
@@ -772,37 +773,20 @@ def recommend(req: RecommendRequest) -> RecommendResponse:
         evaluations.append(RecommendEvaluation(crews=m, total_time_h=t))
         return t
 
-    floor_t_fast = t_fast(upper)
-    target_fast = floor_t_fast * req.tolerance
+    floor_t = t_fast(upper)
+    target  = floor_t * req.tolerance
 
     lo, hi = 1, upper
     while lo < hi:
         mid = (lo + hi) // 2
-        if t_fast(mid) <= target_fast:
+        if t_fast(mid) <= target:
             hi = mid
         else:
             lo = mid + 1
 
-    approx_lo = lo
-
-    # Phase 2: Run the full realistic scheduler once each for floor and result
-    # to get accurate times that match what Plan restoration produces.
-    has_flags = (req.crew_specialization or req.crew_stickiness
-                 or req.hierarchical or req.tiered_priority
-                 or req.customer_weight or req.storm_duration)
-
-    if has_flags:
-        floor_t  = _scheduler_time_only(outage_tuples, upper,    req.seed, req.realistic, req)
-        result_t = _scheduler_time_only(outage_tuples, approx_lo, req.seed, req.realistic, req)
-        evaluations.append(RecommendEvaluation(crews=upper,     total_time_h=floor_t))
-        evaluations.append(RecommendEvaluation(crews=approx_lo, total_time_h=result_t))
-    else:
-        floor_t  = floor_t_fast
-        result_t = t_fast(approx_lo)
-
     return RecommendResponse(
-        recommended_crews=approx_lo,
-        recommended_time_h=result_t,
+        recommended_crews=lo,
+        recommended_time_h=t_fast(lo),
         floor_time_h=floor_t,
         upper_bound=upper,
         tolerance=req.tolerance,
