@@ -7,6 +7,7 @@
 <meta name="robots" content="noindex, nofollow" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" />
 <style>
   html, body { margin:0; padding:0; height:100%; font-family: system-ui, sans-serif; background:#f5f7fb; }
   #app { display:grid; grid-template-columns: 360px 1fr; height:100vh; }
@@ -336,11 +337,6 @@
     <div class="section-label">4 · Export</div>
 
     <div class="ctrl" style="background:#f0f9ff;border-color:#bae6fd;">
-      <div style="font-size:11px;color:#0c4a6e;line-height:1.45;margin-bottom:8px;">
-        Save the current grid + storm + restoration plan as GIS files you can open in QGIS, ArcGIS, geopandas, or R.
-      </div>
-      <button class="action" id="exportGeoJSON" style="background:linear-gradient(135deg,#0ea5e9,#0369a1);margin-bottom:6px">Download GeoJSON</button>
-      <button class="action" id="exportShapefile" style="background:linear-gradient(135deg,#6366f1,#3730a3);margin-bottom:6px">Download Shapefile (zip)</button>
       <button class="action" id="exportReport" style="background:linear-gradient(135deg,#a855f7,#7c3aed);margin-bottom:0">Download Simulation Report</button>
       <div style="font-size:10px;color:#6b7a93;margin-top:4px;line-height:1.4;">
         Generates a detailed written report of the entire simulation: grid layout, storm damage, crew dispatch timeline, and restoration statistics. Useful for research documentation and presentations.
@@ -594,11 +590,11 @@ legend.onAdd=function(){
     <div class="ml-row"><span class="ml-line" style="border-color:#1f77b4"></span> Feeder backbone (colored by substation)</div>
     <div class="ml-row"><span class="ml-line" style="border-color:#bfc4cb;border-width:1px"></span> Lateral</div>
     <div class="ml-row"><svg width="14" height="14" viewBox="0 0 14 14"><line x1="2" y1="2" x2="12" y2="12" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round"/><line x1="12" y1="2" x2="2" y2="12" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round"/></svg> Storm outage</div>
-    <div class="ml-row"><svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" rx="2" fill="#475569" stroke="#1e293b" stroke-width="1"/></svg> Crew depot</div>
-    <div class="ml-row">🏥 Hospital</div>
-    <div class="ml-row">🚒 Fire station</div>
-    <div class="ml-row">🚑 EMS</div>
-    <div class="ml-row">💧 Water plant</div>
+    <div class="ml-row"><span style="display:inline-block;width:14px;height:18px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#475569;vertical-align:middle;margin-right:2px"></span> Crew depot</div>
+    <div class="ml-row"><span style="display:inline-block;width:14px;height:18px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#c0312b;vertical-align:middle;margin-right:2px"></span> Hospital</div>
+    <div class="ml-row"><span style="display:inline-block;width:14px;height:18px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#e06c1a;vertical-align:middle;margin-right:2px"></span> Fire station</div>
+    <div class="ml-row"><span style="display:inline-block;width:14px;height:18px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#2563eb;vertical-align:middle;margin-right:2px"></span> EMS</div>
+    <div class="ml-row"><span style="display:inline-block;width:14px;height:18px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#0d7a6b;vertical-align:middle;margin-right:2px"></span> Water plant</div>
     <div class="ml-row"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="#fbbf24" stroke="#92400e" stroke-width="1.5"/></svg> Storm track point (wind speed)</div>
     <div class="ml-row ml-note">Colored dots on outages = crew assignment + repair order.</div>
   `;
@@ -2079,8 +2075,8 @@ function renderPlan(crews, totalTime, N, realistic){
   const DEPOT_SVG_LIMIT = 500;
   if (crews.length <= DEPOT_SVG_LIMIT) {
     crews.forEach(c=>{
-      const html=`<div style="width:14px;height:14px;background:${c.color};border:2px solid #111;"></div>`;
-      L.marker([c.depot.lat,c.depot.lon],{icon:L.divIcon({className:'crew-depot',html,iconSize:[14,14],iconAnchor:[7,7]})}).addTo(depotLayer)
+      const html=`<div style="width:18px;height:22px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${c.color};display:flex;align-items:center;justify-content:center;"><i class="ti ti-truck" style="transform:rotate(45deg);font-size:10px;color:#fff;"></i></div>`;
+      L.marker([c.depot.lat,c.depot.lon],{icon:L.divIcon({className:'crew-depot',html,iconSize:[18,22],iconAnchor:[9,22]})}).addTo(depotLayer)
         .bindTooltip(`Crew ${c.color} depot`);
     });
   } else {
@@ -2441,8 +2437,8 @@ function renderRestorationFromState(){
   // Depots
   if (plan.crews.length <= 500){
     plan.crews.forEach(c => {
-      const html = `<div style="width:14px;height:14px;background:${c.color};border:2px solid #111;"></div>`;
-      L.marker([c.depot.lat, c.depot.lon], {icon: L.divIcon({className:'crew-depot', html, iconSize:[14,14], iconAnchor:[7,7]})}).addTo(depotLayer);
+      const html = `<div style="width:18px;height:22px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${c.color};display:flex;align-items:center;justify-content:center;"><i class="ti ti-truck" style="transform:rotate(45deg);font-size:10px;color:#fff;"></i></div>`;
+      L.marker([c.depot.lat, c.depot.lon], {icon: L.divIcon({className:'crew-depot', html, iconSize:[18,22], iconAnchor:[9,22]})}).addTo(depotLayer);
     });
   } else {
     const depotPts = plan.crews.map(c => ({lat:c.depot.lat, lon:c.depot.lon, color:c.color, r:5}));
@@ -3180,8 +3176,7 @@ async function runBenchmark(){
 document.getElementById('benchmarkBtn').onclick = runBenchmark;
 document.getElementById('resetAll').onclick=resetStorm;
 
-// --- Export: GeoJSON + Shapefile ---
-// Convert the in-memory simulation state to standard GIS layers.
+// --- Export (report only — GeoJSON/Shapefile removed) ---
 function buildFeatureCollections(){
   const seed = +seedI.value|0;
   const stamp = new Date().toISOString().replace(/[:.]/g,'-');
@@ -3306,77 +3301,6 @@ function downloadBlob(blob, filename){
   setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
 }
 
-async function exportGeoJSON(){
-  if (!substations.length){ status.textContent="Generate the grid first."; return; }
-  const { subsFC, feedsFC, latsFC, outFC, planFC, manifest, stamp } = buildFeatureCollections();
-  const bundle = {
-    manifest,
-    substations: subsFC,
-    feeders: feedsFC,
-    laterals: latsFC,
-    outages: outFC,
-    restoration_plan: planFC,
-  };
-  if (typeof JSZip !== 'undefined'){
-    const zip = new JSZip();
-    zip.file("manifest.json", JSON.stringify(manifest, null, 2));
-    zip.file("substations.geojson",     JSON.stringify(subsFC));
-    zip.file("feeders.geojson",         JSON.stringify(feedsFC));
-    zip.file("laterals.geojson",        JSON.stringify(latsFC));
-    zip.file("outages.geojson",         JSON.stringify(outFC));
-    zip.file("restoration_plan.geojson",JSON.stringify(planFC));
-    const blob = await zip.generateAsync({ type:"blob" });
-    downloadBlob(blob, `hartford_grid_seed${manifest.inputs.seed}_${stamp}.zip`);
-    status.textContent = `Exported GeoJSON zip (${manifest.counts.substations} subs, ${manifest.counts.feeders} feeders, ${manifest.counts.laterals} laterals).`;
-  } else {
-    downloadBlob(new Blob([JSON.stringify(bundle, null, 2)], {type:"application/json"}), `hartford_grid_seed${manifest.inputs.seed}_${stamp}.json`);
-    status.textContent = "Exported combined GeoJSON (JSZip not loaded → single file).";
-  }
-}
-
-async function exportShapefile(){
-  if (!substations.length){ status.textContent="Generate the grid first."; return; }
-  if (typeof shpwrite === 'undefined' || typeof JSZip === 'undefined'){
-    status.textContent = "Shapefile libraries did not load. Use Download GeoJSON instead.";
-    return;
-  }
-  const { subsFC, feedsFC, latsFC, outFC, planFC, manifest, stamp } = buildFeatureCollections();
-  const layers = [
-    { name:"substations",     fc: subsFC,  hasGeom: subsFC.features.length>0 },
-    { name:"feeders",         fc: feedsFC, hasGeom: feedsFC.features.length>0 },
-    { name:"laterals",        fc: latsFC,  hasGeom: latsFC.features.length>0 },
-    { name:"outages",         fc: outFC,   hasGeom: outFC.features.length>0 },
-    { name:"restoration_plan",fc: planFC,  hasGeom: planFC.features.length>0 },
-  ];
-  const master = new JSZip();
-  master.file("manifest.json", JSON.stringify(manifest, null, 2));
-  for (const layer of layers) {
-    if (!layer.hasGeom) continue;
-    try {
-      const blob = shpwrite.zip(layer.fc); // returns base64 string in 0.3.x
-      // shp-write 0.3.x returns a base64-encoded zip. Decode and unpack into master zip.
-      const raw = atob(blob);
-      const inner = await JSZip.loadAsync(raw, { binary:true });
-      for (const path in inner.files) {
-        const f = inner.files[path];
-        if (!f.dir) {
-          const data = await f.async("uint8array");
-          // Prefix with layer name to avoid collisions
-          master.file(`${layer.name}/${path}`, data);
-        }
-      }
-    } catch(e) {
-      console.warn(`shp-write failed on ${layer.name}:`, e);
-    }
-  }
-  const blob = await master.generateAsync({ type:"blob" });
-  downloadBlob(blob, `hartford_grid_seed${manifest.inputs.seed}_${stamp}_shp.zip`);
-  status.textContent = `Exported shapefile bundle (${manifest.counts.substations} subs, ${manifest.counts.feeders} feeders, ${manifest.counts.laterals} laterals).`;
-}
-
-document.getElementById('exportGeoJSON').onclick = exportGeoJSON;
-document.getElementById('exportShapefile').onclick = exportShapefile;
-
 // --- Critical facilities map layer ---
 let critFacilityLayer = null;
 function renderCriticalFacilities(){
@@ -3387,12 +3311,17 @@ function renderCriticalFacilities(){
   if (countEl) countEl.textContent = ` (${facs.length} facilities loaded)`;
   if (!show || !facs.length) return;
   critFacilityLayer = L.layerGroup();
-  const critEmoji = { hospital: '🏥', fire: '🚒', ems: '🚑', water: '💧' };
+  const critCfg = {
+    hospital: { color:'#c0312b', icon:'ti-plus' },
+    fire:     { color:'#e06c1a', icon:'ti-flame' },
+    ems:      { color:'#2563eb', icon:'ti-ambulance' },
+    water:    { color:'#0d7a6b', icon:'ti-droplet' },
+  };
   for (const f of facs){
-    const emoji = critEmoji[f.type] || '🏥';
-    const html = `<div style="font-size:18px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.3))">${emoji}</div>`;
+    const cfg = critCfg[f.type] || critCfg.hospital;
+    const html = `<div style="width:22px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${cfg.color};display:flex;align-items:center;justify-content:center;"><i class="ti ${cfg.icon}" style="transform:rotate(45deg);font-size:12px;color:#fff;"></i></div>`;
     const tip = `<b>${f.name}</b><br>${f.type.toUpperCase()}${f.beds ? ' · '+f.beds+' beds' : ''}<br>${f.town}`;
-    L.marker([f.lat, f.lon], {icon: L.divIcon({className:'', html, iconSize:[16,16], iconAnchor:[8,8]})})
+    L.marker([f.lat, f.lon], {icon: L.divIcon({className:'', html, iconSize:[22,28], iconAnchor:[11,28]})})
       .bindTooltip(tip).addTo(critFacilityLayer);
   }
   critFacilityLayer.addTo(map);
