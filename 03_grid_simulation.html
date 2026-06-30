@@ -1014,15 +1014,7 @@ function fmtEstHours(h){
   return d + " d " + hr + " h";
 }
 
-const _estimatedTimeEl = document.getElementById('estimatedTime');
-function updateEstimate(){
-  const N = +oS.value;
-  const M = +cS.value;
-  const realistic = document.getElementById('realisticMode').checked;
-  _estimatedTimeEl.textContent = "≈ " + fmtEstHours(estimateRestorationTime(N, M, realistic));
-}
-document.getElementById('realisticMode').addEventListener('change', updateEstimate);
-updateEstimate();
+function updateEstimate(){}
 
 (function(){
   const panel = document.getElementById('realisticSubToggles');
