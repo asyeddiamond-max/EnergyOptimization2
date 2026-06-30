@@ -343,61 +343,40 @@
       </div>
     </div>
 
-    <div class="section-label">5 · Real-data layers</div>
-
-    <div class="ctrl" style="background:#fef2f2;border-color:#fecaca;">
-      <div style="font-size:11px;color:#7f1d1d;line-height:1.4;">
-        <b style="color:#991b1b">Critical facilities</b> — real hospitals, fire stations, EMS, and water treatment plants from the federal <b>HIFLD</b> dataset. When a storm outage falls near one of these, it is flagged priority-1 for restoration instead of random 2% sampling.
-        <span id="critFacilityCount" style="font-weight:600;"></span>
+    <div class="ctrl rf-root">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-size:12px;font-weight:600;color:#334155;">5 · Real-data layers</div>
+        <button type="button" id="realDataExpandBtn" style="background:#f1f5f9;border:1px solid #cbd5e1;color:#475569;font-size:10px;padding:2px 10px;border-radius:4px;cursor:pointer;">Show &#9662;</button>
       </div>
-      <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:#7f1d1d;cursor:pointer;">
-        <input type="checkbox" id="showCriticalFacilities" checked /> Show on map
-      </label>
-    </div>
-
-    <div class="ctrl" style="background:#ecfdf5;border-color:#a7f3d0;">
-      <div style="font-size:11px;color:#065f46;line-height:1.4;">
-        <b style="color:#047857">NLCD tree canopy</b> — per-substation canopy fraction from the USGS National Land Cover Database (30 m resolution, 2021 release). Replaces the simple urban/suburban/rural distance heuristic with actual measured tree cover around each substation.
-      </div>
-    </div>
-
-    <div class="ctrl" style="background:#eff6ff;border-color:#93c5fd;">
-      <div style="font-size:11px;color:#1e3a5f;line-height:1.4;">
-        <b style="color:#1d4ed8">Census tract population</b> — demand points at census-tract resolution (~196 tracts) from the 2020 Decennial Census, replacing the 29-town centroid model for ~5× finer spatial granularity in outage customer-count estimation.
-        <span id="censusTractCount" style="font-weight:600;"></span>
-      </div>
-      <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:#1e3a5f;cursor:pointer;">
-        <input type="checkbox" id="useCensusTracts" checked /> Use tract-level demand
-      </label>
-    </div>
-
-    <div class="ctrl" style="background:#fdf4ff;border-color:#e879f9;">
-      <div style="font-size:11px;color:#701a75;line-height:1.4;">
-        <b style="color:#86198f">NOAA storm tracks</b> — HURDAT2 best-track data for Sandy (2012), Isaias (2020), Irene (2011), and Henri (2021). Overlay the storm path on the map and weight outage placement by wind exposure along the track.
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:#701a75;">
-        <label style="cursor:pointer;display:flex;align-items:center;gap:4px;">
-          <input type="checkbox" id="showStormTrack" /> Show track
-        </label>
-        <select id="stormTrackSelect" style="flex:1;font-size:11px;border:1px solid #e879f9;border-radius:4px;padding:3px;">
-          <option value="">— Select storm —</option>
-          <option value="sandy_2012">Sandy 2012</option>
-          <option value="isaias_2020">Isaias 2020</option>
-          <option value="irene_2011">Irene 2011</option>
-          <option value="henri_2021">Henri 2021</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="ctrl" style="background:#fff7ed;border-color:#fdba74;">
-      <div style="font-size:11px;color:#9a3412;line-height:1.4;">
-        <b style="color:#c2410c">DOE OE-417 events</b> — real major outage events from the Department of Energy Electric Disturbance database. Shows actual customer counts and restoration durations for calibrating the simulator against historical reality.
-        <span id="doeEventCount" style="font-weight:600;"></span>
-      </div>
-      <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:#9a3412;cursor:pointer;">
-        <input type="checkbox" id="showDoePanel" /> Show events panel
-      </label>
-      <div id="doeEventsPanel" style="display:none;margin-top:6px;max-height:160px;overflow-y:auto;font-size:10px;font-family:ui-monospace,monospace;background:#fff;border:1px solid #fdba74;border-radius:4px;padding:6px;">
+      <div style="font-size:10px;color:#64748b;margin-top:3px;line-height:1.35;">HIFLD critical facilities · NLCD tree canopy · Census tracts · NOAA tracks · DOE OE-417 — all active by default.</div>
+      <div id="realDataPanel" class="rf-panel">
+        <div class="rf-item">
+          <label class="rf-label"><input type="checkbox" id="showCriticalFacilities" checked /><span class="rf-name">Critical facilities</span></label>
+          <div class="rf-desc">Real HIFLD hospitals, fire stations, EMS, water plants shown on map. Outages near these are priority-1 for restoration. <span id="critFacilityCount"></span></div>
+        </div>
+        <div class="rf-item">
+          <label class="rf-label"><input type="checkbox" id="useCensusTracts" checked /><span class="rf-name">Census tract demand</span></label>
+          <div class="rf-desc">~196 tracts (2020 Census) for ~5× finer customer-count placement than the 29-town model. <span id="censusTractCount"></span></div>
+        </div>
+        <div class="rf-item">
+          <label class="rf-label"><input type="checkbox" id="showStormTrack" /><span class="rf-name">NOAA storm track</span></label>
+          <div class="rf-desc">HURDAT2 best-track overlay. Also weights outage placement by wind exposure along the selected track.</div>
+          <select id="stormTrackSelect" style="width:100%;font-size:10px;border:1px solid #cbd5e1;border-radius:3px;padding:2px 4px;margin-top:4px;">
+            <option value="">— Select storm —</option>
+            <option value="sandy_2012">Sandy 2012</option>
+            <option value="isaias_2020">Isaias 2020</option>
+            <option value="irene_2011">Irene 2011</option>
+            <option value="henri_2021">Henri 2021</option>
+          </select>
+        </div>
+        <div class="rf-item">
+          <label class="rf-label"><input type="checkbox" id="showDoePanel" /><span class="rf-name">DOE OE-417 events</span></label>
+          <div class="rf-desc">Real CT disturbance events for calibrating simulated vs. actual restoration curves. <span id="doeEventCount"></span></div>
+          <div id="doeEventsPanel" style="display:none;margin-top:6px;max-height:160px;overflow-y:auto;font-size:10px;font-family:ui-monospace,monospace;background:#fff;border:1px solid #fdba74;border-radius:4px;padding:6px;"></div>
+        </div>
+        <div class="rf-item" style="border-top:1px solid #e2e8f0;padding-top:6px;">
+          <div style="font-size:10px;color:#64748b;line-height:1.4;"><b style="color:#475569">NLCD tree canopy</b> — always active. Per-substation canopy fraction from USGS 30 m 2021 data replaces the distance-based urban/rural heuristic.</div>
+        </div>
       </div>
     </div>
 
@@ -1037,6 +1016,22 @@ function updateEstimate(){}
   document.getElementById('rfSelectAll').addEventListener('click', () => { boxes.forEach(b=>{b.checked=true;}); updateCount(); });
   document.getElementById('rfSelectNone').addEventListener('click', () => { boxes.forEach(b=>{b.checked=false;}); updateCount(); });
   updateCount();
+})();
+
+(function(){
+  const panel = document.getElementById('realDataPanel');
+  const btn   = document.getElementById('realDataExpandBtn');
+  btn.addEventListener('click', () => {
+    const open = panel.classList.toggle('rf-open');
+    btn.innerHTML = open ? 'Hide &#9652;' : 'Show &#9662;';
+  });
+  panel.querySelectorAll('.rf-name').forEach(name => {
+    name.addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      name.closest('.rf-item').classList.toggle('rf-expanded');
+    });
+  });
 })();
 
 function starSVG(color,size=14){return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24"><polygon points="12,1 15,9 23,9 16.5,14 19,22 12,17 5,22 7.5,14 1,9 9,9" fill="${color}" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg>`;}
