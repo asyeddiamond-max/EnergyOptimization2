@@ -319,7 +319,7 @@
 
     <div class="ctrl" style="background:#fff7ed;border-color:#fdba74;">
       <div style="font-size:11px;color:#9a3412;line-height:1.45;margin-bottom:6px;">
-        Finds the smallest crew count that gets restoration within 15% of the theoretical floor (the time achieved when crews = outages).
+        Finds the most cost-efficient crew count: the smallest number of crews that gets restoration time within 15% of the best achievable time (the floor, evaluated at the slider maximum). Adding more crews past this point only saves &lt;15% more time but costs significantly more.
       </div>
       <button class="action" id="recommendCrews" style="background:linear-gradient(135deg,#fb923c,#c2410c);margin-bottom:8px">Find optimal crew count</button>
       <div class="progress" id="recProgress"><span class="label" id="recProgressLabel">0%</span><div class="bar orange" id="recProgressBar"></div></div>
