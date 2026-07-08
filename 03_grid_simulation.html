@@ -187,6 +187,7 @@
     </div>
 
     <button class="action btn-grid" id="genGrid">Generate distribution grid</button>
+    <div class="progress" id="gridProgress"><span class="label" id="gridProgressLabel">0%</span><div class="bar" id="gridProgressBar"></div></div>
 
     <div class="section-label">2 · Storm simulation</div>
 
@@ -204,6 +205,7 @@
     </div>
 
     <button class="action btn-storm" id="simStorm">Simulate storm</button>
+    <div class="progress" id="stormProgress"><span class="label" id="stormProgressLabel">0%</span><div class="bar orange" id="stormProgressBar"></div></div>
 
     <div class="stat-box stat-affected">
       <div class="lbl">Customers without power</div>
@@ -1045,6 +1047,26 @@ const _planProgressLabel=document.getElementById('planProgressLabel');
 const _recProgress=document.getElementById('recProgress');
 const _recProgressBar=document.getElementById('recProgressBar');
 const _recProgressLabel=document.getElementById('recProgressLabel');
+const _gridProgress=document.getElementById('gridProgress');
+const _gridProgressBar=document.getElementById('gridProgressBar');
+const _gridProgressLabel=document.getElementById('gridProgressLabel');
+const _stormProgress=document.getElementById('stormProgress');
+const _stormProgressBar=document.getElementById('stormProgressBar');
+const _stormProgressLabel=document.getElementById('stormProgressLabel');
+function setGridProgress(pct, visible){
+  if (visible === false){ _gridProgress.classList.remove('active'); return; }
+  _gridProgress.classList.add('active');
+  const v = Math.max(0, Math.min(100, Math.round(pct)));
+  _gridProgressBar.style.width = v + "%";
+  _gridProgressLabel.textContent = v + "%";
+}
+function setStormProgress(pct, visible){
+  if (visible === false){ _stormProgress.classList.remove('active'); return; }
+  _stormProgress.classList.add('active');
+  const v = Math.max(0, Math.min(100, Math.round(pct)));
+  _stormProgressBar.style.width = v + "%";
+  _stormProgressLabel.textContent = v + "%";
+}
 function setPlanProgress(pct, visible){
   if (visible === false){ _planProgress.classList.remove('active'); return; }
   _planProgress.classList.add('active');
@@ -1282,7 +1304,8 @@ function kmeans(pts,k,geo,rnd,iters=15){
 }
 
 // --- Step 2: Generate feeders (radial backbones) + laterals (random walks) ---
-function generateGrid(){
+async function generateGrid(){
+  setGridProgress(0);
   const seed=+seedI.value|0;
   const rnd=mulberry32(seed+1);
   const feedersPerSub=+fS.value;
@@ -1349,7 +1372,8 @@ function generateGrid(){
   feeders=[]; laterals=[];
 
   // For each substation: f feeder backbones radiating outward
-  substations.forEach((s,si)=>{
+  for (let si=0; si<substations.length; si++){
+    const s = substations[si];
     const popPerFeeder=s.popServed/feedersPerSub;
     for (let f=0;f<feedersPerSub;f++){
       const baseAng=(f/feedersPerSub)*Math.PI*2+rnd()*0.4;
@@ -1389,15 +1413,25 @@ function generateGrid(){
         laterals.push({feederIdx:fIdx,pts:lPts,popServed:popPerFeeder/lateralsPerFeeder});
       }
     }
-  });
+
+    // Yield every 20 substations so the browser can repaint and show
+    // progress at statewide scale (up to 299 substations).
+    if ((si + 1) % 20 === 0 || si === substations.length - 1){
+      setGridProgress(100 * (si + 1) / substations.length);
+      await new Promise(r => setTimeout(r, 0));
+    }
+  }
 
   renderGrid();
   console.log(`Generated: subs=${substations.length}, feeders=${feeders.length}, laterals=${laterals.length}`);
   if (feeders.length === 0) {
     status.textContent = `WARNING: 0 feeders generated. Check console for errors. Substations: ${substations.length}.`;
+    setGridProgress(0, false);
     return;
   }
   status.textContent=`Grid: ${substations.length} ${useReal?'real':'synthetic'} substations, ${feeders.length} feeders, ${laterals.length} laterals. Ready to simulate storm.`;
+  setGridProgress(100);
+  setTimeout(()=>setGridProgress(0,false), 600);
   // Reset downstream state
   storm=null; plan=null;
   outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
@@ -1507,6 +1541,7 @@ function getHrrrWindMph(lat, lon, hrrrStorm, grid) {
 // --- Step 3: Storm — pick N outage points on the network ---
 async function simulateStorm(){
   if (!feeders.length){status.textContent="Generate the grid first.";return;}
+  setStormProgress(0);
   const seed=+seedI.value|0;
   const rnd=mulberry32(seed*7919+13);
   const N=+oS.value;
@@ -1741,7 +1776,9 @@ async function simulateStorm(){
     // Yield every 5000 placements so the browser can repaint and the page
     // stays responsive at statewide scale (up to 100K outages).
     if ((i + 1) % 5000 === 0){
-      status.textContent = `Placing outages… ${Math.round(100*(i+1)/N)}% (${(i+1).toLocaleString()}/${N.toLocaleString()})`;
+      const pct = 100*(i+1)/N;
+      status.textContent = `Placing outages… ${Math.round(pct)}% (${(i+1).toLocaleString()}/${N.toLocaleString()})`;
+      setStormProgress(pct);
       await new Promise(r => setTimeout(r, 0));
     }
   }
@@ -1780,6 +1817,8 @@ async function simulateStorm(){
   restoreTimeEl.textContent='—'; restoreDetailEl.textContent='— customers restored';
   const switchMsg = switchRestoredCount > 0 ? ` (${switchRestoredCount} auto-restored via switching)` : '';
   status.textContent=`Storm: ${N.toLocaleString()} outages${switchMsg}, ~${Math.round(totalCust).toLocaleString()} customers without power.`;
+  setStormProgress(100);
+  setTimeout(()=>setStormProgress(0,false), 600);
 }
 
 // --- Spatial grid hash for nearest-outage queries ---
@@ -2701,8 +2740,7 @@ document.getElementById('simStorm').onclick=simulateStorm;
 // click Plan/Storm before clicking Generate.
 window.addEventListener('load', () => {
   if (window.CONNECTICUT_SUBSTATIONS && window.CONNECTICUT_SUBSTATIONS.length){
-    try { generateGrid(); }
-    catch(e){ console.error('Initial grid generation failed:', e); }
+    generateGrid().catch(e => console.error('Initial grid generation failed:', e));
   }
 });
 // Auto-detect server availability: ping /health and /version on load,
@@ -4436,7 +4474,7 @@ document.getElementById('recommendCrews').onclick = recommendCrewCount;
   }
   status.textContent="Ready. Click \"Generate distribution grid\" to start.";
   // Auto-generate for first view
-  generateGrid();
+  generateGrid().catch(e => console.error('Initial grid generation failed:', e));
   renderCriticalFacilities();
 })();
 </script>
