@@ -146,6 +146,29 @@ def main():
     out_path.write_text(json.dumps(reports, indent=1))
     print(f"\nWrote {len(reports)} reports to {out_path}")
 
+    # Also merge into the consolidated window-global .js file the browser
+    # actually loads (data/connecticut_storm_events.js), keyed by date, so a
+    # new storm's real reports become usable without any manual wiring --
+    # same convention as the other data/*.js sources.
+    consolidated_path = HERE / "data" / "connecticut_storm_events.js"
+    events_by_date = {}
+    if consolidated_path.exists():
+        text = consolidated_path.read_text(encoding="utf-8")
+        start = text.index("{")
+        events_by_date = json.loads(text[start:text.rindex("}") + 1])
+    events_by_date[args.date] = reports
+    header = (
+        "// Real per-report storm damage locations (lat/lon + wind magnitude) from\n"
+        "// NOAA/NCEI Storm Events Database -- see 15_fetch_storm_events.py.\n"
+        "// Keyed by storm date (YYYY-MM-DD). Used to flag severe-wind repair sites\n"
+        "// (tornado/derecho-strength gusts) that HRRR gridded wind data cannot\n"
+        "// resolve, since tornadoes are sub-grid-scale (narrower than HRRR's ~3km\n"
+        "// native resolution) regardless of which wind field is pulled.\n\n"
+    )
+    body = "window.CONNECTICUT_STORM_EVENTS = " + json.dumps(events_by_date) + ";\n"
+    consolidated_path.write_text(header + body, encoding="utf-8")
+    print(f"Merged into {consolidated_path} ({len(events_by_date)} storm date(s) total)")
+
 
 if __name__ == "__main__":
     main()

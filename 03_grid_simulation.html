@@ -395,6 +395,7 @@
 <script src="./data/hartford_doe_oe417.js"></script>
 <script src="./data/connecticut_storm_wind.js"></script>
 <script src="./data/connecticut_flood_corridors.js"></script>
+<script src="./data/connecticut_storm_events.js"></script>
 <script>
 // Real Connecticut town population + centroid (169 towns), from the 2020
 // Census P.L. 94-171 Redistricting Data (11_fetch_census_tracts.py). Used as
@@ -1600,13 +1601,43 @@ async function simulateStorm(){
   const trackData = trackKey && window.HARTFORD_STORM_TRACKS && window.HARTFORD_STORM_TRACKS[trackKey];
   const _hw = window.CONNECTICUT_STORM_WIND;
   const _hrrrStorm = _hw?._populated && _hw.storms?.[trackKey];
+  // Real per-report storm damage locations (15_fetch_storm_events.py), when
+  // available for the selected storm's date -- HRRR's ~3km grid structurally
+  // cannot resolve tornado-scale wind (narrower than its own resolution, no
+  // matter which field is pulled), but individual NWS storm reports capture
+  // real, localized severe/tornadic gusts. Used below to override the
+  // gridded wind estimate near a real report location.
+  const _stormDate = _hrrrStorm?.date;
+  const _realReports = (_stormDate && window.CONNECTICUT_STORM_EVENTS?.[_stormDate]) || null;
+  function realReportWindMph(lat, lon){
+    if (!_realReports) return 0;
+    let best = 0;
+    for (const r of _realReports){
+      const dLatMi = (r.lat - lat) * 69;
+      const dLonMi = (r.lon - lon) * 69 * Math.cos(lat * Math.PI / 180);
+      const miles = Math.sqrt(dLatMi*dLatMi + dLonMi*dLonMi);
+      if (miles <= 3){ // within ~3mi of a real storm report
+        const mph = r.wind_kt * 1.15078;
+        if (mph > best) best = mph;
+      }
+    }
+    return best;
+  }
   const useHrrrGrid = !!(_hrrrStorm && _hrrrStorm.peak_wind_mph);
   let segWeights = null;
   let totalWeight = 0;
+  // Raw wind speed (mph) per segment, alongside segWeights (a transformed
+  // placement-probability weight). Carried onto each outage as wind_mph so
+  // planRestoration can scale repair time for severe-wind sites -- a plain
+  // downed line and a snapped pole/destroyed transformer from tornado-force
+  // wind take very different amounts of time to fix, and the repair-time
+  // model previously had no way to tell them apart.
+  let segWindMph = null;
   if (useHrrrGrid) {
     // HRRR path: bilinear interpolation from the statewide grid, weight ∝ wind² (kinetic energy).
     const grid = _hw.grid;
     segWeights = new Float64Array(allSegs.length);
+    segWindMph = new Float64Array(allSegs.length);
     for (let si = 0; si < allSegs.length; si++){
       const seg = allSegs[si];
       const arr = seg.kind==='f' ? feeders[seg.fi].pts : laterals[seg.li].pts;
@@ -1614,12 +1645,14 @@ async function simulateStorm(){
       const midLat = (a[0]+b[0])/2, midLon = (a[1]+b[1])/2;
       const w = getHrrrWindMph(midLat, midLon, _hrrrStorm, grid);
       segWeights[si] = Math.max(0.05, (w / 30) ** 2);
+      segWindMph[si] = w;
       totalWeight += segWeights[si];
     }
   } else if (useWindField && trackData && trackData.track && trackData.track.length >= 2){
     // Gaussian track-decay fallback (HURDAT2 track + Gaussian spatial decay).
     const track = trackData.track;
     segWeights = new Float64Array(allSegs.length);
+    segWindMph = new Float64Array(allSegs.length);
     for (let si = 0; si < allSegs.length; si++){
       const seg = allSegs[si];
       const arr = seg.kind==='f' ? feeders[seg.fi].pts : laterals[seg.li].pts;
@@ -1643,6 +1676,10 @@ async function simulateStorm(){
       const spatialWeight = Math.exp(-(distMi * distMi) / (2 * sigma * sigma));
       const windFactor = windAtSeg / 50;
       segWeights[si] = Math.max(0.1, spatialWeight * windFactor);
+      // wind_kt is the storm's reported max sustained wind at the nearest
+      // track point, not a local gust -- decayed by the same spatial falloff
+      // used for placement, then converted to mph (1kt = 1.15078mph).
+      segWindMph[si] = windAtSeg * 1.15078 * Math.max(0.15, spatialWeight);
       totalWeight += segWeights[si];
     }
   }
@@ -1800,6 +1837,9 @@ async function simulateStorm(){
       near_flood_zone: nearFloodZone,
       callback_lag_h: callbackLagH,
       switch_restored: switchRestored,
+      // Real per-report wind (tornado-scale, sub-HRRR-grid-resolution)
+      // overrides the gridded estimate when this outage lands near one.
+      wind_mph: Math.max(segWindMph ? segWindMph[segIdx] : 30, realReportWindMph(lat, lon)),
     });
 
     // Yield every 5000 placements so the browser can repaint and the page
@@ -2150,9 +2190,22 @@ async function planRestoration(){
     _bmZ = mag * Math.sin(2*Math.PI*u2);
     return mag * Math.cos(2*Math.PI*u2);
   }
-  function sampleRepairHours(){
+  function sampleRepairHours(windMph){
     if (!realistic) return 1.5;
-    return Math.max(0.25, Math.min(12, Math.exp(Math.log(2) + 0.857 * nextNormal())));
+    const base = Math.exp(Math.log(2) + 0.857 * nextNormal());
+    // Severe-wind sites (~70+ mph gusts, tornado/derecho-strength) often mean
+    // a snapped pole or destroyed transformer, not just a downed conductor --
+    // a full pole-set + re-string realistically takes the better part of a
+    // day, not the normal 12h cap. Verified against May 2018 (CT's tornado/
+    // derecho outbreak): without this, simulated restoration ran 36% faster
+    // than the real 8-day event, the single biggest miss across 11 real
+    // storms tested, because every repair used the same generic distribution
+    // regardless of whether the damage was ordinary wind or tornado-force.
+    if ((windMph||30) >= 70){
+      const severityMult = 1 + Math.min(2.5, ((windMph||30) - 70) / 20);
+      return Math.max(0.25, Math.min(36, base * severityMult));
+    }
+    return Math.max(0.25, Math.min(12, base));
   }
   // HRRR temperature + precipitation repair multiplier (constant per simulation call).
   // Cold slows fieldwork; ice storms add re-sag risk and hazard time.
@@ -2540,7 +2593,7 @@ async function planRestoration(){
       roadMult *= 1.35;
     }
     const driveMiles = dist({lat:cLat,lon:cLon},o) * roadMult;
-    let repairH = sampleRepairHours() * hrrrRepairMult;
+    let repairH = sampleRepairHours(o.wind_mph) * hrrrRepairMult;
     if (realistic && document.getElementById('equipmentShortage').checked && N >= 5000){
       const pctDone = (N - remaining) / N;
       if (pctDone > 0.6) repairH *= 1.0 + 0.4 * ((pctDone - 0.6) / 0.4);
