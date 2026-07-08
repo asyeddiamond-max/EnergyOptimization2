@@ -555,7 +555,11 @@ async function loadLandBoundary(){
 }
 
 // --- Map ---
-const map=L.map('map',{zoomControl:true,minZoom:9,maxZoom:16}).setView([41.60,-72.70],9);
+// preferCanvas: statewide town boundaries are ~83K raw OSM-way vertices;
+// Leaflet's default SVG renderer builds one DOM path per feature and was
+// blocking the main thread long enough (10s+) to trip the browser's
+// unresponsive-tab watchdog on boot. Canvas draws all of it in one pass.
+const map=L.map('map',{zoomControl:true,minZoom:9,maxZoom:16,preferCanvas:true}).setView([41.60,-72.70],9);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; CARTO, OSM'}).addTo(map);
 // Dedicated top pane for the county boundary so nothing else can render above it.
 map.createPane('countyBoundary');
