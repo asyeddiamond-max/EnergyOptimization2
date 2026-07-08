@@ -101,12 +101,18 @@ def get_storm_data(key, cfg):
     H = Herbie(date_str, model="hrrr", product="sfc", fxx=0, verbose=False)
 
     try:
-        ds_w = H.xarray("WIND:10 m above ground")
+        # GUST:surface, not WIND:10 m above ground -- the sustained 10m wind
+        # field badly understates convective/tornadic storms. Verified on
+        # May 2018 (confirmed tornado outbreak): WIND topped out at 21mph
+        # statewide, while real NCEI storm reports for the same day/event
+        # recorded 40-100mph gusts. GUST is HRRR's actual peak-gust field and
+        # lines up with that real data (statewide peak ~81mph for this storm).
+        ds_w = H.xarray("GUST:surface")
         wind_mph = extract_to_grid(ds_w) * 2.23694
         rec["peak_wind_mph"] = np.round(wind_mph, 1).tolist()
-        print(f"  wind  avg={np.nanmean(wind_mph):.1f}  peak={np.nanmax(wind_mph):.1f} mph")
+        print(f"  gust  avg={np.nanmean(wind_mph):.1f}  peak={np.nanmax(wind_mph):.1f} mph")
     except Exception as e:
-        print(f"  wind  FAILED: {e}")
+        print(f"  gust  FAILED: {e}")
 
     try:
         ds_t = H.xarray("TMP:2 m above ground")
