@@ -3398,9 +3398,9 @@ function renderCriticalFacilities(){
   };
   for (const f of facs){
     const cfg = critCfg[f.type] || critCfg.hospital;
-    const html = `<div style="width:12px;height:12px;border-radius:50%;background:${cfg.color};display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 1px rgba(0,0,0,0.35);"><i class="ti ${cfg.icon}" style="font-size:7px;color:#fff;"></i></div>`;
+    const html = `<div style="width:6px;height:6px;border-radius:50%;background:${cfg.color};box-shadow:0 0 0 1px rgba(0,0,0,0.45);"></div>`;
     const tip = `<b>${f.name}</b><br>${f.type.toUpperCase()}${f.beds ? ' · '+f.beds+' beds' : ''}<br>${f.town}`;
-    L.marker([f.lat, f.lon], {icon: L.divIcon({className:'', html, iconSize:[12,12], iconAnchor:[6,6]})})
+    L.marker([f.lat, f.lon], {icon: L.divIcon({className:'', html, iconSize:[6,6], iconAnchor:[3,3]})})
       .bindTooltip(tip).addTo(critFacilityLayer);
   }
   critFacilityLayer.addTo(map);
