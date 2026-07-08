@@ -126,16 +126,6 @@
     <h1>Connecticut — Storm &amp; Restoration</h1>
     <p>Mock distribution grid for the state of Connecticut. Simulate storm outages, count affected customers, and plan crew-based restoration.</p>
 
-    <div class="ctrl" style="background:#eff6ff; border-color:#bfdbfe;">
-      <div style="font-size:12px; color:#1e40af; font-weight:600; margin-bottom:6px;">
-        Quick start: load a pre-computed scenario
-      </div>
-      <select id="presetSelect" style="width:100%; padding:6px 8px; border-radius:6px; border:1px solid #bfdbfe; background:white; font-size:13px;">
-        <option value="">— Custom (use sliders below) —</option>
-      </select>
-      <div id="presetStatus" style="font-size:10px; color:#64748b; margin-top:4px; min-height:14px;"></div>
-    </div>
-
     <div class="seed-explainer">
       <b>Random seed</b> — controls <i>every</i> random choice in the model: where feeders branch, where the storm strikes, where crew depots sit. Same seed + same sliders → identical result every time (reproducible). Change the seed to explore a different scenario.
       <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
@@ -202,7 +192,7 @@
 
     <div class="ctrl">
       <div class="row"><span>Storm outages: <b id="oVal">500</b></span></div>
-      <input type="range" id="oSlider" min="50" max="25000" value="500" step="100" />
+      <input type="range" id="oSlider" min="50" max="100000" value="500" step="100" />
       <div class="small">How many failure points to place across feeders and laterals.</div>
     </div>
 
@@ -2557,64 +2547,6 @@ function resetStorm(){
 document.getElementById('genGrid').onclick=generateGrid;
 document.getElementById('simStorm').onclick=simulateStorm;
 
-// --- Preset scenario library ---
-// Each preset sets sliders + all realistic flags, then runs the full live
-// simulation so results always reflect the current scheduler (never stale JSON).
-
-// All presets run with every realistic toggle on.
-// Only storm duration varies — it's a property of the event, not a realism setting.
-const PRESET_DEFS = [
-  { value:'quiet_day',  label:'Quiet day · 100 outages · 5 crews',             outages:100,   crews:5,    dur:0  },
-  { value:'thunder_sm', label:'Thunderstorm · 500 outages · 10 crews',          outages:500,   crews:10,   dur:6  },
-  { value:'thunder_lg', label:'Thunderstorm · 500 outages · 50 crews',          outages:500,   crews:50,   dur:6  },
-  { value:'major_sm',   label:'Major storm · 2,000 outages · 20 crews',         outages:2000,  crews:20,   dur:12 },
-  { value:'major_lg',   label:'Major storm · 2,000 outages · 100 crews',        outages:2000,  crews:100,  dur:12 },
-  { value:'tropical',   label:'Tropical storm · 5,000 outages · 200 crews',     outages:5000,  crews:200,  dur:18 },
-  { value:'sandy_sm',   label:'Sandy-scale · 10,000 outages · 500 crews',       outages:10000, crews:500,  dur:36 },
-  { value:'sandy_lg',   label:'Sandy-scale · 10,000 outages · 1,000 crews',     outages:10000, crews:1000, dur:36 },
-  { value:'worst_case', label:'Worst case · 25,000 outages · 1,000 crews',      outages:25000, crews:1000, dur:48 },
-];
-
-function loadPresetList(){
-  const sel = document.getElementById('presetSelect');
-  for (const p of PRESET_DEFS){
-    const opt = document.createElement('option');
-    opt.value = p.value;
-    opt.textContent = p.label;
-    sel.appendChild(opt);
-  }
-}
-
-async function loadPreset(name){
-  const p = PRESET_DEFS.find(d => d.value === name);
-  if (!p) return;
-  const statusEl = document.getElementById('presetStatus');
-  statusEl.textContent = `Applying ${p.label}…`;
-
-  // Sliders
-  oS.value = p.outages; oV.textContent = p.outages;
-  cS.value = p.crews;   cV.textContent = p.crews;
-
-  // Realistic mode on; core flags always on; storm-specific flags per preset
-  // Every realistic toggle on — only storm duration varies by event type.
-  document.getElementById('realisticMode').checked = true;
-  ['customerPriority','crewSpecialization','hierarchicalMode','tieredPriority',
-   'crewStickiness','stormDrag','soilSaturation','weatherWindow',
-   'crewTimeSeriesRamp','preStormStaging']
-    .forEach(id => { const el=document.getElementById(id); if(el) el.checked=true; });
-  document.getElementById('stormDurationH').value = p.dur ?? 18;
-
-  // Run full live simulation with these settings
-  await generateGrid();
-  await simulateStorm();
-  await runPlanAutoRoute();
-  statusEl.textContent = `Loaded: ${p.label}`;
-}
-
-document.getElementById('presetSelect').addEventListener('change', (e) => {
-  if (e.target.value) loadPreset(e.target.value);
-});
-loadPresetList();
 // Reflect the actual number of real substations loaded from OSM.
 (function(){
   const el = document.getElementById('realSubCount');
@@ -3466,9 +3398,9 @@ function renderCriticalFacilities(){
   };
   for (const f of facs){
     const cfg = critCfg[f.type] || critCfg.hospital;
-    const html = `<div style="width:26px;height:26px;border-radius:50%;background:${cfg.color};display:flex;align-items:center;justify-content:center;"><i class="ti ${cfg.icon}" style="font-size:14px;color:#fff;"></i></div>`;
+    const html = `<div style="width:12px;height:12px;border-radius:50%;background:${cfg.color};display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 1px rgba(0,0,0,0.35);"><i class="ti ${cfg.icon}" style="font-size:7px;color:#fff;"></i></div>`;
     const tip = `<b>${f.name}</b><br>${f.type.toUpperCase()}${f.beds ? ' · '+f.beds+' beds' : ''}<br>${f.town}`;
-    L.marker([f.lat, f.lon], {icon: L.divIcon({className:'', html, iconSize:[26,26], iconAnchor:[13,13]})})
+    L.marker([f.lat, f.lon], {icon: L.divIcon({className:'', html, iconSize:[12,12], iconAnchor:[6,6]})})
       .bindTooltip(tip).addTo(critFacilityLayer);
   }
   critFacilityLayer.addTo(map);

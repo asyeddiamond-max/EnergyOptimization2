@@ -36,7 +36,6 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
 | Calibration framework | `/api/calibrate` tunes 4 realism parameters via SciPy Nelder-Mead against an observed restoration curve |
 | Multi-server batch sweeps | `/api/batch` fans scenarios out across worker URLs |
 | Customers-restored-over-time curve | inline SVG overlay after each Plan restoration |
-| Pre-computed scenario library | 12 canned storms in `scenarios/`, loadable without compute |
 | Simulation report download | comprehensive text report with grid stats, storm impact, crew performance, top substations, cost estimates, restoration timeline milestones, and academic references (Wanik, Journal of Homeland Security, IBEW) |
 | Real restoration curve overlay | DOE OE-417 events (Sandy, Isaias, Irene, etc.) overlaid on simulated restoration curve for direct comparison |
 | Crew mobilization chart | Time-series chart showing simulated crew arrivals vs. real daily crew counts from Isaias 2020 |
@@ -103,8 +102,7 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
 ├── 02_fetch_town_boundaries.py    # cache all 169 CT town polygons from OSM
 ├── 03_grid_simulation.html        # the main interactive (~4k LOC, runs in any browser)
 ├── 04_geojson_to_shapefile.py     # offline GeoJSON → shapefile converter (optional)
-├── 05_generate_artifacts.py       # offline matplotlib PNG generator (used by scenario precomputer)
-├── 06_precompute_scenarios.py     # batches scenario library JSON for the Alternative #2 dropdown
+├── 05_generate_artifacts.py       # offline matplotlib PNG generator for output/
 ├── 07_server.py                   # FastAPI backend (~780 LOC), disk-backed result cache
 ├── 08_fetch_substations.py        # cache 299 real HIFLD substations statewide
 ├── 09_fetch_critical_facilities.py # cache 1,143 real HIFLD/EPA critical facilities statewide
@@ -127,7 +125,6 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
 │   ├── hartford_doe_oe417.js      #   DOE OE-417 disturbance events for CT
 │   └── ...                        #   boundary, towns, etc.
 ├── output/                        # generated artifacts (PNGs)
-├── scenarios/                     # pre-computed scenario JSON files (Alt #2)
 ├── wasm_scheduler/                # Rust source for the WASM scheduler (kept as reference;
 │                                  #   benchmarked slower than V8 JS, not used in production)
 ├── wasm/scheduler.wasm            # compiled WASM artifact (17 KB)
