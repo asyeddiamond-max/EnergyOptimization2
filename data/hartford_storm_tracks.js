@@ -78,4 +78,31 @@ window.HARTFORD_STORM_TRACKS = {
       {lat:41.7,lon:-72.2,wind_kt:35,pres_mb:1000,time:"2021-08-23T00:00Z"},
     ],
   },
+  // Not a HURDAT2 tropical track -- a severe thunderstorm complex has no
+  // single moving center to trace. This is a provisional stand-in built from
+  // the towns named in local news coverage (NBC CT, WFSB, WTNH, CT Public) as
+  // hardest-hit: Harwinton, Montville, New Britain, New Fairfield, Winchester.
+  // Coordinates are each town's real centroid (data/connecticut_towns_population.json);
+  // wind_kt (~65 mph gust) is an estimate from typical severe-thunderstorm
+  // damaging-wind reports, NOT a measured per-town value -- Eversource/NWS
+  // never published per-town wind speeds for this event. The simulator's
+  // existing Gaussian track-decay placement (sigma=30mi) treats each town as
+  // an independent damage hot spot rather than points along one path.
+  // Meant to be replaced by a real NWS Storm Events Database pull once that
+  // fetch script exists -- see 15_fetch_storm_events.py (planned).
+  "ct_july2026_severe_tstorm": {
+    name: "July 4, 2026 Severe Thunderstorm Complex",
+    date: "2026-07-04",
+    category_at_landfall: "Severe Thunderstorm (non-tropical)",
+    ct_peak_wind_mph: 65,
+    ct_customers_lost: 103500,
+    is_localized_reports: true,
+    track: [
+      {lat:41.7613447,lon:-73.0604432,wind_kt:56,pres_mb:null,time:"2026-07-04T22:00Z"},
+      {lat:41.4638999,lon:-72.1555701,wind_kt:56,pres_mb:null,time:"2026-07-04T22:00Z"},
+      {lat:41.6765545,lon:-72.7861613,wind_kt:56,pres_mb:null,time:"2026-07-04T23:00Z"},
+      {lat:41.4803182,lon:-73.4868629,wind_kt:56,pres_mb:null,time:"2026-07-04T23:00Z"},
+      {lat:41.9272131,lon:-73.1093363,wind_kt:56,pres_mb:null,time:"2026-07-05T00:00Z"},
+    ],
+  },
 };
