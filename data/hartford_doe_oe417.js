@@ -156,4 +156,32 @@ window.HARTFORD_DOE_OE417 = [
     daily_pct_out: [1.0, 0.45, 0.02, 0.0],
     daily_crews: null,
   },
+  {
+    // NOTE: real sources conflict on the peak figure for this storm. Several
+    // summaries say "more than 120,000 customers" lost power, but that
+    // appears to be either a multi-state (CT+MA) figure or a pre-storm
+    // worst-case projection ("several hundred thousand" was floated by
+    // ctmirror.org before the storm hit) that didn't materialize for CT
+    // specifically -- WFSB's hour-by-hour timeline article gives a much
+    // smaller, specific peak: 13,665 Eversource CT customers at noon Monday
+    // 2/23. Using that more granular, timestamped figure (plus UI's share,
+    // for a combined ~15,000) rather than the vaguer "120,000+" claims.
+    date: "2026-02-23",
+    event: "Blizzard Calvin",
+    type: "Severe Weather — Winter Storm (blizzard)",
+    utility: "Eversource Energy",
+    state: "CT",
+    customers_affected: 15000,
+    demand_loss_mw: null,
+    duration_h: 40,
+    restoration_complete: "2026-02-24",
+    notes: "CT's first official blizzard in 8 years, but CT-specific impact " +
+      "was much smaller than pre-storm projections -- Massachusetts took the " +
+      "brunt (142,000 Eversource + 45,000 National Grid customers there). " +
+      "700 crews pre-positioned in CT (from NH, MA, NY, NJ, PA, and Canada) " +
+      "ahead of the storm per Eversource's own announcement. Eversource said " +
+      "power would be fully restored by 11:45pm Tuesday 2/24 at the latest.",
+    daily_pct_out: [1.0, 0.20, 0.0],
+    daily_crews: [700, 700, 100],
+  },
 ];
