@@ -643,11 +643,17 @@ function runSchedule(params){
   const discTime = new Float64Array(N);
   for (let i=0;i<N;i++){oLat[i]=outages[i].lat;oLon[i]=outages[i].lon;}
   if (realistic){
+    // Discovery-tail cap scales with storm size: assessing every last outage
+    // realistically takes longer when there are thousands of them spread
+    // statewide than when there are a few hundred. Anchored so the original
+    // flat 36h is reproduced at N=20,000 (roughly Isaias/Sandy scale, where
+    // it was implicitly validated), sqrt-scaled down for smaller storms.
+    const discMaxTail = Math.max(3, 36 * Math.sqrt(N / 20000));
     const rndDisc = mulberry32(seed*991+7);
     for (let i=0;i<N;i++){
       const u = rndDisc();
       if (u<0.30) discTime[i] = ASSESSMENT_DELAY + u*(1.0/0.30);
-      else {const v=(u-0.30)/0.70;const tA=-Math.log(Math.max(1e-9,1-0.99*v))/0.1;discTime[i]=ASSESSMENT_DELAY+1+Math.min(36,tA);}
+      else {const v=(u-0.30)/0.70;const tA=-Math.log(Math.max(1e-9,1-0.99*v))/0.1;discTime[i]=ASSESSMENT_DELAY+1+Math.min(discMaxTail,tA);}
     }
   }
   let discOrder=null;
@@ -2161,11 +2167,22 @@ async function planRestoration(){
 
   // Item 3: damage-assessment ramp — discovery time per outage.
   //  - 30% of outages are visible within the first hour after dispatch.
-  //  - the remaining 70% reveal exponentially over the next ~36 h (until t=48).
+  //  - the remaining 70% reveal exponentially over a tail that scales with
+  //    storm size (see discMaxTail below), up to ~36h for a mega-storm.
   const oLat=new Float64Array(N), oLon=new Float64Array(N);
   const discTime = new Float64Array(N);
   for (let i=0;i<N;i++){ oLat[i]=storm.outages[i].lat; oLon[i]=storm.outages[i].lon; }
   if (realistic){
+    // With a fixed 36h cap regardless of N, any storm with more than ~100
+    // outages was virtually guaranteed to have at least one outage undiscovered
+    // until t=ASSESSMENT_DELAY+1+36=49h, no matter how few crews were needed
+    // to actually fix everything -- verified empirically (max discovery time
+    // was exactly 49h for N=100 all the way up to N=20,000). Realistically,
+    // assessing a few hundred scattered outages takes hours, not two days;
+    // only a genuinely statewide mega-storm takes the full ~36h tail. Scaled
+    // so the original flat 36h is reproduced at N=20,000 (Isaias/Sandy scale,
+    // where it was implicitly validated against real restoration curves).
+    const discMaxTail = Math.max(3, 36 * Math.sqrt(N / 20000));
     const rndDisc = mulberry32(seed*991 + 7);
     for (let i=0;i<N;i++){
       const u = rndDisc();
@@ -2174,7 +2191,7 @@ async function planRestoration(){
       } else {
         const v = (u - 0.30) / 0.70;                       // 0..1
         const tAfter = -Math.log(Math.max(1e-9, 1 - 0.99*v)) / 0.1;
-        discTime[i] = ASSESSMENT_DELAY + 1 + Math.min(36, tAfter);
+        discTime[i] = ASSESSMENT_DELAY + 1 + Math.min(discMaxTail, tAfter);
       }
     }
   }
@@ -3413,11 +3430,12 @@ function runJsSchedulerReference(outages, M, seed, realistic){
   const discTime = new Float64Array(N);
   for (let i=0;i<N;i++){oLat[i]=outages[i].lat; oLon[i]=outages[i].lon;}
   if (realistic){
+    const discMaxTail = Math.max(3, 36 * Math.sqrt(N / 20000));
     const rd = mulberry32(seed*991 + 7);
     for (let i=0;i<N;i++){
       const u = rd();
       if (u<0.30) discTime[i] = ASSESSMENT_DELAY + u*(1.0/0.30);
-      else {const v=(u-0.30)/0.70; const tA=-Math.log(Math.max(1e-9,1-0.99*v))/0.1; discTime[i]=ASSESSMENT_DELAY+1+Math.min(36,tA);}
+      else {const v=(u-0.30)/0.70; const tA=-Math.log(Math.max(1e-9,1-0.99*v))/0.1; discTime[i]=ASSESSMENT_DELAY+1+Math.min(discMaxTail,tA);}
     }
   }
   const arrivals = computeArrivals(M, realistic);
@@ -4072,6 +4090,7 @@ function scheduleOnly(M, outages){
   const discTime = new Float64Array(N);
   for (let i=0;i<N;i++){oLat[i]=outages[i].lat; oLon[i]=outages[i].lon;}
   if (realistic){
+    const discMaxTail = Math.max(3, 36 * Math.sqrt(N / 20000));
     const rndDisc = mulberry32(seed*991 + 7);
     for (let i=0;i<N;i++){
       const u = rndDisc();
@@ -4080,7 +4099,7 @@ function scheduleOnly(M, outages){
       } else {
         const v = (u - 0.30) / 0.70;
         const tAfter = -Math.log(Math.max(1e-9, 1 - 0.99*v)) / 0.1;
-        discTime[i] = ASSESSMENT_DELAY + 1 + Math.min(36, tAfter);
+        discTime[i] = ASSESSMENT_DELAY + 1 + Math.min(discMaxTail, tAfter);
       }
     }
   }
@@ -4322,6 +4341,7 @@ async function recommendCrewCount(){
   const discTime = new Float64Array(N);
   for (let i=0;i<N;i++){ oLat[i]=outages[i].lat; oLon[i]=outages[i].lon; }
   if (realistic){
+    const discMaxTail = Math.max(3, 36 * Math.sqrt(N / 20000));
     const rndDisc = mulberry32(seed*991 + 7);
     for (let i=0;i<N;i++){
       const u = rndDisc();
@@ -4330,7 +4350,7 @@ async function recommendCrewCount(){
       } else {
         const v = (u - 0.30) / 0.70;
         const tAfter = -Math.log(Math.max(1e-9, 1 - 0.99*v)) / 0.1;
-        discTime[i] = ASSESSMENT_DELAY + 1 + Math.min(36, tAfter);
+        discTime[i] = ASSESSMENT_DELAY + 1 + Math.min(discMaxTail, tAfter);
       }
     }
   }
