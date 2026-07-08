@@ -473,9 +473,25 @@ const FLOOD_CORRIDORS = [
   {name:"Salmon Brook", pts:[[42.00,-72.79],[41.96,-72.78],[41.92,-72.77],[41.88,-72.78]]},
   ...(window.CONNECTICUT_FLOOD_CORRIDORS_EXTRA || []),
 ];
+// Precompute a padded bounding box per corridor so distToFloodCorridor can
+// skip whole corridors that are nowhere near the query point, instead of
+// checking every segment of all 17 corridors (~300 haversine calls) for
+// every single outage. Margin (2mi) is safely bigger than the 1.5mi
+// flood-zone threshold that's the only thing downstream actually checks.
+const FLOOD_MARGIN_DEG = 0.03;
+for (const c of FLOOD_CORRIDORS){
+  let minLa=90, maxLa=-90, minLo=180, maxLo=-180;
+  for (const [la,lo] of c.pts){
+    if (la<minLa) minLa=la; if (la>maxLa) maxLa=la;
+    if (lo<minLo) minLo=lo; if (lo>maxLo) maxLo=lo;
+  }
+  c._bbox = [minLa-FLOOD_MARGIN_DEG, maxLa+FLOOD_MARGIN_DEG, minLo-FLOOD_MARGIN_DEG, maxLo+FLOOD_MARGIN_DEG];
+}
 function distToFloodCorridor(lat, lon){
   let minD = Infinity;
   for (const c of FLOOD_CORRIDORS){
+    const b = c._bbox;
+    if (lat<b[0] || lat>b[1] || lon<b[2] || lon>b[3]) continue;
     for (let i = 0; i < c.pts.length - 1; i++){
       const [aLat,aLon] = c.pts[i], [bLat,bLon] = c.pts[i+1];
       const dx = bLat-aLat, dy = bLon-aLon;
@@ -562,8 +578,8 @@ function mulberry32(s){return function(){s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s
 function dist(a,b){const R=3958.8,toR=d=>d*Math.PI/180;const dLa=toR(b.lat-a.lat),dLo=toR(b.lon-a.lon);const s=Math.sin(dLa/2)**2+Math.cos(toR(a.lat))*Math.cos(toR(b.lat))*Math.sin(dLo/2)**2;return 2*R*Math.asin(Math.sqrt(s));}
 const NN_CELL_DEG = 0.005;
 function buildNNGrid(oLat,oLon,N){const g=new Map();for (let i=0;i<N;i++){const cx=Math.floor(oLon[i]/NN_CELL_DEG),cy=Math.floor(oLat[i]/NN_CELL_DEG);const k=cx*100000+cy;let a=g.get(k);if (!a){a=[];g.set(k,a);}a.push(i);}return g;}
-function nnGridFind(g,cLat,cLon,done,oLat,oLon){const ccx=Math.floor(cLon/NN_CELL_DEG),ccy=Math.floor(cLat/NN_CELL_DEG);let bestI=-1,bestSq=Infinity;for (let ring=0;ring<100;ring++){const rm=ring*NN_CELL_DEG;if (bestI!==-1 && rm*rm>bestSq) break;if (ring===0){const k=ccx*100000+ccy;const c=g.get(k);if (c){for (let i=0;i<c.length;i++){const j=c[i];if (done[j]) continue;const dx=oLat[j]-cLat,dy=oLon[j]-cLon,sq=dx*dx+dy*dy;if (sq<bestSq){bestSq=sq;bestI=j;}}}} else {for (let dx=-ring;dx<=ring;dx++)for (let dy=-ring;dy<=ring;dy++){if (dx!==-ring&&dx!==ring&&dy!==-ring&&dy!==ring) continue;const k=(ccx+dx)*100000+(ccy+dy);const c=g.get(k);if (!c) continue;for (let i=0;i<c.length;i++){const j=c[i];if (done[j]) continue;const ddx=oLat[j]-cLat,ddy=oLon[j]-cLon,sq=ddx*ddx+ddy*ddy;if (sq<bestSq){bestSq=sq;bestI=j;}}}}}return bestI;}
-function nnGridFindVisible(g,cLat,cLon,done,oLat,oLon,discTime,cTime){const ccx=Math.floor(cLon/NN_CELL_DEG),ccy=Math.floor(cLat/NN_CELL_DEG);let bestI=-1,bestSq=Infinity;for (let ring=0;ring<100;ring++){const rm=ring*NN_CELL_DEG;if (bestI!==-1 && rm*rm>bestSq) break;if (ring===0){const k=ccx*100000+ccy;const c=g.get(k);if (c){for (let i=0;i<c.length;i++){const j=c[i];if (done[j]) continue;if (discTime[j]>cTime) continue;const dx=oLat[j]-cLat,dy=oLon[j]-cLon,sq=dx*dx+dy*dy;if (sq<bestSq){bestSq=sq;bestI=j;}}}} else {for (let dx=-ring;dx<=ring;dx++)for (let dy=-ring;dy<=ring;dy++){if (dx!==-ring&&dx!==ring&&dy!==-ring&&dy!==ring) continue;const k=(ccx+dx)*100000+(ccy+dy);const c=g.get(k);if (!c) continue;for (let i=0;i<c.length;i++){const j=c[i];if (done[j]) continue;if (discTime[j]>cTime) continue;const ddx=oLat[j]-cLat,ddy=oLon[j]-cLon,sq=ddx*ddx+ddy*ddy;if (sq<bestSq){bestSq=sq;bestI=j;}}}}}return bestI;}
+function nnGridFind(g,cLat,cLon,done,oLat,oLon){const ccx=Math.floor(cLon/NN_CELL_DEG),ccy=Math.floor(cLat/NN_CELL_DEG);let bestI=-1,bestSq=Infinity;for (let ring=0;ring<100;ring++){const rm=(ring-1)*NN_CELL_DEG;if (bestI!==-1 && rm*rm>bestSq) break;if (ring===0){const k=ccx*100000+ccy;const c=g.get(k);if (c){for (let i=0;i<c.length;i++){const j=c[i];if (done[j]) continue;const dx=oLat[j]-cLat,dy=oLon[j]-cLon,sq=dx*dx+dy*dy;if (sq<bestSq){bestSq=sq;bestI=j;}}}} else {for (let dx=-ring;dx<=ring;dx++)for (let dy=-ring;dy<=ring;dy++){if (dx!==-ring&&dx!==ring&&dy!==-ring&&dy!==ring) continue;const k=(ccx+dx)*100000+(ccy+dy);const c=g.get(k);if (!c) continue;for (let i=0;i<c.length;i++){const j=c[i];if (done[j]) continue;const ddx=oLat[j]-cLat,ddy=oLon[j]-cLon,sq=ddx*ddx+ddy*ddy;if (sq<bestSq){bestSq=sq;bestI=j;}}}}}return bestI;}
+function nnGridFindVisible(g,cLat,cLon,done,oLat,oLon,discTime,cTime){const ccx=Math.floor(cLon/NN_CELL_DEG),ccy=Math.floor(cLat/NN_CELL_DEG);let bestI=-1,bestSq=Infinity;for (let ring=0;ring<100;ring++){const rm=(ring-1)*NN_CELL_DEG;if (bestI!==-1 && rm*rm>bestSq) break;if (ring===0){const k=ccx*100000+ccy;const c=g.get(k);if (c){for (let i=0;i<c.length;i++){const j=c[i];if (done[j]) continue;if (discTime[j]>cTime) continue;const dx=oLat[j]-cLat,dy=oLon[j]-cLon,sq=dx*dx+dy*dy;if (sq<bestSq){bestSq=sq;bestI=j;}}}} else {for (let dx=-ring;dx<=ring;dx++)for (let dy=-ring;dy<=ring;dy++){if (dx!==-ring&&dx!==ring&&dy!==-ring&&dy!==ring) continue;const k=(ccx+dx)*100000+(ccy+dy);const c=g.get(k);if (!c) continue;for (let i=0;i<c.length;i++){const j=c[i];if (done[j]) continue;if (discTime[j]>cTime) continue;const ddx=oLat[j]-cLat,ddy=oLon[j]-cLon,sq=ddx*ddx+ddy*ddy;if (sq<bestSq){bestSq=sq;bestI=j;}}}}}return bestI;}
 function hPush(h,it){h.push(it);let i=h.length-1;while (i>0){const p=(i-1)>>1;if (h[p][0]<=h[i][0]) break;const t=h[i];h[i]=h[p];h[p]=t;i=p;}}
 function hPop(h){const top=h[0];const last=h.pop();if (h.length>0){h[0]=last;let i=0;const L=h.length;while (true){const l=2*i+1,r=2*i+2;let s=i;if (l<L&&h[l][0]<h[s][0]) s=l;if (r<L&&h[r][0]<h[s][0]) s=r;if (s===i) break;const t=h[i];h[i]=h[s];h[s]=t;i=s;}}return top;}
 
@@ -1470,7 +1486,7 @@ function getHrrrWindMph(lat, lon, hrrrStorm, grid) {
 }
 
 // --- Step 3: Storm — pick N outage points on the network ---
-function simulateStorm(){
+async function simulateStorm(){
   if (!feeders.length){status.textContent="Generate the grid first.";return;}
   const seed=+seedI.value|0;
   const rnd=mulberry32(seed*7919+13);
@@ -1607,6 +1623,15 @@ function simulateStorm(){
   }
   function commitSegIdx(idx){ fenwick.remove(idx); }
 
+  // Spatial grids for the per-outage nearest-substation and critical-facility
+  // checks below -- built once here instead of a linear scan per outage.
+  // At 100K outages x 299 substations x 1,143 facilities the linear scans
+  // were tens to hundreds of millions of distance checks.
+  const SUB_CELL_DEG = 0.05;
+  const CRIT_CELL_DEG = 0.01;
+  const subGrid = buildStaticGrid(substations, SUB_CELL_DEG);
+  const critGrid = useCritFacilities ? buildStaticGrid(critFacilities, CRIT_CELL_DEG) : null;
+
   for (let i=0;i<N;i++){
     const segIdx = peekSegIdx();
     const seg=allSegs[segIdx];
@@ -1630,12 +1655,7 @@ function simulateStorm(){
     const arr=seg.kind==='f'?feeders[seg.fi].pts:laterals[seg.li].pts;
     const a=arr[seg.s], b=arr[seg.s+1];
     const lat=a[0]+(b[0]-a[0])*t, lon=a[1]+(b[1]-a[1])*t;
-    let bestSub = -1, bestSubD = Infinity;
-    for (let si = 0; si < substations.length; si++){
-      const dx = substations[si].lat - lat, dy = substations[si].lon - lon;
-      const d2 = dx*dx + dy*dy;
-      if (d2 < bestSubD){ bestSubD = d2; bestSub = si; }
-    }
+    const bestSub = staticGridNearest(subGrid, SUB_CELL_DEG, lat, lon, substations);
     // Per-outage tree-blocked flag (environmental realism). Combines:
     //   (a) per-substation TREE FACTOR — state-center urban = 0.4×,
     //       suburban = 1.0×, rural perimeter = 1.5×.
@@ -1654,9 +1674,7 @@ function simulateStorm(){
     const isTreeBlocked = rnd() < pTree ? 1 : 0;
     let isCritical = false;
     if (useCritFacilities){
-      for (const f of critFacilities){
-        if (dist({lat,lon}, f) <= CRIT_RADIUS_MI){ isCritical = true; break; }
-      }
+      isCritical = staticGridAnyWithin(critGrid, CRIT_CELL_DEG, lat, lon, critFacilities, CRIT_RADIUS_MI);
     } else {
       isCritical = rnd() < critRate;
     }
@@ -1700,6 +1718,13 @@ function simulateStorm(){
       callback_lag_h: callbackLagH,
       switch_restored: switchRestored,
     });
+
+    // Yield every 5000 placements so the browser can repaint and the page
+    // stays responsive at statewide scale (up to 100K outages).
+    if ((i + 1) % 5000 === 0){
+      status.textContent = `Placing outages… ${Math.round(100*(i+1)/N)}% (${(i+1).toLocaleString()}/${N.toLocaleString()})`;
+      await new Promise(r => setTimeout(r, 0));
+    }
   }
 
   // Remove switch-restored outages from the repair queue (they're auto-fixed)
@@ -1760,10 +1785,14 @@ function nnGridFind(grid, cLat, cLon, done, oLat, oLon){
   const ccx = Math.floor(cLon/NN_CELL_DEG);
   const ccy = Math.floor(cLat/NN_CELL_DEG);
   let bestI=-1, bestSq=Infinity;
-  // Expand outward in concentric rings. Stop when the closest possible point
-  // in the next ring (distance = ring * cell) is farther than our current best.
+  // Expand outward in concentric rings. The guaranteed-covered radius after
+  // fully scanning rings 0..ring-1 is (ring-1)*cell, not ring*cell -- the
+  // query point can sit right at a cell boundary, so the very next
+  // (not-yet-scanned) ring can be arbitrarily close, not ring*cell away.
+  // Using ring*cell here stops one ring too early and can silently return
+  // the wrong (non-nearest) point.
   for (let ring=0; ring<100; ring++){
-    const ringMin = ring*NN_CELL_DEG;
+    const ringMin = (ring-1)*NN_CELL_DEG;
     if (bestI!==-1 && ringMin*ringMin > bestSq) break;
     if (ring===0){
       const key = ccx*100000+ccy;
@@ -1806,7 +1835,8 @@ function nnGridFindVisible(grid, cLat, cLon, done, oLat, oLon, discTime, cTime){
   const ccy = Math.floor(cLat/NN_CELL_DEG);
   let bestI=-1, bestSq=Infinity;
   for (let ring=0; ring<100; ring++){
-    const ringMin = ring*NN_CELL_DEG;
+    // See nnGridFind above for why this is (ring-1), not ring.
+    const ringMin = (ring-1)*NN_CELL_DEG;
     if (bestI!==-1 && ringMin*ringMin > bestSq) break;
     if (ring===0){
       const key = ccx*100000+ccy;
@@ -1841,6 +1871,81 @@ function nnGridFindVisible(grid, cLat, cLon, done, oLat, oLon, discTime, cTime){
     }
   }
   return bestI;
+}
+
+// --- Static-point spatial grid (substations, critical facilities) ---
+// Same expanding-ring bucketing as buildNNGrid/nnGridFind above, but for
+// point sets that never get "used up" (no `done` mask needed) -- built once
+// per simulateStorm() call and reused for every outage instead of a
+// per-outage O(count) linear scan. At statewide scale (299 substations,
+// 1,143 critical facilities) x up to 100K outages, the naive scan was the
+// dominant cost -- tens to hundreds of millions of distance checks.
+function buildStaticGrid(points, cellDeg){
+  const grid = new Map();
+  for (let i=0;i<points.length;i++){
+    const cx = Math.floor(points[i].lon/cellDeg);
+    const cy = Math.floor(points[i].lat/cellDeg);
+    const key = cx*100000+cy;
+    let arr = grid.get(key);
+    if (!arr){ arr=[]; grid.set(key,arr); }
+    arr.push(i);
+  }
+  return grid;
+}
+function staticGridNearest(grid, cellDeg, cLat, cLon, points){
+  const ccx = Math.floor(cLon/cellDeg), ccy = Math.floor(cLat/cellDeg);
+  let bestI=-1, bestSq=Infinity;
+  for (let ring=0; ring<100; ring++){
+    // Guaranteed-covered radius after fully scanning rings 0..ring-1 is
+    // (ring-1)*cellDeg, NOT ring*cellDeg -- the query point can sit anywhere
+    // within its own cell, including right at a boundary shared with an
+    // as-yet-unscanned ring, so that ring can be arbitrarily close (not
+    // ring*cellDeg away). Using ring*cellDeg here would stop one ring too
+    // early and can silently return the wrong (non-nearest) point.
+    const safeCovered = (ring-1)*cellDeg;
+    if (bestI!==-1 && safeCovered*safeCovered > bestSq) break;
+    if (ring===0){
+      const cell = grid.get(ccx*100000+ccy);
+      if (cell) for (let k=0;k<cell.length;k++){
+        const i = cell[k];
+        const dx=points[i].lat-cLat, dy=points[i].lon-cLon, sq=dx*dx+dy*dy;
+        if (sq<bestSq){bestSq=sq; bestI=i;}
+      }
+    } else {
+      for (let dx=-ring; dx<=ring; dx++){
+        for (let dy=-ring; dy<=ring; dy++){
+          if (dx!==-ring && dx!==ring && dy!==-ring && dy!==ring) continue;
+          const cell = grid.get((ccx+dx)*100000+(ccy+dy));
+          if (!cell) continue;
+          for (let k=0;k<cell.length;k++){
+            const i = cell[k];
+            const ddx=points[i].lat-cLat, ddy=points[i].lon-cLon, sq=ddx*ddx+ddy*ddy;
+            if (sq<bestSq){bestSq=sq; bestI=i;}
+          }
+        }
+      }
+    }
+  }
+  return bestI;
+}
+// Boolean "is anything within radiusMi" query, using the real haversine
+// dist() on candidates so results match a full linear scan exactly --
+// the grid only cuts down which points get the expensive check. Checks a
+// fixed 5x5 block of cells (cellDeg chosen so that comfortably covers
+// radiusMi even from a worst-case corner position).
+function staticGridAnyWithin(grid, cellDeg, cLat, cLon, points, radiusMi){
+  const ccx = Math.floor(cLon/cellDeg), ccy = Math.floor(cLat/cellDeg);
+  for (let dx=-2; dx<=2; dx++){
+    for (let dy=-2; dy<=2; dy++){
+      const cell = grid.get((ccx+dx)*100000+(ccy+dy));
+      if (!cell) continue;
+      for (let k=0;k<cell.length;k++){
+        const p = points[cell[k]];
+        if (dist({lat:cLat,lon:cLon}, p) <= radiusMi) return true;
+      }
+    }
+  }
+  return false;
 }
 
 // --- Step 4: Restoration plan ---
@@ -2065,6 +2170,22 @@ async function planRestoration(){
   const stickyOn = document.getElementById('crewStickiness') &&
     document.getElementById('crewStickiness').checked;
   const crewFeederAssignment = stickyOn ? new Int32Array(M).fill(-1) : null;
+  // Feeder -> outage-index buckets, built once so the sticky-territory lookup
+  // below only scans outages on the crew's assigned feeder instead of a full
+  // O(N) scan over every outage on every dispatch decision. At statewide
+  // scale (100K outages) the old per-dispatch linear scan was O(N) times up
+  // to N dispatches -- effectively O(N^2) -- since stickiness is on by default.
+  const feederBuckets = stickyOn ? new Map() : null;
+  if (stickyOn){
+    for (let i=0;i<N;i++){
+      const o = storm.outages[i];
+      const fid = o.kind === 'f' ? o.fi : (laterals[o.li] ? laterals[o.li].feederIdx : -1);
+      if (fid < 0) continue;
+      let arr = feederBuckets.get(fid);
+      if (!arr){ arr=[]; feederBuckets.set(fid, arr); }
+      arr.push(i);
+    }
+  }
 
   function hPush(h,item){h.push(item);let i=h.length-1;while (i>0){const p=(i-1)>>1;if (h[p][0]<=h[i][0]) break;const t=h[i];h[i]=h[p];h[p]=t;i=p;}}
   function hPop(h){const top=h[0];const last=h.pop();if (h.length>0){h[0]=last;let i=0;const L=h.length;while (true){const l=2*i+1,r=2*i+2;let s=i;if (l<L&&h[l][0]<h[s][0]) s=l;if (r<L&&h[r][0]<h[s][0]) s=r;if (s===i) break;const t=h[i];h[i]=h[s];h[s]=t;i=s;}}return top;}
@@ -2161,20 +2282,22 @@ async function planRestoration(){
     }
 
     // Feeder-circuit stickiness: if the crew has an assigned feeder,
-    // first try to find an undone outage on that same feeder.
+    // first try to find an undone outage on that same feeder. Scans only
+    // the pre-built bucket for this feeder, not all N outages.
     let bestI = -1;
     if (stickyOn && crewFeederAssignment[ci] >= 0){
       const assignedFid = crewFeederAssignment[ci];
+      const bucket = feederBuckets.get(assignedFid);
       let bestSq = Infinity;
-      for (let i = 0; i < N; i++){
-        if (done[i]) continue;
-        const o = storm.outages[i];
-        const oFid = o.kind === 'f' ? o.fi : (laterals[o.li] ? laterals[o.li].feederIdx : -1);
-        if (oFid !== assignedFid) continue;
-        if (realistic && discTime[i] > cTime) continue;
-        const dx = oLat[i]-cLat, dy = oLon[i]-cLon;
-        const sq = dx*dx+dy*dy;
-        if (sq < bestSq){ bestSq = sq; bestI = i; }
+      if (bucket){
+        for (let bi = 0; bi < bucket.length; bi++){
+          const i = bucket[bi];
+          if (done[i]) continue;
+          if (realistic && discTime[i] > cTime) continue;
+          const dx = oLat[i]-cLat, dy = oLon[i]-cLon;
+          const sq = dx*dx+dy*dy;
+          if (sq < bestSq){ bestSq = sq; bestI = i; }
+        }
       }
       if (bestI === -1) crewFeederAssignment[ci] = -1;
     }
