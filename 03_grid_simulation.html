@@ -532,6 +532,25 @@ async function loadBoundary(){
   if (!d.length||!d[0].geojson) throw new Error("No boundary from Nominatim");
   return d[0].geojson;
 }
+// Connecticut's real legal boundary genuinely extends into Long Island Sound
+// (a real 1880s CT-NY boundary compact) -- accurate, and what the map's red
+// outline shows. But it means "inside the state's legal jurisdiction" isn't
+// the same thing as "on land with real electrical infrastructure" -- without
+// this, the grid generator was happy to grow feeders/laterals (and place
+// outages) out into open water. This loads a land-only polygon (the legal
+// boundary minus the real Long Island Sound water body, computed by
+// 14_fetch_land_boundary.py) used ONLY to constrain where grid/outages can
+// go; the red outline keeps using the full legal boundary above.
+async function loadLandBoundary(){
+  try {
+    const r = await fetch('./data/connecticut_land_boundary.json');
+    if (r.ok) {
+      const d = await r.json();
+      if (d.length && d[0].geojson) { console.log("land boundary loaded from local cache"); return d[0].geojson; }
+    }
+  } catch(_){}
+  return null; // caller falls back to the full legal boundary if this is missing
+}
 
 // --- Map ---
 const map=L.map('map',{zoomControl:true,minZoom:9,maxZoom:16}).setView([41.60,-72.70],9);
@@ -4354,8 +4373,13 @@ document.getElementById('recommendCrews').onclick = recommendCrewCount;
   let geo;
   try {
     geo=await loadBoundary();
-    countyGeo=geo;
-    buildInsideBitmap(geo);
+    // Grid generation (feeders/laterals/depots/demand-points) is constrained
+    // by countyGeo + the inside-bitmap, which should be the LAND-only shape
+    // so nothing gets placed out in Long Island Sound -- but the red outline
+    // (below) still shows the full, real legal state boundary.
+    const landGeo = await loadLandBoundary();
+    countyGeo = landGeo || geo;
+    buildInsideBitmap(countyGeo);
     const b=geoBounds(geo);
     map.fitBounds(b,{padding:[20,20]});
     // No max-bounds: user can pan around to see neighboring states.
