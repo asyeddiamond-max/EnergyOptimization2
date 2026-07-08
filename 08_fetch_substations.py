@@ -1,18 +1,18 @@
 """
-08_fetch_substations.py — Cache REAL Hartford County substation locations.
+08_fetch_substations.py — Cache REAL Connecticut (statewide) substation locations.
 
 Primary source: HIFLD (Homeland Infrastructure Foundation-Level Data) "Electric
 Substations" — the U.S. federal dataset, the most complete and authoritative
-public substation layer. It carries explicit COUNTY attribution (so no polygon
-filtering is needed), plus city, status, line count, and voltage where known.
+public substation layer. It carries explicit COUNTY attribution, plus city,
+status, line count, and voltage where known.
 
 Per advisor feedback: "the substations exist as point data; you don't need to
 simulate; keep names of real substations." Synthetic feeders/laterals are grown
 FROM these real anchor points in the interactive.
 
 Writes:
-    data/hartford_substations.json  — array of {name, lat, lon, voltage, city, lines}
-    data/hartford_substations.js    — window.HARTFORD_SUBSTATIONS = [...]
+    data/connecticut_substations.json  — array of {name, lat, lon, voltage, city, lines, county}
+    data/connecticut_substations.js    — window.CONNECTICUT_SUBSTATIONS = [...]
 
 Usage:
     python 08_fetch_substations.py
@@ -31,13 +31,13 @@ import urllib.parse
 from pathlib import Path
 
 HERE = Path(__file__).parent
-OUT_JSON = HERE / "data" / "hartford_substations.json"
-OUT_JS = HERE / "data" / "hartford_substations.js"
+OUT_JSON = HERE / "data" / "connecticut_substations.json"
+OUT_JS = HERE / "data" / "connecticut_substations.js"
 
 HIFLD = ("https://services5.arcgis.com/HDRa0B57OVrv2E1q/ArcGIS/rest/services/"
          "Electric_Substations/FeatureServer/0/query")
 OVERPASS = "https://overpass-api.de/api/interpreter"
-BBOX = "41.49,-73.04,42.05,-72.40"  # Hartford County, for the OSM fallback
+BBOX = "40.95,-73.73,42.05,-71.79"  # Connecticut statewide, for the OSM fallback
 
 
 import re
@@ -57,12 +57,12 @@ def _clean_name(name: str, city: str) -> str:
 
 def fetch_hifld() -> list:
     params = {
-        "where": "STATE='CT' AND COUNTY='HARTFORD'",
-        "outFields": "NAME,CITY,STATUS,LINES,MAX_VOLT,LATITUDE,LONGITUDE",
+        "where": "STATE='CT'",
+        "outFields": "NAME,CITY,COUNTY,STATUS,LINES,MAX_VOLT,LATITUDE,LONGITUDE",
         "returnGeometry": "true", "outSR": "4326", "f": "json",
     }
     url = HIFLD + "?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers={"User-Agent": "hartford-grid-resilience/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "connecticut-grid-resilience/1.0"})
     with urllib.request.urlopen(req, timeout=90) as r:
         d = json.loads(r.read())
     if "error" in d:
@@ -83,6 +83,7 @@ def fetch_hifld() -> list:
             "lon": round(float(lon), 6),
             "voltage": voltage,
             "city": (a.get("CITY") or "").title(),
+            "county": (a.get("COUNTY") or "").title(),
             "lines": a.get("LINES", 0) or 0,
         })
     return subs
@@ -98,7 +99,7 @@ def fetch_osm_fallback() -> list:
 out center tags;"""
     req = urllib.request.Request(
         OVERPASS, data=("data=" + urllib.parse.quote(q)).encode(),
-        headers={"User-Agent": "hartford-grid-resilience/1.0"})
+        headers={"User-Agent": "connecticut-grid-resilience/1.0"})
     with urllib.request.urlopen(req, timeout=120) as r:
         d = json.loads(r.read())
     subs = []
@@ -120,7 +121,7 @@ out center tags;"""
 
 def main() -> None:
     try:
-        print("Querying HIFLD Electric Substations (Hartford County, CT)…")
+        print("Querying HIFLD Electric Substations (Connecticut, statewide)…")
         subs = fetch_hifld()
         src = "HIFLD"
     except Exception as ex:
@@ -138,11 +139,14 @@ def main() -> None:
         uniq.append(s)
 
     OUT_JSON.write_text(json.dumps(uniq, indent=2))
-    OUT_JS.write_text("window.HARTFORD_SUBSTATIONS = " + json.dumps(uniq) + ";\n")
-    named = sum(1 for s in uniq if "substation" not in s["name"].lower()
-                or not s["name"].lower().endswith("substation")
-                and "unnamed" not in s["name"].lower())
+    OUT_JS.write_text("window.CONNECTICUT_SUBSTATIONS = " + json.dumps(uniq) + ";\n")
     print(f"Wrote {len(uniq)} substations from {src}")
+    by_county = {}
+    for s in uniq:
+        c = s.get("county") or "(unknown)"
+        by_county[c] = by_county.get(c, 0) + 1
+    for c, n in sorted(by_county.items(), key=lambda kv: -kv[1]):
+        print(f"    {c}: {n}")
     print(f"  {OUT_JSON}")
     print(f"  {OUT_JS}")
 

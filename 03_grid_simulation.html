@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Hartford County — Grid + Storm + Restoration Simulation</title>
+<title>Connecticut — Grid + Storm + Restoration Simulation</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="robots" content="noindex, nofollow" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -123,8 +123,8 @@
 <body>
 <div id="app">
   <aside id="sidebar">
-    <h1>Hartford County — Storm &amp; Restoration</h1>
-    <p>Mock distribution grid for Hartford County. Simulate storm outages, count affected customers, and plan crew-based restoration.</p>
+    <h1>Connecticut — Storm &amp; Restoration</h1>
+    <p>Mock distribution grid for the state of Connecticut. Simulate storm outages, count affected customers, and plan crew-based restoration.</p>
 
     <div class="ctrl" style="background:#eff6ff; border-color:#bfdbfe;">
       <div style="font-size:12px; color:#1e40af; font-weight:600; margin-bottom:6px;">
@@ -172,7 +172,7 @@
         </div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="crewTimeSeriesRamp" checked /><span class="rf-name">Crew ramp (Isaias model)</span></label><div class="rf-desc">Logistic mobilization curve: 16% day 1, 40% day 3, 73% day 5, full by day 7. PURA Docket 20-08-03.</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="crewFatigueOT" checked /><span class="rf-name">Crew fatigue & overtime</span></label><div class="rf-desc">+5%/day repair penalty after day 2, up to +30% by day 8. IBEW/Circadian research.</div></div>
-        <div class="rf-item"><label class="rf-label"><input type="checkbox" id="floodZoneClosures" checked /><span class="rf-name">Flood-zone road closures</span></label><div class="rf-desc">+35% road impedance near Connecticut/Park/Hockanum/Farmington/Salmon Brook river corridors. FEMA flood-zone maps.</div></div>
+        <div class="rf-item"><label class="rf-label"><input type="checkbox" id="floodZoneClosures" checked /><span class="rf-name">Flood-zone road closures</span></label><div class="rf-desc">+35% road impedance near the Connecticut/Park/Hockanum/Farmington/Salmon Brook river corridors. FEMA flood-zone maps. These 5 corridors are all in Hartford County — statewide flood corridors are a planned Phase 2 addition, so other counties see no flood effect yet.</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="equipmentShortage" checked /><span class="rf-name">Equipment shortage</span></label><div class="rf-desc">After 60% of repairs done, parts run thin — up to +40% penalty on final third. Eversource Isaias reports.</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="customerCallbackLag" checked /><span class="rf-name">Customer callback lag</span></label><div class="rf-desc">15% of rural outages discovered only by customer call. +2-8 h discovery delay. CT PURA testimony.</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="undergroundLines" checked /><span class="rf-name">Underground lines</span></label><div class="rf-desc">Urban areas ~40% underground laterals, 90% less storm damage. Eversource filings.</div></div>
@@ -187,7 +187,7 @@
 
     <div class="ctrl" style="background:#ecfdf5;border-color:#6ee7b7;">
       <div style="font-size:11px;color:#065f46;line-height:1.4;">
-        <b style="color:#047857">Real substations</b> — the model uses the actual Hartford County substations from the federal <b>HIFLD</b> dataset (with real names, locations, and voltages). Synthetic feeders + laterals are grown from these real anchor points. <span id="realSubCount">49 real substations loaded</span>.
+        <b style="color:#047857">Real substations</b> — the model uses the actual Connecticut substations from the federal <b>HIFLD</b> dataset (with real names, locations, and voltages). Synthetic feeders + laterals are grown from these real anchor points. <span id="realSubCount">Loading…</span>.
       </div>
     </div>
 
@@ -209,7 +209,7 @@
     <div class="ctrl" style="background:#fef3c7;border-color:#fcd34d;">
       <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#78350f;line-height:1.4;">
         <input type="checkbox" id="windFieldWeighting" checked style="margin-top:2px;flex-shrink:0;" />
-        <span><b style="color:#b45309">Wind-field weighted placement</b> — when a storm track is selected, outages concentrate near the track path proportional to interpolated wind speed. Segments closer to the track and in higher-wind zones get 3–5× more outages than distant areas. Uses HURDAT2 track data. When no track is selected, falls back to uniform placement.</span>
+        <span><b style="color:#b45309">Wind-field weighted placement</b> — when a storm track is selected, outages concentrate near the track path proportional to interpolated wind speed. Segments closer to the track and in higher-wind zones get 3–5× more outages than distant areas. Uses HURDAT2 track data. When no track is selected, falls back to uniform placement. The interpolated wind grid currently only has real HRRR resolution over Hartford County — other counties reuse the nearest grid-edge value until Phase 2 adds statewide HRRR data.</span>
       </label>
     </div>
 
@@ -218,7 +218,7 @@
     <div class="stat-box stat-affected">
       <div class="lbl">Customers without power</div>
       <div class="big" id="affected">0</div>
-      <div class="sub" id="affectedPct">0% of county population</div>
+      <div class="sub" id="affectedPct">0% of state population</div>
     </div>
 
     <div class="stat-box stat-outage">
@@ -356,7 +356,7 @@
         </div>
         <div class="rf-item">
           <label class="rf-label"><input type="checkbox" id="useCensusTracts" checked /><span class="rf-name">Census tract demand</span></label>
-          <div class="rf-desc">~196 tracts (2020 Census) for ~5× finer customer-count placement than the 29-town model. <span id="censusTractCount"></span></div>
+          <div class="rf-desc">883 tracts (2020 Census) for much finer customer-count placement than the 169-town model. <span id="censusTractCount"></span></div>
         </div>
         <div class="rf-item">
           <label class="rf-label"><input type="checkbox" id="showStormTrack" /><span class="rf-name">NOAA storm track</span></label>
@@ -389,69 +389,37 @@
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://unpkg.com/shp-write@0.3.1/shpwrite.js"></script>
-<script src="./data/hartford_towns.js"></script>
-<script src="./data/hartford_substations.js"></script>
-<script src="./data/hartford_critical_facilities.js"></script>
-<script src="./data/hartford_census_tracts.js"></script>
+<script src="./data/connecticut_towns.js"></script>
+<script src="./data/connecticut_towns_population.js"></script>
+<script src="./data/connecticut_substations.js"></script>
+<script src="./data/connecticut_critical_facilities.js"></script>
+<script src="./data/connecticut_census_tracts.js"></script>
+<script src="./data/connecticut_tree_canopy.js"></script>
 <script src="./data/hartford_storm_tracks.js"></script>
 <script src="./data/hartford_doe_oe417.js"></script>
 <script src="./data/hartford_storm_wind.js"></script>
 <script>
-const TOWNS = [
-  {name:"Hartford",lat:41.7637,lon:-72.6851,pop:121054},
-  {name:"New Britain",lat:41.6612,lon:-72.7795,pop:74992},
-  {name:"West Hartford",lat:41.7620,lon:-72.7420,pop:64083},
-  {name:"Bristol",lat:41.6718,lon:-72.9493,pop:60833},
-  {name:"Manchester",lat:41.7759,lon:-72.5215,pop:59713},
-  {name:"Enfield",lat:41.9762,lon:-72.5917,pop:42141},
-  {name:"East Hartford",lat:41.7823,lon:-72.6120,pop:51045},
-  {name:"Southington",lat:41.6001,lon:-72.8781,pop:43501},
-  {name:"Glastonbury",lat:41.7126,lon:-72.6081,pop:35159},
-  {name:"South Windsor",lat:41.8237,lon:-72.6223,pop:26918},
-  {name:"Windsor",lat:41.8525,lon:-72.6437,pop:29492},
-  {name:"Newington",lat:41.6981,lon:-72.7237,pop:30152},
-  {name:"Wethersfield",lat:41.7142,lon:-72.6526,pop:26492},
-  {name:"Rocky Hill",lat:41.6648,lon:-72.6648,pop:20845},
-  {name:"Bloomfield",lat:41.8281,lon:-72.7295,pop:21535},
-  {name:"Plainville",lat:41.6745,lon:-72.8589,pop:17716},
-  {name:"Farmington",lat:41.7201,lon:-72.8320,pop:26712},
-  {name:"Berlin",lat:41.6212,lon:-72.7456,pop:20175},
-  {name:"Avon",lat:41.8098,lon:-72.8303,pop:18871},
-  {name:"Simsbury",lat:41.8762,lon:-72.8009,pop:24517},
-  {name:"Windsor Locks",lat:41.9292,lon:-72.6234,pop:12613},
-  {name:"East Windsor",lat:41.9123,lon:-72.5453,pop:11190},
-  {name:"Suffield",lat:41.9837,lon:-72.6520,pop:15735},
-  {name:"Granby",lat:41.9526,lon:-72.7898,pop:11282},
-  {name:"Canton",lat:41.8348,lon:-72.8945,pop:10124},
-  {name:"Marlborough",lat:41.6320,lon:-72.4598,pop:6307},
-  {name:"East Granby",lat:41.9434,lon:-72.7320,pop:5184},
-  {name:"Hartland",lat:41.9856,lon:-72.9534,pop:1885},
-  {name:"Burlington",lat:41.7720,lon:-72.9590,pop:9701},
-];
+// Real Connecticut town population + centroid (169 towns), from the 2020
+// Census P.L. 94-171 Redistricting Data (11_fetch_census_tracts.py). Used as
+// the demand-point fallback when census-tract data is toggled off.
+const TOWNS = window.CONNECTICUT_TOWNS_POPULATION || [];
 const TOTAL_POP = TOWNS.reduce((s,t)=>s+t.pop,0);
 const PALETTE = ["#ff7f0e","#8B4513","#fdbb84","#fc8d8d","#bcbcbc","#1fb8d1","#2ca02c","#9ed0e6","#c266a7","#a68272","#7e5fc4","#f4c842","#e377c2","#f7b6d2","#888888","#d62728","#1f77b4","#9c8fbf","#a7e09b","#7f7f7f","#d6c95a","#bcbd22","#17becf","#ffbb78","#98df8a"];
 
 // --- NLCD 2021 tree-canopy fraction per substation (USGS 30m resolution) ---
-// Pre-computed: for each of the 49 HIFLD substations, the mean tree-canopy
-// percentage within a 1-km buffer extracted from the NLCD 2021 Tree Canopy
-// Cover layer (CONUS). Values range 0–100. Used to replace the simple
-// urban/suburban/rural distance heuristic with real measured canopy.
+// Live-computed (not hand-typed) mean tree-canopy percentage within a 1-km
+// buffer of every real Connecticut substation, from the NLCD 2021 Tree Canopy
+// Cover layer (CONUS). Values range 0-100. Keyed by "lat,lon" rather than
+// substation name, since HIFLD's NAME field isn't unique (e.g. 5 distinct
+// substations are all literally named "Bridgeport substation").
 // Source: https://www.mrlc.gov/data/nlcd-2021-usgs-tree-canopy-cover-conus
-const NLCD_CANOPY_BY_SUBSTATION = {
-  "Barbour Hill":38, "Bloomfield":52, "Broad Brook":45, "Bristol":35,
-  "Berlin":28, "Canton Center":68, "Cedar Hill":22, "Collinsville":62,
-  "Congress St":12, "Cromwell":30, "Devon":24, "Dutch Point":15,
-  "East Berlin":32, "East Granby":55, "East Hartford":18, "Enfield":40,
-  "Farmington":42, "Franklin Ave":14, "Glastonbury":48, "Granby":65,
-  "Goodwin":20, "Hartford":8, "Hartland":72, "Kensington":26,
-  "Manchester":34, "Milldale":30, "New Britain":16, "Newington":22,
-  "North Canton":70, "North Haven":28, "Plainville":25, "Poquonock":44,
-  "Rocky Hill":35, "Shuttle Meadow":58, "Simsbury":56, "Southington":32,
-  "South Meadows":10, "South Windsor":42, "Suffield":50, "Tariffville":54,
-  "Unionville":46, "Vernon":40, "Wethersfield":20, "West Hartford":36,
-  "Windsor":38, "Windsor Locks":35, "Wolcott":48, "Warehouse Point":30,
-  "Burlington":60,
-};
+// See: 10_fetch_tree_canopy.py
+function canopyOf(s){
+  const table = window.CONNECTICUT_TREE_CANOPY;
+  if (!table) return null;
+  const key = s.lat.toFixed(6) + ',' + s.lon.toFixed(6);
+  return table[key] ?? null;
+}
 
 // --- Real Eversource CT reliability parameters (2021–2025 published data) ---
 // Sources:
@@ -499,7 +467,8 @@ const EVERSOURCE_CT = {
 };
 
 // --- Flood-zone river corridors (FEMA flood zones, simplified to centerlines) ---
-// Major flood-prone corridors in Hartford County. Outages within ~1.5 mi of
+// Major flood-prone corridors in Hartford County -- statewide corridors for the
+// other 7 counties are a planned Phase 2 addition. Outages within ~1.5 mi of
 // these corridors get a road-impedance penalty when the flood-zone toggle is on.
 // Source: FEMA National Flood Hazard Layer (NFHL), simplified.
 const FLOOD_CORRIDORS = [
@@ -540,13 +509,13 @@ function buildMask(geo){const outer=[[-90,-180],[-90,180],[90,180],[90,-180],[-9
 async function loadBoundary(){
   // Try local cache first (works offline / when Nominatim is rate-limiting); fall back to live API.
   try {
-    const r = await fetch('./data/hartford_boundary.json');
+    const r = await fetch('./data/connecticut_boundary.json');
     if (r.ok) {
       const d = await r.json();
       if (d.length && d[0].geojson) { console.log("boundary loaded from local cache"); return d[0].geojson; }
     }
   } catch(_){}
-  const url="https://nominatim.openstreetmap.org/search.php?q=Hartford+County%2C+Connecticut&format=json&polygon_geojson=1&limit=1";
+  const url="https://nominatim.openstreetmap.org/search.php?q=Connecticut%2C+United+States&format=json&polygon_geojson=1&limit=1";
   const r=await fetch(url,{headers:{'Accept':'application/json'}});
   const d=await r.json();
   if (!d.length||!d[0].geojson) throw new Error("No boundary from Nominatim");
@@ -554,7 +523,7 @@ async function loadBoundary(){
 }
 
 // --- Map ---
-const map=L.map('map',{zoomControl:true,minZoom:9,maxZoom:16}).setView([41.80,-72.73],10);
+const map=L.map('map',{zoomControl:true,minZoom:9,maxZoom:16}).setView([41.60,-72.70],9);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; CARTO, OSM'}).addTo(map);
 // Dedicated top pane for the county boundary so nothing else can render above it.
 map.createPane('countyBoundary');
@@ -1042,11 +1011,11 @@ function buildDemandPoints(rnd){
   const pts=[];
   const useTracts = document.getElementById('useCensusTracts')
                     && document.getElementById('useCensusTracts').checked
-                    && window.HARTFORD_CENSUS_TRACTS
-                    && window.HARTFORD_CENSUS_TRACTS.length > 0;
+                    && window.CONNECTICUT_CENSUS_TRACTS
+                    && window.CONNECTICUT_CENSUS_TRACTS.length > 0;
   if (useTracts){
-    // Census-tract-level demand (~196 tracts, ~5× finer than 29-town model).
-    const tracts = window.HARTFORD_CENSUS_TRACTS;
+    // Census-tract-level demand (883 tracts, much finer than the 169-town model).
+    const tracts = window.CONNECTICUT_CENSUS_TRACTS;
     tracts.forEach(t=>{
       const n = Math.max(3, Math.round(Math.sqrt(t.pop)/3));
       const w = t.pop/n;
@@ -1056,7 +1025,7 @@ function buildDemandPoints(rnd){
       }
     });
   } else {
-    // Fallback: 29-town centroid model.
+    // Fallback: 169-town centroid model.
     TOWNS.forEach(t=>{
       const n=Math.max(8,Math.round(Math.sqrt(t.pop)/2));
       const w=t.pop/n;
@@ -1132,13 +1101,13 @@ function generateGrid(){
   const seed=+seedI.value|0;
   const rnd=mulberry32(seed+1);
   const feedersPerSub=+fS.value;
-  const haveReal = window.HARTFORD_SUBSTATIONS && window.HARTFORD_SUBSTATIONS.length;
+  const haveReal = window.CONNECTICUT_SUBSTATIONS && window.CONNECTICUT_SUBSTATIONS.length;
 
   const demand=buildDemandPoints(rnd);
   let centers, useReal;
   if (haveReal){
-    // Real Hartford County substations from HIFLD (with real names + voltages).
-    centers = window.HARTFORD_SUBSTATIONS.map(s => ({lat:s.lat, lon:s.lon}));
+    // Real Connecticut substations from HIFLD (with real names + voltages).
+    centers = window.CONNECTICUT_SUBSTATIONS.map(s => ({lat:s.lat, lon:s.lon}));
     useReal = true;
     status.textContent=`Using ${centers.length} real substations…`;
   } else {
@@ -1153,14 +1122,16 @@ function generateGrid(){
   // converted to a multiplier: 0% canopy → 0.15× (bare industrial), 50% → 1.0×
   // (baseline), 75%+ → 1.5×+ (heavy rural canopy). Falls back to the distance
   // heuristic if NLCD data is missing for a substation.
-  const HARTFORD_CENTER = {lat: 41.7637, lon: -72.6851};
+  // Centroid of the loaded state boundary -- used only as the fallback
+  // distance-heuristic origin when a substation has no NLCD canopy value.
+  const STATE_CENTER = {lat: (_gLatMin+_gLatMax)/2, lon: (_gLonMin+_gLonMax)/2};
   function treeFactor(s){
-    if (s.name && NLCD_CANOPY_BY_SUBSTATION[s.name] != null){
-      const pct = NLCD_CANOPY_BY_SUBSTATION[s.name];
+    const pct = canopyOf(s);
+    if (pct != null){
       return Math.max(0.15, pct / 50);
     }
-    const dx = (s.lat - HARTFORD_CENTER.lat) * 69;
-    const dy = (s.lon - HARTFORD_CENTER.lon) * 51;
+    const dx = (s.lat - STATE_CENTER.lat) * 69;
+    const dy = (s.lon - STATE_CENTER.lon) * 51;
     const km = Math.hypot(dx, dy) * 1.609;
     if (km < 5)  return 0.40;
     if (km < 12) return 1.00;
@@ -1175,8 +1146,8 @@ function generateGrid(){
   substations=centers.map((c,i)=>{
     const s = {
       lat:c.lat, lon:c.lon, color:PALETTE[i%PALETTE.length], popServed:0,
-      name: useReal ? window.HARTFORD_SUBSTATIONS[i].name : null,
-      voltage: useReal ? (window.HARTFORD_SUBSTATIONS[i].voltage||'') : '',
+      name: useReal ? window.CONNECTICUT_SUBSTATIONS[i].name : null,
+      voltage: useReal ? (window.CONNECTICUT_SUBSTATIONS[i].voltage||'') : '',
     };
     s.treeFactor = treeFactor(s);
     return s;
@@ -1245,7 +1216,7 @@ function generateGrid(){
   // Reset downstream state
   storm=null; plan=null;
   outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
-  affectedEl.textContent='0'; affectedPctEl.textContent='0% of county population';
+  affectedEl.textContent='0'; affectedPctEl.textContent='0% of state population';
   outageCountEl.textContent='0'; restoreTimeEl.textContent='—'; restoreDetailEl.textContent='— customers restored';
   const _curveBox = document.getElementById('restoreCurveBox'); if (_curveBox) _curveBox.style.display = 'none';
 }
@@ -1335,7 +1306,7 @@ function simulateStorm(){
   // Critical facilities: use real HIFLD locations when available. An outage
   // within ~0.5 miles of a real hospital/fire/EMS/water plant is flagged
   // priority-1. Falls back to random 2% if no facility data loaded.
-  const critFacilities = window.HARTFORD_CRITICAL_FACILITIES || [];
+  const critFacilities = window.CONNECTICUT_CRITICAL_FACILITIES || [];
   const useCritFacilities = realistic && critFacilities.length > 0;
   const CRIT_RADIUS_MI = 0.5;
   const critRate = (realistic && !useCritFacilities) ? 0.02 : 0;
@@ -1355,7 +1326,6 @@ function simulateStorm(){
   const _hrrrStorm = _hw?._populated && _hw.storms?.[trackKey];
   const useHrrrGrid = !!(_hrrrStorm && _hrrrStorm.peak_wind_mph);
   let segWeights = null;
-  let segCumWeights = null;
   let totalWeight = 0;
   if (useHrrrGrid) {
     // HRRR path: bilinear interpolation from 15×21 grid, weight ∝ wind² (kinetic energy).
@@ -1370,10 +1340,6 @@ function simulateStorm(){
       segWeights[si] = Math.max(0.05, (w / 30) ** 2);
       totalWeight += segWeights[si];
     }
-    segCumWeights = new Float64Array(allSegs.length);
-    segCumWeights[0] = segWeights[0];
-    for (let si = 1; si < allSegs.length; si++)
-      segCumWeights[si] = segCumWeights[si-1] + segWeights[si];
   } else if (useWindField && trackData && trackData.track && trackData.track.length >= 2){
     // Gaussian track-decay fallback (HURDAT2 track + Gaussian spatial decay).
     const track = trackData.track;
@@ -1383,35 +1349,26 @@ function simulateStorm(){
       const arr = seg.kind==='f' ? feeders[seg.fi].pts : laterals[seg.li].pts;
       const a = arr[seg.s], b = arr[seg.s+1];
       const midLat = (a[0]+b[0])/2, midLon = (a[1]+b[1])/2;
-      let minD2 = Infinity, windAtSeg = 30;
+      // Miles per degree of latitude is ~constant (69 mi/deg) everywhere,
+      // but miles per degree of longitude shrinks with latitude as
+      // meridians converge toward the poles: 69*cos(lat). Using a flat
+      // 69 for both axes overstates east-west distance by ~33% at
+      // Connecticut's latitude (cos(41.8°) ≈ 0.746).
+      const miPerDegLon = 69 * Math.cos(midLat * Math.PI / 180);
+      let bestMi2 = Infinity, windAtSeg = 30;
       for (let ti = 0; ti < track.length; ti++){
-        const dlat = track[ti].lat - midLat, dlon = track[ti].lon - midLon;
-        const d2 = dlat*dlat + dlon*dlon;
-        if (d2 < minD2){ minD2 = d2; windAtSeg = track[ti].wind_kt; }
+        const dLatMi = (track[ti].lat - midLat) * 69;
+        const dLonMi = (track[ti].lon - midLon) * miPerDegLon;
+        const mi2 = dLatMi*dLatMi + dLonMi*dLonMi;
+        if (mi2 < bestMi2){ bestMi2 = mi2; windAtSeg = track[ti].wind_kt; }
       }
-      const distMi = Math.sqrt(minD2) * 69;
+      const distMi = Math.sqrt(bestMi2);
       const sigma = 30;
       const spatialWeight = Math.exp(-(distMi * distMi) / (2 * sigma * sigma));
       const windFactor = windAtSeg / 50;
       segWeights[si] = Math.max(0.1, spatialWeight * windFactor);
       totalWeight += segWeights[si];
     }
-    segCumWeights = new Float64Array(allSegs.length);
-    segCumWeights[0] = segWeights[0];
-    for (let si = 1; si < allSegs.length; si++){
-      segCumWeights[si] = segCumWeights[si-1] + segWeights[si];
-    }
-  }
-
-  // Binary search for weighted random sampling
-  function weightedSample(){
-    const r = rnd() * totalWeight;
-    let lo = 0, hi = segCumWeights.length - 1;
-    while (lo < hi){
-      const mid = (lo + hi) >> 1;
-      if (segCumWeights[mid] < r) lo = mid + 1; else hi = mid;
-    }
-    return lo;
   }
 
   // Underground line model: urban substations (low canopy) have ~40% underground laterals
@@ -1427,8 +1384,54 @@ function simulateStorm(){
   const amiOn = realistic && document.getElementById('amiCoverage') &&
     document.getElementById('amiCoverage').checked;
 
+  // Sampling is without replacement: a physical stretch of wire either fails
+  // once or it doesn't during a given storm -- a utility wouldn't log two
+  // independent trouble tickets for the same 0.3-mile span. A Fenwick tree
+  // (binary indexed tree) over the segment weights gives O(log N) weighted
+  // sampling AND O(log N) removal, so once a segment is drawn its weight is
+  // zeroed and it truly cannot be drawn again -- unlike a capped retry loop,
+  // which can silently fail to find a rare remaining segment and accept a
+  // duplicate anyway. If every segment gets used before N draws are done,
+  // the tree is rebuilt from the original weights so sampling can continue
+  // -- at that point a repeat is physically necessary since there is no
+  // unused wire left to place it on.
+  // peek()/commit() are split rather than one atomic draw-and-remove: the
+  // underground-immunity check below can discard a candidate entirely
+  // ("this segment turned out to be protected, no outage here, try again").
+  // A discarded candidate must stay in the pool -- being exempted on one
+  // random roll doesn't mean it can never fail later -- so only commit()
+  // once a candidate is confirmed to become a real outage.
+  const baseWeights = segWeights || new Float64Array(allSegs.length).fill(1);
+  function buildFenwick(weights){
+    const n = weights.length;
+    const tree = new Float64Array(n + 1);
+    function add(i, delta){ for (i++; i <= n; i += i & (-i)) tree[i] += delta; }
+    function prefix(i){ let s = 0; for (; i > 0; i -= i & (-i)) s += tree[i]; return s; }
+    for (let i = 0; i < n; i++) add(i, weights[i]);
+    return {
+      total: () => prefix(n),
+      peek(r){
+        let idx = 0, remaining = r, pw = 1;
+        while (pw * 2 <= n) pw *= 2;
+        for (; pw > 0; pw = Math.floor(pw / 2)){
+          const next = idx + pw;
+          if (next <= n && tree[next] <= remaining){ idx = next; remaining -= tree[next]; }
+        }
+        return idx;
+      },
+      remove(idx){ add(idx, -(prefix(idx + 1) - prefix(idx))); }
+    };
+  }
+  let fenwick = buildFenwick(baseWeights);
+  function peekSegIdx(){
+    let total = fenwick.total();
+    if (total <= 0){ fenwick = buildFenwick(baseWeights); total = fenwick.total(); }
+    return fenwick.peek(rnd() * total);
+  }
+  function commitSegIdx(idx){ fenwick.remove(idx); }
+
   for (let i=0;i<N;i++){
-    const segIdx = segCumWeights ? weightedSample() : Math.floor(rnd()*allSegs.length);
+    const segIdx = peekSegIdx();
     const seg=allSegs[segIdx];
 
     // Underground immunity: urban laterals have ~40% chance of being underground,
@@ -1437,13 +1440,14 @@ function simulateStorm(){
       const parentFeeder = laterals[seg.li] ? laterals[seg.li].feederIdx : -1;
       const subIdx = parentFeeder >= 0 && feeders[parentFeeder] ? feeders[parentFeeder].sub_id : -1;
       if (subIdx >= 0 && substations[subIdx]){
-        const canopy = substations[subIdx].name && NLCD_CANOPY_BY_SUBSTATION[substations[subIdx].name];
+        const canopy = canopyOf(substations[subIdx]);
         if (canopy != null && canopy < 25){
           const isUnderground = rnd() < 0.40;
           if (isUnderground && rnd() < 0.90){ i--; continue; }
         }
       }
     }
+    commitSegIdx(segIdx);
 
     const t=rnd();
     const arr=seg.kind==='f'?feeders[seg.fi].pts:laterals[seg.li].pts;
@@ -1456,7 +1460,7 @@ function simulateStorm(){
       if (d2 < bestSubD){ bestSubD = d2; bestSub = si; }
     }
     // Per-outage tree-blocked flag (environmental realism). Combines:
-    //   (a) per-substation TREE FACTOR — Hartford-center urban = 0.4×,
+    //   (a) per-substation TREE FACTOR — state-center urban = 0.4×,
     //       suburban = 1.0×, rural perimeter = 1.5×.
     //   (b) per-feeder VEGETATION TRIM AGE — feeders trimmed recently are
     //       less tree-blocked; older trims more so. trimAgeMult(age):
@@ -1493,8 +1497,7 @@ function simulateStorm(){
     // detection based on smart meter penetration.
     let callbackLagH = 0;
     if (amiOn){
-      const subCanopy = bestSub >= 0 && substations[bestSub].name
-        ? (NLCD_CANOPY_BY_SUBSTATION[substations[bestSub].name] ?? 50) : 50;
+      const subCanopy = bestSub >= 0 ? (canopyOf(substations[bestSub]) ?? 50) : 50;
       // Urban (<25% canopy) = ~70% AMI → 30% chance of delayed detection (1-3h)
       // Suburban (25-50%) = ~50% AMI → 50% chance of delayed detection (2-5h)
       // Rural (>50%) = ~30% AMI → 70% chance of delayed detection (3-8h)
@@ -1529,7 +1532,7 @@ function simulateStorm(){
     }
   }
 
-  // Customers affected = sum of popLoss, capped at county population.
+  // Customers affected = sum of popLoss, capped at state population.
   let totalCust=outages.reduce((s,o)=>s+o.popLoss,0);
   totalCust=Math.min(totalCust,TOTAL_POP);
 
@@ -1551,7 +1554,7 @@ function simulateStorm(){
   }
 
   affectedEl.textContent=Math.round(totalCust).toLocaleString();
-  affectedPctEl.textContent=(100*totalCust/TOTAL_POP).toFixed(1)+"% of county population";
+  affectedPctEl.textContent=(100*totalCust/TOTAL_POP).toFixed(1)+"% of state population";
   outageCountEl.textContent=N.toLocaleString();
   restoreTimeEl.textContent='—'; restoreDetailEl.textContent='— customers restored';
   const switchMsg = switchRestoredCount > 0 ? ` (${switchRestoredCount} auto-restored via switching)` : '';
@@ -2358,7 +2361,7 @@ function resetStorm(){
   if (window._criticalCloud){ map.removeLayer(window._criticalCloud); window._criticalCloud=null; }
   if (window._depotCloud){ map.removeLayer(window._depotCloud); window._depotCloud=null; }
   if (window._repairCloud){ map.removeLayer(window._repairCloud); window._repairCloud=null; }
-  affectedEl.textContent='0'; affectedPctEl.textContent='0% of county population';
+  affectedEl.textContent='0'; affectedPctEl.textContent='0% of state population';
   outageCountEl.textContent='0'; restoreTimeEl.textContent='—'; restoreDetailEl.textContent='— customers restored';
   const _curveBox = document.getElementById('restoreCurveBox'); if (_curveBox) _curveBox.style.display = 'none';
   status.textContent='Storm cleared.';
@@ -2428,7 +2431,7 @@ loadPresetList();
 // Reflect the actual number of real substations loaded from OSM.
 (function(){
   const el = document.getElementById('realSubCount');
-  const n = (window.HARTFORD_SUBSTATIONS||[]).length;
+  const n = (window.CONNECTICUT_SUBSTATIONS||[]).length;
   if (el) el.textContent = n ? `${n} real substations loaded` : 'no real substation data found — run 08_fetch_substations.py';
 })();
 // Auto-build the grid on page load using the real HIFLD substations so the
@@ -2436,7 +2439,7 @@ loadPresetList();
 // first. Without this, the user can see "Substation 71" tooltips if they
 // click Plan/Storm before clicking Generate.
 window.addEventListener('load', () => {
-  if (window.HARTFORD_SUBSTATIONS && window.HARTFORD_SUBSTATIONS.length){
+  if (window.CONNECTICUT_SUBSTATIONS && window.CONNECTICUT_SUBSTATIONS.length){
     try { generateGrid(); }
     catch(e){ console.error('Initial grid generation failed:', e); }
   }
@@ -2601,7 +2604,7 @@ function buildServerPayload(){
   if (!storm) throw new Error('Simulate a storm first.');
   const priorityOn = document.getElementById('customerPriority').checked;
   // The weight is in units of (customers per squared-degree of lat/lon). At
-  // Hartford-County coords, a degree is ~70 miles, so a weight of 5000 means
+  // Connecticut coords, a degree is ~70 miles, so a weight of 5000 means
   // a 1-mile detour is worth ~1 extra customer restored. Tuned conservatively
   // so the bias is visible but doesn't override the spatial efficiency of
   // the nearest-neighbour scan entirely.
@@ -3228,13 +3231,13 @@ function buildFeatureCollections(){
 
   const manifest = {
     schema_version: 1,
-    generator: "hartford_county_simulation",
+    generator: "connecticut_simulation",
     generated_utc: new Date().toISOString(),
     crs: "EPSG:4326",
     inputs: {
       seed,
       substations: substations.length,
-      substation_source: (window.HARTFORD_SUBSTATIONS && window.HARTFORD_SUBSTATIONS.length) ? "HIFLD-real" : "synthetic",
+      substation_source: (window.CONNECTICUT_SUBSTATIONS && window.CONNECTICUT_SUBSTATIONS.length) ? "HIFLD-real" : "synthetic",
       feeders_per_sub: +fS.value,
       storm_outages: +oS.value,
       repair_crews: +cS.value,
@@ -3262,7 +3265,7 @@ function downloadBlob(blob, filename){
 let critFacilityLayer = null;
 function renderCriticalFacilities(){
   if (critFacilityLayer){ map.removeLayer(critFacilityLayer); critFacilityLayer=null; }
-  const facs = window.HARTFORD_CRITICAL_FACILITIES || [];
+  const facs = window.CONNECTICUT_CRITICAL_FACILITIES || [];
   const show = document.getElementById('showCriticalFacilities').checked;
   const countEl = document.getElementById('critFacilityCount');
   if (countEl) countEl.textContent = ` (${facs.length} facilities loaded)`;
@@ -3288,7 +3291,7 @@ document.getElementById('showCriticalFacilities').onchange = renderCriticalFacil
 // --- Census tract count display ---
 (function(){
   const el = document.getElementById('censusTractCount');
-  const tracts = window.HARTFORD_CENSUS_TRACTS || [];
+  const tracts = window.CONNECTICUT_CENSUS_TRACTS || [];
   if (el) el.textContent = tracts.length ? ` (${tracts.length} tracts loaded)` : '';
 })();
 
@@ -3384,7 +3387,7 @@ function _generateSimulationReport(){
   const totalTime = plan.totalTime || 0;
   const totalCust = storm.totalCust || 0;
 
-  let r = 'HARTFORD COUNTY STORM & RESTORATION SIMULATION REPORT\n';
+  let r = 'CONNECTICUT STORM & RESTORATION SIMULATION REPORT\n';
   r += '='.repeat(80) + '\n\n';
   r += `Generated:  ${now}\n`;
   r += `Seed:       ${seed}\n`;
@@ -3395,7 +3398,7 @@ function _generateSimulationReport(){
   r += `Substations:        ${substations?.length || 0}\n`;
   r += `Feeders:            ${feeders?.length || 0}\n`;
   r += `Laterals:           ${laterals?.length || 0}\n`;
-  r += `County Population:  ${TOTAL_POP?.toLocaleString() || '—'}\n\n`;
+  r += `State Population:  ${TOTAL_POP?.toLocaleString() || '—'}\n\n`;
 
   r += 'STORM IMPACT\n';
   r += '-'.repeat(80) + '\n';
@@ -3609,7 +3612,7 @@ function _generateSimulationReport(){
   r += '═'.repeat(80) + '\n';
   r += 'END OF REPORT\n';
   r += '═'.repeat(80) + '\n';
-  downloadBlob(new Blob([r], {type:'text/plain'}), `hartford_simulation_report_seed${seed}_${new Date().toISOString().replace(/[:.]/g,'-')}.txt`);
+  downloadBlob(new Blob([r], {type:'text/plain'}), `connecticut_simulation_report_seed${seed}_${new Date().toISOString().replace(/[:.]/g,'-')}.txt`);
 }
 document.getElementById('exportReport').onclick = generateSimulationReport;
 
@@ -4113,8 +4116,8 @@ document.getElementById('recommendCrews').onclick = recommendCrewCount;
     buildInsideBitmap(geo);
     const b=geoBounds(geo);
     map.fitBounds(b,{padding:[20,20]});
-    // No max-bounds: user can pan around to see surrounding counties.
-    // No mask: surrounding counties stay visible; only the red boundary marks Hartford.
+    // No max-bounds: user can pan around to see neighboring states.
+    // No mask: areas outside the state stay visible; only the red boundary marks Connecticut.
     window._mask=null;
     // MASSIVELY BOLD red boundary on a dedicated top pane (z-index 650)
     // so it always paints above the mask, tiles, and grid layers.
@@ -4122,15 +4125,15 @@ document.getElementById('recommendCrews').onclick = recommendCrewCount;
       pane: 'countyBoundary',
       style: { color:"#ef0000", weight:2, opacity:1, fill:false, lineCap:"round", lineJoin:"round" }
     }).addTo(map);
-    // Town boundaries — green 1px outline per Hartford County town.
+    // Town boundaries — green 1px outline per Connecticut town.
     // Isolated try/catch so any town-data issue can't break grid generation below.
     try {
       if (!map.getPane('townBoundaries')) {
         map.createPane('townBoundaries');
         map.getPane('townBoundaries').style.zIndex = 640;
       }
-      if (window.HARTFORD_TOWNS_GEOJSON && window.HARTFORD_TOWNS_GEOJSON.features) {
-        const tg = window.HARTFORD_TOWNS_GEOJSON;
+      if (window.CONNECTICUT_TOWNS_GEOJSON && window.CONNECTICUT_TOWNS_GEOJSON.features) {
+        const tg = window.CONNECTICUT_TOWNS_GEOJSON;
         console.log("[towns] features:", tg.features.length);
         // Sanitize: drop any feature whose coordinates aren't a valid Polygon ring.
         const safe = {
@@ -4154,7 +4157,7 @@ document.getElementById('recommendCrews').onclick = recommendCrewCount;
         }).addTo(map);
         console.log("[towns] layer added, child count:", window._towns.getLayers().length);
       } else {
-        console.warn("[towns] HARTFORD_TOWNS_GEOJSON missing or empty");
+        console.warn("[towns] CONNECTICUT_TOWNS_GEOJSON missing or empty");
       }
     } catch(e) {
       console.error("[towns] render threw — skipping town overlay:", e);

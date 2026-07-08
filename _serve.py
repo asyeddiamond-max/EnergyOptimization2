@@ -4,5 +4,6 @@ class H(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header('Cache-Control', 'no-cache')
         super().end_headers()
-with socketserver.ThreadingTCPServer(("", 8765), H) as s:
+port = int(os.environ.get('PORT', 8765))
+with socketserver.ThreadingTCPServer(("", port), H) as s:
     s.serve_forever()

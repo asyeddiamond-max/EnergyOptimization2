@@ -1,0 +1,1185 @@
+[
+  {
+    "name": "Bethel",
+    "county": "Fairfield",
+    "pop": 20358,
+    "lat": 41.3697777,
+    "lon": -73.3895032
+  },
+  {
+    "name": "Bridgeport",
+    "county": "Fairfield",
+    "pop": 148654,
+    "lat": 41.1873933,
+    "lon": -73.1957567
+  },
+  {
+    "name": "Brookfield",
+    "county": "Fairfield",
+    "pop": 17528,
+    "lat": 41.4704024,
+    "lon": -73.3947599
+  },
+  {
+    "name": "Danbury",
+    "county": "Fairfield",
+    "pop": 86518,
+    "lat": 41.3987408,
+    "lon": -73.4781032
+  },
+  {
+    "name": "Darien",
+    "county": "Fairfield",
+    "pop": 21499,
+    "lat": 41.0521498,
+    "lon": -73.4797138
+  },
+  {
+    "name": "Easton",
+    "county": "Fairfield",
+    "pop": 7605,
+    "lat": 41.2649447,
+    "lon": -73.3004792
+  },
+  {
+    "name": "Fairfield",
+    "county": "Fairfield",
+    "pop": 61512,
+    "lat": 41.1759399,
+    "lon": -73.272046
+  },
+  {
+    "name": "Greenwich",
+    "county": "Fairfield",
+    "pop": 63518,
+    "lat": 41.0453658,
+    "lon": -73.6340183
+  },
+  {
+    "name": "Monroe",
+    "county": "Fairfield",
+    "pop": 18825,
+    "lat": 41.3392358,
+    "lon": -73.2228275
+  },
+  {
+    "name": "New Canaan",
+    "county": "Fairfield",
+    "pop": 20622,
+    "lat": 41.160393,
+    "lon": -73.5001238
+  },
+  {
+    "name": "New Fairfield",
+    "county": "Fairfield",
+    "pop": 13579,
+    "lat": 41.4803182,
+    "lon": -73.4868629
+  },
+  {
+    "name": "Newtown",
+    "county": "Fairfield",
+    "pop": 27173,
+    "lat": 41.3995034,
+    "lon": -73.293982
+  },
+  {
+    "name": "Norwalk",
+    "county": "Fairfield",
+    "pop": 91184,
+    "lat": 41.0927388,
+    "lon": -73.4197955
+  },
+  {
+    "name": "Redding",
+    "county": "Fairfield",
+    "pop": 8765,
+    "lat": 41.3054148,
+    "lon": -73.3925837
+  },
+  {
+    "name": "Ridgefield",
+    "county": "Fairfield",
+    "pop": 25033,
+    "lat": 41.3176745,
+    "lon": -73.499837
+  },
+  {
+    "name": "Shelton",
+    "county": "Fairfield",
+    "pop": 40869,
+    "lat": 41.3045774,
+    "lon": -73.1392153
+  },
+  {
+    "name": "Sherman",
+    "county": "Fairfield",
+    "pop": 3527,
+    "lat": 41.5794184,
+    "lon": -73.4976901
+  },
+  {
+    "name": "Stamford",
+    "county": "Fairfield",
+    "pop": 135470,
+    "lat": 41.0796114,
+    "lon": -73.5460803
+  },
+  {
+    "name": "Stratford",
+    "county": "Fairfield",
+    "pop": 52355,
+    "lat": 41.2056875,
+    "lon": -73.1279855
+  },
+  {
+    "name": "Trumbull",
+    "county": "Fairfield",
+    "pop": 36827,
+    "lat": 41.2728914,
+    "lon": -73.2118988
+  },
+  {
+    "name": "Weston",
+    "county": "Fairfield",
+    "pop": 10354,
+    "lat": 41.2274128,
+    "lon": -73.3670614
+  },
+  {
+    "name": "Westport",
+    "county": "Fairfield",
+    "pop": 27141,
+    "lat": 41.1208312,
+    "lon": -73.3434638
+  },
+  {
+    "name": "Wilton",
+    "county": "Fairfield",
+    "pop": 18503,
+    "lat": 41.2112771,
+    "lon": -73.4409775
+  },
+  {
+    "name": "Avon",
+    "county": "Hartford",
+    "pop": 18932,
+    "lat": 41.7871585,
+    "lon": -72.8520463
+  },
+  {
+    "name": "Berlin",
+    "county": "Hartford",
+    "pop": 20175,
+    "lat": 41.605451,
+    "lon": -72.7784967
+  },
+  {
+    "name": "Bloomfield",
+    "county": "Hartford",
+    "pop": 21535,
+    "lat": 41.8437722,
+    "lon": -72.7410015
+  },
+  {
+    "name": "Bristol",
+    "county": "Hartford",
+    "pop": 60833,
+    "lat": 41.6815776,
+    "lon": -72.9407487
+  },
+  {
+    "name": "Burlington",
+    "county": "Hartford",
+    "pop": 9519,
+    "lat": 41.7490794,
+    "lon": -72.9486573
+  },
+  {
+    "name": "Canton",
+    "county": "Hartford",
+    "pop": 10124,
+    "lat": 41.8587259,
+    "lon": -72.9108619
+  },
+  {
+    "name": "East Granby",
+    "county": "Hartford",
+    "pop": 5214,
+    "lat": 41.929719,
+    "lon": -72.7453782
+  },
+  {
+    "name": "East Hartford",
+    "county": "Hartford",
+    "pop": 51045,
+    "lat": 41.7606953,
+    "lon": -72.6076462
+  },
+  {
+    "name": "East Windsor",
+    "county": "Hartford",
+    "pop": 11190,
+    "lat": 41.9040094,
+    "lon": -72.5644729
+  },
+  {
+    "name": "Enfield",
+    "county": "Hartford",
+    "pop": 42141,
+    "lat": 41.983993,
+    "lon": -72.5555531
+  },
+  {
+    "name": "Farmington",
+    "county": "Hartford",
+    "pop": 26712,
+    "lat": 41.7297737,
+    "lon": -72.8420312
+  },
+  {
+    "name": "Glastonbury",
+    "county": "Hartford",
+    "pop": 35159,
+    "lat": 41.6918834,
+    "lon": -72.5521735
+  },
+  {
+    "name": "Granby",
+    "county": "Hartford",
+    "pop": 10903,
+    "lat": 41.97148,
+    "lon": -72.8301588
+  },
+  {
+    "name": "Hartford",
+    "county": "Hartford",
+    "pop": 121054,
+    "lat": 41.7659331,
+    "lon": -72.6815789
+  },
+  {
+    "name": "Hartland",
+    "county": "Hartford",
+    "pop": 1901,
+    "lat": 42.0012054,
+    "lon": -72.9540266
+  },
+  {
+    "name": "Manchester",
+    "county": "Hartford",
+    "pop": 59713,
+    "lat": 41.7752402,
+    "lon": -72.524434
+  },
+  {
+    "name": "Marlborough",
+    "county": "Hartford",
+    "pop": 6133,
+    "lat": 41.636439,
+    "lon": -72.4540018
+  },
+  {
+    "name": "New Britain",
+    "county": "Hartford",
+    "pop": 74135,
+    "lat": 41.6765545,
+    "lon": -72.7861613
+  },
+  {
+    "name": "Newington",
+    "county": "Hartford",
+    "pop": 30536,
+    "lat": 41.6869933,
+    "lon": -72.7308386
+  },
+  {
+    "name": "Plainville",
+    "county": "Hartford",
+    "pop": 17525,
+    "lat": 41.6739923,
+    "lon": -72.8544338
+  },
+  {
+    "name": "Rocky Hill",
+    "county": "Hartford",
+    "pop": 20845,
+    "lat": 41.6566243,
+    "lon": -72.6617787
+  },
+  {
+    "name": "Simsbury",
+    "county": "Hartford",
+    "pop": 24517,
+    "lat": 41.8725296,
+    "lon": -72.8284382
+  },
+  {
+    "name": "Southington",
+    "county": "Hartford",
+    "pop": 43501,
+    "lat": 41.6071597,
+    "lon": -72.8787599
+  },
+  {
+    "name": "South Windsor",
+    "county": "Hartford",
+    "pop": 26918,
+    "lat": 41.8380902,
+    "lon": -72.5778358
+  },
+  {
+    "name": "Suffield",
+    "county": "Hartford",
+    "pop": 15752,
+    "lat": 41.9999149,
+    "lon": -72.6787509
+  },
+  {
+    "name": "West Hartford",
+    "county": "Hartford",
+    "pop": 64083,
+    "lat": 41.7665678,
+    "lon": -72.7549436
+  },
+  {
+    "name": "Wethersfield",
+    "county": "Hartford",
+    "pop": 27298,
+    "lat": 41.7024837,
+    "lon": -72.6693014
+  },
+  {
+    "name": "Windsor",
+    "county": "Hartford",
+    "pop": 29492,
+    "lat": 41.8710365,
+    "lon": -72.6750825
+  },
+  {
+    "name": "Windsor Locks",
+    "county": "Hartford",
+    "pop": 12613,
+    "lat": 41.9277901,
+    "lon": -72.6516158
+  },
+  {
+    "name": "Barkhamsted",
+    "county": "Litchfield",
+    "pop": 3647,
+    "lat": 41.9357077,
+    "lon": -72.9729214
+  },
+  {
+    "name": "Bethlehem",
+    "county": "Litchfield",
+    "pop": 3385,
+    "lat": 41.6357587,
+    "lon": -73.2114217
+  },
+  {
+    "name": "Bridgewater",
+    "county": "Litchfield",
+    "pop": 1662,
+    "lat": 41.520294,
+    "lon": -73.3610927
+  },
+  {
+    "name": "Canaan",
+    "county": "Litchfield",
+    "pop": 1080,
+    "lat": 41.9629594,
+    "lon": -73.3071433
+  },
+  {
+    "name": "Colebrook",
+    "county": "Litchfield",
+    "pop": 1361,
+    "lat": 42.0057973,
+    "lon": -73.0641841
+  },
+  {
+    "name": "Cornwall",
+    "county": "Litchfield",
+    "pop": 1567,
+    "lat": 41.8480597,
+    "lon": -73.3305614
+  },
+  {
+    "name": "Goshen",
+    "county": "Litchfield",
+    "pop": 3150,
+    "lat": 41.8495372,
+    "lon": -73.2340016
+  },
+  {
+    "name": "Harwinton",
+    "county": "Litchfield",
+    "pop": 5484,
+    "lat": 41.7613447,
+    "lon": -73.0604432
+  },
+  {
+    "name": "Kent",
+    "county": "Litchfield",
+    "pop": 3019,
+    "lat": 41.729782,
+    "lon": -73.45414
+  },
+  {
+    "name": "Litchfield",
+    "county": "Litchfield",
+    "pop": 8192,
+    "lat": 41.7409368,
+    "lon": -73.192751
+  },
+  {
+    "name": "Morris",
+    "county": "Litchfield",
+    "pop": 2256,
+    "lat": 41.6943231,
+    "lon": -73.2099985
+  },
+  {
+    "name": "New Hartford",
+    "county": "Litchfield",
+    "pop": 6658,
+    "lat": 41.8410525,
+    "lon": -72.998664
+  },
+  {
+    "name": "New Milford",
+    "county": "Litchfield",
+    "pop": 28115,
+    "lat": 41.6012671,
+    "lon": -73.422807
+  },
+  {
+    "name": "Norfolk",
+    "county": "Litchfield",
+    "pop": 1588,
+    "lat": 41.9697726,
+    "lon": -73.1784393
+  },
+  {
+    "name": "North Canaan",
+    "county": "Litchfield",
+    "pop": 3211,
+    "lat": 42.0205944,
+    "lon": -73.2962455
+  },
+  {
+    "name": "Plymouth",
+    "county": "Litchfield",
+    "pop": 11671,
+    "lat": 41.6663915,
+    "lon": -73.0265164
+  },
+  {
+    "name": "Roxbury",
+    "county": "Litchfield",
+    "pop": 2260,
+    "lat": 41.5555325,
+    "lon": -73.2960259
+  },
+  {
+    "name": "Salisbury",
+    "county": "Litchfield",
+    "pop": 4194,
+    "lat": 41.986226,
+    "lon": -73.4252735
+  },
+  {
+    "name": "Sharon",
+    "county": "Litchfield",
+    "pop": 2680,
+    "lat": 41.8607627,
+    "lon": -73.4492152
+  },
+  {
+    "name": "Thomaston",
+    "county": "Litchfield",
+    "pop": 7442,
+    "lat": 41.664944,
+    "lon": -73.0963247
+  },
+  {
+    "name": "Torrington",
+    "county": "Litchfield",
+    "pop": 35515,
+    "lat": 41.8341999,
+    "lon": -73.1314705
+  },
+  {
+    "name": "Warren",
+    "county": "Litchfield",
+    "pop": 1351,
+    "lat": 41.7358548,
+    "lon": -73.3428314
+  },
+  {
+    "name": "Washington",
+    "county": "Litchfield",
+    "pop": 3646,
+    "lat": 41.6561747,
+    "lon": -73.3101747
+  },
+  {
+    "name": "Watertown",
+    "county": "Litchfield",
+    "pop": 22105,
+    "lat": 41.6172455,
+    "lon": -73.1143619
+  },
+  {
+    "name": "Winchester",
+    "county": "Litchfield",
+    "pop": 10224,
+    "lat": 41.9272131,
+    "lon": -73.1093363
+  },
+  {
+    "name": "Woodbury",
+    "county": "Litchfield",
+    "pop": 9723,
+    "lat": 41.5616321,
+    "lon": -73.2060959
+  },
+  {
+    "name": "Chester",
+    "county": "Middlesex",
+    "pop": 3749,
+    "lat": 41.4117284,
+    "lon": -72.4871458
+  },
+  {
+    "name": "Clinton",
+    "county": "Middlesex",
+    "pop": 13185,
+    "lat": 41.2951299,
+    "lon": -72.5300394
+  },
+  {
+    "name": "Cromwell",
+    "county": "Middlesex",
+    "pop": 14225,
+    "lat": 41.6166088,
+    "lon": -72.6615596
+  },
+  {
+    "name": "Deep River",
+    "county": "Middlesex",
+    "pop": 4415,
+    "lat": 41.3678191,
+    "lon": -72.4774422
+  },
+  {
+    "name": "Durham",
+    "county": "Middlesex",
+    "pop": 7152,
+    "lat": 41.4689218,
+    "lon": -72.6845254
+  },
+  {
+    "name": "East Haddam",
+    "county": "Middlesex",
+    "pop": 8875,
+    "lat": 41.4766614,
+    "lon": -72.3921201
+  },
+  {
+    "name": "East Hampton",
+    "county": "Middlesex",
+    "pop": 12717,
+    "lat": 41.5677366,
+    "lon": -72.5095441
+  },
+  {
+    "name": "Essex",
+    "county": "Middlesex",
+    "pop": 6733,
+    "lat": 41.3498623,
+    "lon": -72.4133829
+  },
+  {
+    "name": "Haddam",
+    "county": "Middlesex",
+    "pop": 8452,
+    "lat": 41.4808086,
+    "lon": -72.5486358
+  },
+  {
+    "name": "Killingworth",
+    "county": "Middlesex",
+    "pop": 6174,
+    "lat": 41.3744187,
+    "lon": -72.5783279
+  },
+  {
+    "name": "Middlefield",
+    "county": "Middlesex",
+    "pop": 4217,
+    "lat": 41.514163,
+    "lon": -72.7178435
+  },
+  {
+    "name": "Middletown",
+    "county": "Middlesex",
+    "pop": 47717,
+    "lat": 41.5486107,
+    "lon": -72.6567838
+  },
+  {
+    "name": "Old Saybrook",
+    "county": "Middlesex",
+    "pop": 10481,
+    "lat": 41.2935043,
+    "lon": -72.3835936
+  },
+  {
+    "name": "Portland",
+    "county": "Middlesex",
+    "pop": 9384,
+    "lat": 41.5988341,
+    "lon": -72.589071
+  },
+  {
+    "name": "Westbrook",
+    "county": "Middlesex",
+    "pop": 6769,
+    "lat": 41.3036945,
+    "lon": -72.4780169
+  },
+  {
+    "name": "Ansonia",
+    "county": "New Haven",
+    "pop": 18918,
+    "lat": 41.3442494,
+    "lon": -73.0698254
+  },
+  {
+    "name": "Beacon Falls",
+    "county": "New Haven",
+    "pop": 6000,
+    "lat": 41.443685,
+    "lon": -73.0519252
+  },
+  {
+    "name": "Bethany",
+    "county": "New Haven",
+    "pop": 5297,
+    "lat": 41.422964,
+    "lon": -72.9941871
+  },
+  {
+    "name": "Branford",
+    "county": "New Haven",
+    "pop": 28273,
+    "lat": 41.2799489,
+    "lon": -72.7859502
+  },
+  {
+    "name": "Cheshire",
+    "county": "New Haven",
+    "pop": 28733,
+    "lat": 41.5118273,
+    "lon": -72.9036174
+  },
+  {
+    "name": "Derby",
+    "county": "New Haven",
+    "pop": 12325,
+    "lat": 41.3261239,
+    "lon": -73.0825739
+  },
+  {
+    "name": "East Haven",
+    "county": "New Haven",
+    "pop": 27923,
+    "lat": 41.2934528,
+    "lon": -72.8589937
+  },
+  {
+    "name": "Guilford",
+    "county": "New Haven",
+    "pop": 22073,
+    "lat": 41.3390318,
+    "lon": -72.7060901
+  },
+  {
+    "name": "Hamden",
+    "county": "New Haven",
+    "pop": 61169,
+    "lat": 41.3973285,
+    "lon": -72.9222256
+  },
+  {
+    "name": "Madison",
+    "county": "New Haven",
+    "pop": 17691,
+    "lat": 41.3444788,
+    "lon": -72.6245426
+  },
+  {
+    "name": "Meriden",
+    "county": "New Haven",
+    "pop": 60850,
+    "lat": 41.5367771,
+    "lon": -72.7945433
+  },
+  {
+    "name": "Middlebury",
+    "county": "New Haven",
+    "pop": 7574,
+    "lat": 41.5246912,
+    "lon": -73.1230162
+  },
+  {
+    "name": "Milford",
+    "county": "New Haven",
+    "pop": 52044,
+    "lat": 41.2250861,
+    "lon": -73.0611101
+  },
+  {
+    "name": "Naugatuck",
+    "county": "New Haven",
+    "pop": 31519,
+    "lat": 41.4885755,
+    "lon": -73.0519518
+  },
+  {
+    "name": "New Haven",
+    "county": "New Haven",
+    "pop": 134023,
+    "lat": 41.3108088,
+    "lon": -72.924953
+  },
+  {
+    "name": "North Branford",
+    "county": "New Haven",
+    "pop": 13544,
+    "lat": 41.3622568,
+    "lon": -72.7834624
+  },
+  {
+    "name": "North Haven",
+    "county": "New Haven",
+    "pop": 24253,
+    "lat": 41.3814653,
+    "lon": -72.8563709
+  },
+  {
+    "name": "Orange",
+    "county": "New Haven",
+    "pop": 14280,
+    "lat": 41.2849513,
+    "lon": -73.0246368
+  },
+  {
+    "name": "Oxford",
+    "county": "New Haven",
+    "pop": 12706,
+    "lat": 41.4440326,
+    "lon": -73.148235
+  },
+  {
+    "name": "Prospect",
+    "county": "New Haven",
+    "pop": 9401,
+    "lat": 41.4992466,
+    "lon": -72.9756339
+  },
+  {
+    "name": "Seymour",
+    "county": "New Haven",
+    "pop": 16748,
+    "lat": 41.3854655,
+    "lon": -73.0836408
+  },
+  {
+    "name": "Southbury",
+    "county": "New Haven",
+    "pop": 19879,
+    "lat": 41.4759861,
+    "lon": -73.2296919
+  },
+  {
+    "name": "Wallingford",
+    "county": "New Haven",
+    "pop": 44396,
+    "lat": 41.4586575,
+    "lon": -72.8045163
+  },
+  {
+    "name": "Waterbury",
+    "county": "New Haven",
+    "pop": 114403,
+    "lat": 41.5585001,
+    "lon": -73.0366845
+  },
+  {
+    "name": "West Haven",
+    "county": "New Haven",
+    "pop": 55584,
+    "lat": 41.2721212,
+    "lon": -72.9674973
+  },
+  {
+    "name": "Wolcott",
+    "county": "New Haven",
+    "pop": 16142,
+    "lat": 41.5950295,
+    "lon": -72.9685135
+  },
+  {
+    "name": "Woodbridge",
+    "county": "New Haven",
+    "pop": 9087,
+    "lat": 41.3635362,
+    "lon": -73.0038907
+  },
+  {
+    "name": "Bozrah",
+    "county": "New London",
+    "pop": 2429,
+    "lat": 41.5450583,
+    "lon": -72.175228
+  },
+  {
+    "name": "Colchester",
+    "county": "New London",
+    "pop": 15555,
+    "lat": 41.5572706,
+    "lon": -72.344247
+  },
+  {
+    "name": "East Lyme",
+    "county": "New London",
+    "pop": 18693,
+    "lat": 41.3560679,
+    "lon": -72.2298414
+  },
+  {
+    "name": "Franklin",
+    "county": "New London",
+    "pop": 1863,
+    "lat": 41.6212115,
+    "lon": -72.1426091
+  },
+  {
+    "name": "Griswold",
+    "county": "New London",
+    "pop": 11402,
+    "lat": 41.5847725,
+    "lon": -71.9210907
+  },
+  {
+    "name": "Groton",
+    "county": "New London",
+    "pop": 38411,
+    "lat": 41.3477177,
+    "lon": -72.0313446
+  },
+  {
+    "name": "Lebanon",
+    "county": "New London",
+    "pop": 7142,
+    "lat": 41.632955,
+    "lon": -72.2400896
+  },
+  {
+    "name": "Ledyard",
+    "county": "New London",
+    "pop": 15413,
+    "lat": 41.4311315,
+    "lon": -72.0203029
+  },
+  {
+    "name": "Lisbon",
+    "county": "New London",
+    "pop": 4195,
+    "lat": 41.6027656,
+    "lon": -72.0122612
+  },
+  {
+    "name": "Lyme",
+    "county": "New London",
+    "pop": 2352,
+    "lat": 41.3986146,
+    "lon": -72.3315456
+  },
+  {
+    "name": "Montville",
+    "county": "New London",
+    "pop": 18387,
+    "lat": 41.4638999,
+    "lon": -72.1555701
+  },
+  {
+    "name": "New London",
+    "county": "New London",
+    "pop": 27367,
+    "lat": 41.3329572,
+    "lon": -72.0961765
+  },
+  {
+    "name": "North Stonington",
+    "county": "New London",
+    "pop": 5149,
+    "lat": 41.4709693,
+    "lon": -71.8725254
+  },
+  {
+    "name": "Norwich",
+    "county": "New London",
+    "pop": 40125,
+    "lat": 41.5480059,
+    "lon": -72.0894538
+  },
+  {
+    "name": "Old Lyme",
+    "county": "New London",
+    "pop": 7628,
+    "lat": 41.3123196,
+    "lon": -72.3057421
+  },
+  {
+    "name": "Preston",
+    "county": "New London",
+    "pop": 4788,
+    "lat": 41.5186523,
+    "lon": -72.0065973
+  },
+  {
+    "name": "Salem",
+    "county": "New London",
+    "pop": 4213,
+    "lat": 41.4893505,
+    "lon": -72.2583804
+  },
+  {
+    "name": "Sprague",
+    "county": "New London",
+    "pop": 2967,
+    "lat": 41.6355702,
+    "lon": -72.0775268
+  },
+  {
+    "name": "Stonington",
+    "county": "New London",
+    "pop": 18335,
+    "lat": 41.3635101,
+    "lon": -71.9113676
+  },
+  {
+    "name": "Voluntown",
+    "county": "New London",
+    "pop": 2570,
+    "lat": 41.5791925,
+    "lon": -71.8312276
+  },
+  {
+    "name": "Waterford",
+    "county": "New London",
+    "pop": 19571,
+    "lat": 41.3516858,
+    "lon": -72.146834
+  },
+  {
+    "name": "Andover",
+    "county": "Tolland",
+    "pop": 3151,
+    "lat": 41.7329821,
+    "lon": -72.3746584
+  },
+  {
+    "name": "Bolton",
+    "county": "Tolland",
+    "pop": 4858,
+    "lat": 41.7645891,
+    "lon": -72.4375753
+  },
+  {
+    "name": "Columbia",
+    "county": "Tolland",
+    "pop": 5272,
+    "lat": 41.6937069,
+    "lon": -72.3056713
+  },
+  {
+    "name": "Coventry",
+    "county": "Tolland",
+    "pop": 12235,
+    "lat": 41.7802124,
+    "lon": -72.343758
+  },
+  {
+    "name": "Ellington",
+    "county": "Tolland",
+    "pop": 16426,
+    "lat": 41.9141491,
+    "lon": -72.4455676
+  },
+  {
+    "name": "Hebron",
+    "county": "Tolland",
+    "pop": 9098,
+    "lat": 41.6585843,
+    "lon": -72.3934198
+  },
+  {
+    "name": "Mansfield",
+    "county": "Tolland",
+    "pop": 25892,
+    "lat": 41.7892725,
+    "lon": -72.2284642
+  },
+  {
+    "name": "Somers",
+    "county": "Tolland",
+    "pop": 10255,
+    "lat": 41.9926327,
+    "lon": -72.4537254
+  },
+  {
+    "name": "Stafford",
+    "county": "Tolland",
+    "pop": 11472,
+    "lat": 41.9838788,
+    "lon": -72.3075745
+  },
+  {
+    "name": "Tolland",
+    "county": "Tolland",
+    "pop": 14563,
+    "lat": 41.8830194,
+    "lon": -72.3588694
+  },
+  {
+    "name": "Union",
+    "county": "Tolland",
+    "pop": 785,
+    "lat": 41.9998845,
+    "lon": -72.1622435
+  },
+  {
+    "name": "Vernon",
+    "county": "Tolland",
+    "pop": 30215,
+    "lat": 41.8375605,
+    "lon": -72.4590404
+  },
+  {
+    "name": "Willington",
+    "county": "Tolland",
+    "pop": 5566,
+    "lat": 41.8972671,
+    "lon": -72.2518477
+  },
+  {
+    "name": "Ashford",
+    "county": "Windham",
+    "pop": 4191,
+    "lat": 41.8971227,
+    "lon": -72.1714268
+  },
+  {
+    "name": "Brooklyn",
+    "county": "Windham",
+    "pop": 8450,
+    "lat": 41.7872432,
+    "lon": -71.9574014
+  },
+  {
+    "name": "Canterbury",
+    "county": "Windham",
+    "pop": 5045,
+    "lat": 41.6939604,
+    "lon": -72.0091181
+  },
+  {
+    "name": "Chaplin",
+    "county": "Windham",
+    "pop": 2151,
+    "lat": 41.7908895,
+    "lon": -72.1295395
+  },
+  {
+    "name": "Eastford",
+    "county": "Windham",
+    "pop": 1649,
+    "lat": 41.8955903,
+    "lon": -72.0933042
+  },
+  {
+    "name": "Hampton",
+    "county": "Windham",
+    "pop": 1728,
+    "lat": 41.7830301,
+    "lon": -72.0645718
+  },
+  {
+    "name": "Killingly",
+    "county": "Windham",
+    "pop": 17752,
+    "lat": 41.829902,
+    "lon": -71.8490975
+  },
+  {
+    "name": "Plainfield",
+    "county": "Windham",
+    "pop": 14973,
+    "lat": 41.6936128,
+    "lon": -71.9007755
+  },
+  {
+    "name": "Pomfret",
+    "county": "Windham",
+    "pop": 4266,
+    "lat": 41.8680405,
+    "lon": -71.9722603
+  },
+  {
+    "name": "Putnam",
+    "county": "Windham",
+    "pop": 9224,
+    "lat": 41.9080271,
+    "lon": -71.8704519
+  },
+  {
+    "name": "Scotland",
+    "county": "Windham",
+    "pop": 1576,
+    "lat": 41.6976356,
+    "lon": -72.0872886
+  },
+  {
+    "name": "Sterling",
+    "county": "Windham",
+    "pop": 3578,
+    "lat": 41.7012,
+    "lon": -71.8159882
+  },
+  {
+    "name": "Thompson",
+    "county": "Windham",
+    "pop": 9189,
+    "lat": 41.9902867,
+    "lon": -71.8670243
+  },
+  {
+    "name": "Windham",
+    "county": "Windham",
+    "pop": 24425,
+    "lat": 41.7144745,
+    "lon": -72.168667
+  },
+  {
+    "name": "Woodstock",
+    "county": "Windham",
+    "pop": 8221,
+    "lat": 41.9662084,
+    "lon": -72.0227864
+  }
+]

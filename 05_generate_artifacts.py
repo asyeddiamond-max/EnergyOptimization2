@@ -7,7 +7,7 @@ the output/ folder can be regenerated with proper PNG visualizations
 matching the research-project pattern.
 
 Outputs (in output/):
-    03a_county_topology.png  - county outline + 29 town outlines + centroids
+    03a_county_topology.png  - state outline + 169 town outlines + centroids
     03b_synthetic_grid.png   - adds 100 substations + feeders + laterals
     03c_grid_outages.png     - adds a 500-outage storm
     03d_restoration_plan.png - adds 10 crews + repair-job assignments
@@ -42,44 +42,14 @@ DATA = ROOT / "data"
 OUT  = ROOT / "output"
 OUT.mkdir(exist_ok=True)
 
-TOWNS = [
-    {"n":"Hartford","lat":41.7637,"lon":-72.6851,"pop":121054},
-    {"n":"New Britain","lat":41.6612,"lon":-72.7795,"pop":74992},
-    {"n":"West Hartford","lat":41.7620,"lon":-72.7420,"pop":64083},
-    {"n":"Bristol","lat":41.6718,"lon":-72.9493,"pop":60833},
-    {"n":"Manchester","lat":41.7759,"lon":-72.5215,"pop":59713},
-    {"n":"East Hartford","lat":41.7823,"lon":-72.6120,"pop":51045},
-    {"n":"Southington","lat":41.6001,"lon":-72.8781,"pop":43501},
-    {"n":"Enfield","lat":41.9762,"lon":-72.5917,"pop":42141},
-    {"n":"Glastonbury","lat":41.7126,"lon":-72.6081,"pop":35159},
-    {"n":"Newington","lat":41.6981,"lon":-72.7237,"pop":30152},
-    {"n":"Windsor","lat":41.8525,"lon":-72.6437,"pop":29492},
-    {"n":"South Windsor","lat":41.8237,"lon":-72.6223,"pop":26918},
-    {"n":"Farmington","lat":41.7201,"lon":-72.8320,"pop":26712},
-    {"n":"Wethersfield","lat":41.7142,"lon":-72.6526,"pop":26492},
-    {"n":"Simsbury","lat":41.8762,"lon":-72.8009,"pop":24517},
-    {"n":"Bloomfield","lat":41.8281,"lon":-72.7295,"pop":21535},
-    {"n":"Rocky Hill","lat":41.6648,"lon":-72.6648,"pop":20845},
-    {"n":"Berlin","lat":41.6212,"lon":-72.7456,"pop":20175},
-    {"n":"Avon","lat":41.8098,"lon":-72.8303,"pop":18871},
-    {"n":"Plainville","lat":41.6745,"lon":-72.8589,"pop":17716},
-    {"n":"Suffield","lat":41.9837,"lon":-72.6520,"pop":15735},
-    {"n":"Windsor Locks","lat":41.9292,"lon":-72.6234,"pop":12613},
-    {"n":"Granby","lat":41.9526,"lon":-72.7898,"pop":11282},
-    {"n":"East Windsor","lat":41.9123,"lon":-72.5453,"pop":11190},
-    {"n":"Canton","lat":41.8348,"lon":-72.8945,"pop":10124},
-    {"n":"Burlington","lat":41.7720,"lon":-72.9590,"pop":9701},
-    {"n":"Marlborough","lat":41.6320,"lon":-72.4598,"pop":6307},
-    {"n":"East Granby","lat":41.9434,"lon":-72.7320,"pop":5184},
-    {"n":"Hartland","lat":41.9856,"lon":-72.9534,"pop":1885},
-]
+TOWNS = json.loads((DATA / "connecticut_towns_population.json").read_text())
 TOTAL_POP = sum(t["pop"] for t in TOWNS)
 PALETTE = ["#ff7f0e","#1f77b4","#2ca02c","#d62728","#9467bd","#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf","#1fb8d1","#c266a7","#7e5fc4","#f4c842","#a68272"]
 
 # --- Load polygons ---
-boundary = json.loads((DATA / "hartford_boundary.json").read_text())
+boundary = json.loads((DATA / "connecticut_boundary.json").read_text())
 county_coords = boundary[0]["geojson"]["coordinates"][0]
-towns_geo = json.loads((DATA / "hartford_towns.geojson").read_text())
+towns_geo = json.loads((DATA / "connecticut_towns.geojson").read_text())
 
 LON = [c[0] for c in county_coords]
 LAT = [c[1] for c in county_coords]
@@ -375,7 +345,7 @@ def draw_outages(ax, outages):
 
 def main():
     # 03a — geography only
-    fig, ax = new_axes("Hartford County: boundary, 29 towns, centroids sized by population")
+    fig, ax = new_axes(f"Connecticut: boundary, {len(TOWNS)} towns, centroids sized by population")
     draw_geography(ax)
     fig.savefig(OUT / "03a_county_topology.png", dpi=110, bbox_inches="tight", facecolor="#f8fafc")
     plt.close(fig)
@@ -387,7 +357,7 @@ def main():
     substations = kmeans_simple(demand, 100, rnd_grid)
 
     # 03f — substations on the actual county outline (clean reference view)
-    fig, ax = new_axes(f"100 synthetic substations inside Hartford County (seed 42, no feeders shown)")
+    fig, ax = new_axes(f"100 synthetic substations inside Connecticut (seed 42, no feeders shown)")
     draw_geography(ax)
     draw_substations(ax, substations)
     fig.savefig(OUT / "03f_substations_on_county.png", dpi=110, bbox_inches="tight", facecolor="#f8fafc")

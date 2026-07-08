@@ -5,7 +5,8 @@
       "name": "grid-sim",
       "runtimeExecutable": "python",
       "runtimeArgs": ["_serve.py"],
-      "port": 8765
+      "port": 8765,
+      "autoPort": true
     }
   ]
 }

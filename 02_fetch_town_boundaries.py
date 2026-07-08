@@ -1,19 +1,23 @@
 """
-02_fetch_town_boundaries.py — Cache the 29 Hartford County town outlines from OSM.
+02_fetch_town_boundaries.py — Cache all Connecticut town outlines from OSM.
 
 Queries Overpass for every `admin_level=8` administrative-boundary relation
-inside the Hartford County bbox, filters down to the 29 named towns, and
-emits each town's outer-way geometry as a MultiLineString GeoJSON feature.
+inside the Connecticut statewide bbox. Connecticut has 169 towns (its
+municipalities double as the primary local government unit, unlike most
+states); we take whatever OSM returns inside the bbox rather than a
+hand-typed name list, so the script doesn't go stale if OSM's town-boundary
+coverage changes.
+
 We use MultiLineString instead of Polygon because OSM's outer ways are
-fragmented and reliable ring-stitching across all 29 towns is fiddly — for
+fragmented and reliable ring-stitching across all towns is fiddly — for
 visualization purposes the line geometry is identical, and L.geoJSON renders
 it the same way.
 
 Writes both:
-  - data/hartford_towns.geojson   (~140 KB GeoJSON FeatureCollection)
-  - data/hartford_towns.js        (same content wrapped as a JS global so the
-                                   interactive can <script src> it without
-                                   needing fetch + a web server)
+  - data/connecticut_towns.geojson   (GeoJSON FeatureCollection)
+  - data/connecticut_towns.js        (same content wrapped as a JS global so the
+                                       interactive can <script src> it without
+                                       needing fetch + a web server)
 
 Usage:
     python 02_fetch_town_boundaries.py
@@ -25,65 +29,106 @@ import urllib.request
 import urllib.parse
 from pathlib import Path
 
-OVERPASS = "https://overpass.kumi.systems/api/interpreter"
-BBOX = (41.54, -73.05, 42.05, -72.40)   # south, west, north, east
+OVERPASS = "https://overpass-api.de/api/interpreter"
+BBOX = (40.95, -73.73, 42.05, -71.79)   # south, west, north, east — Connecticut statewide
+BOUNDARY_FILE = Path(__file__).parent / "data" / "connecticut_boundary.json"
 
-WANTED = {
-    "Hartford","New Britain","West Hartford","Bristol","Manchester","Enfield",
-    "East Hartford","Southington","Glastonbury","South Windsor","Windsor",
-    "Newington","Wethersfield","Rocky Hill","Bloomfield","Plainville",
-    "Farmington","Berlin","Avon","Simsbury","Windsor Locks","East Windsor",
-    "Suffield","Granby","Canton","Marlborough","East Granby","Hartland",
-    "Burlington",
-}
+
+def _boundary_rings():
+    """Load the real CT state polygon (run 01_fetch_county_boundary.py first)."""
+    data = json.loads(BOUNDARY_FILE.read_text())
+    coords = data[0]["geojson"]["coordinates"]
+    rings = []
+    def flatten(c):
+        if isinstance(c[0][0], (int, float)):
+            rings.append(c)
+        else:
+            for cc in c:
+                flatten(cc)
+    flatten(coords)
+    return rings
+
+
+def _point_in_any_ring(lon: float, lat: float, rings: list) -> bool:
+    """Standard ray-casting point-in-polygon test, OR'd across every ring
+    (Nominatim can return a MultiPolygon with several disjoint rings)."""
+    for ring in rings:
+        inside = False
+        n = len(ring)
+        for i in range(n):
+            x1, y1 = ring[i]
+            x2, y2 = ring[(i + 1) % n]
+            if ((y1 > lat) != (y2 > lat)) and \
+               (lon < (x2 - x1) * (lat - y1) / (y2 - y1 + 1e-15) + x1):
+                inside = not inside
+        if inside:
+            return True
+    return False
 
 QUERY = (
-    "[out:json][timeout:90];"
+    "[out:json][timeout:300];"
     f'relation["boundary"="administrative"]["admin_level"="8"]'
     f'({BBOX[0]},{BBOX[1]},{BBOX[2]},{BBOX[3]});'
     "out geom;"
 )
 
-OUT_GEOJSON = Path(__file__).parent / "data" / "hartford_towns.geojson"
-OUT_JS      = Path(__file__).parent / "data" / "hartford_towns.js"
+OUT_GEOJSON = Path(__file__).parent / "data" / "connecticut_towns.geojson"
+OUT_JS      = Path(__file__).parent / "data" / "connecticut_towns.js"
 
 
 def fetch_overpass() -> dict:
-    print(f"Querying Overpass: {len(WANTED)} towns inside Hartford County bbox")
+    print("Querying Overpass: all admin_level=8 towns inside Connecticut bbox")
     url = OVERPASS + "?" + urllib.parse.urlencode({"data": QUERY})
-    req = urllib.request.Request(url, headers={"User-Agent": "hartford-grid-resilience/1.0"})
-    with urllib.request.urlopen(req, timeout=120) as r:
+    req = urllib.request.Request(url, headers={"User-Agent": "connecticut-grid-resilience/1.0"})
+    with urllib.request.urlopen(req, timeout=320) as r:
         return json.loads(r.read())
 
 
 def build_feature_collection(raw: dict) -> dict:
+    rings = _boundary_rings()
     features = []
-    matched = set()
+    seen_names = set()
+    out_of_state = []
     for el in raw.get("elements", []):
         if el.get("type") != "relation":
             continue
         name = el.get("tags", {}).get("name")
-        if not name or name not in WANTED:
+        if not name:
             continue
         lines = []
+        all_pts = []
         for m in el.get("members", []):
             if m.get("type") != "way" or m.get("role") != "outer" or not m.get("geometry"):
                 continue
             coords = [[round(p["lon"], 5), round(p["lat"], 5)] for p in m["geometry"]]
             if len(coords) >= 2:
                 lines.append(coords)
+                all_pts.extend(coords)
         if not lines:
             continue
+        # A bbox query necessarily also catches border towns in MA/RI/NY --
+        # a rectangle can't match Connecticut's actual shape. Keep only
+        # relations whose centroid genuinely falls inside the real state
+        # polygon (fetched separately by 01_fetch_county_boundary.py).
+        cx = sum(p[0] for p in all_pts) / len(all_pts)
+        cy = sum(p[1] for p in all_pts) / len(all_pts)
+        if not _point_in_any_ring(cx, cy, rings):
+            out_of_state.append(name)
+            continue
+        # OSM sometimes returns the same town as two relations (e.g. a
+        # borough + the enclosing town); keep the first and skip dupes.
+        if name in seen_names:
+            continue
+        seen_names.add(name)
         features.append({
             "type": "Feature",
             "properties": {"name": name},
             "geometry": {"type": "MultiLineString", "coordinates": lines},
         })
-        matched.add(name)
-    missing = WANTED - matched
-    if missing:
-        print(f"  warn: missing {len(missing)} towns: {sorted(missing)}")
-    print(f"  matched {len(matched)}/{len(WANTED)} towns")
+    if out_of_state:
+        print(f"  dropped {len(out_of_state)} out-of-state relations (bbox spillover): "
+              f"{sorted(out_of_state)}")
+    print(f"  matched {len(features)} towns")
     return {"type": "FeatureCollection", "features": features}
 
 
@@ -91,11 +136,14 @@ def main() -> None:
     OUT_GEOJSON.parent.mkdir(parents=True, exist_ok=True)
     raw = fetch_overpass()
     fc = build_feature_collection(raw)
-    if len(fc["features"]) < 25:
-        sys.exit("Too few towns matched; check the Overpass response.")
+    # Connecticut has 169 towns; OSM coverage can occasionally miss a couple
+    # or fold a borough in as a separate relation, so we check against a
+    # generous floor rather than requiring the exact number.
+    if len(fc["features"]) < 140:
+        sys.exit(f"Too few towns matched ({len(fc['features'])}); check the Overpass response.")
     text = json.dumps(fc, separators=(",", ":"))
     OUT_GEOJSON.write_text(text)
-    OUT_JS.write_text("window.HARTFORD_TOWNS_GEOJSON = " + text + ";")
+    OUT_JS.write_text("window.CONNECTICUT_TOWNS_GEOJSON = " + text + ";")
     print(f"Wrote {OUT_GEOJSON}  ({OUT_GEOJSON.stat().st_size} bytes)")
     print(f"Wrote {OUT_JS}  ({OUT_JS.stat().st_size} bytes)")
 

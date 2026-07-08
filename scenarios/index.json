@@ -2,73 +2,73 @@
   {
     "name": "quiet_day_realistic",
     "label": "Quiet day \u00b7 100 outages \u00b7 5 crews",
-    "size_kb": 608.0,
-    "total_time_hours": 98.68
+    "size_kb": 608.5,
+    "total_time_hours": 120
   },
   {
     "name": "thunderstorm_realistic",
     "label": "Thunderstorm \u00b7 500 outages \u00b7 10 crews",
-    "size_kb": 638.7,
-    "total_time_hours": 240
+    "size_kb": 639.1,
+    "total_time_hours": 247.47
   },
   {
     "name": "thunderstorm_well_staffed",
     "label": "Thunderstorm \u00b7 500 outages \u00b7 50 crews",
-    "size_kb": 640.3,
-    "total_time_hours": 85.2
+    "size_kb": 640.8,
+    "total_time_hours": 96
   },
   {
     "name": "major_storm_understaffed",
     "label": "Major storm \u00b7 2,000 outages \u00b7 20 crews",
-    "size_kb": 753.3,
-    "total_time_hours": 444.2
+    "size_kb": 753.8,
+    "total_time_hours": 456
   },
   {
     "name": "major_storm_well_staffed",
     "label": "Major storm \u00b7 2,000 outages \u00b7 100 crews",
-    "size_kb": 755.9,
-    "total_time_hours": 120.01
+    "size_kb": 756.3,
+    "total_time_hours": 126.41
   },
   {
     "name": "tropical_storm",
     "label": "Tropical storm \u00b7 5,000 outages \u00b7 200 crews",
-    "size_kb": 987.8,
-    "total_time_hours": 144
+    "size_kb": 988.2,
+    "total_time_hours": 145.29
   },
   {
     "name": "sandy_scale",
     "label": "Sandy-scale \u00b7 10,000 outages \u00b7 500 crews",
-    "size_kb": 1378.5,
-    "total_time_hours": 121.09
+    "size_kb": 1378.6,
+    "total_time_hours": 132.86
   },
   {
     "name": "sandy_scale_all_hands",
     "label": "Sandy-scale \u00b7 10,000 outages \u00b7 1,000 crews",
-    "size_kb": 1400.9,
+    "size_kb": 1401.5,
     "total_time_hours": 96
   },
   {
     "name": "worst_case",
     "label": "Worst case \u00b7 25,000 outages \u00b7 1,000 crews",
-    "size_kb": 2537.9,
-    "total_time_hours": 144
+    "size_kb": 2537.5,
+    "total_time_hours": 146.32
   },
   {
     "name": "thunderstorm_optimistic",
     "label": "Thunderstorm (optimistic) \u00b7 500 outages \u00b7 10 crews",
-    "size_kb": 638.5,
-    "total_time_hours": 78.52
+    "size_kb": 639.0,
+    "total_time_hours": 82.91
   },
   {
     "name": "major_storm_optimistic",
     "label": "Major storm (optimistic) \u00b7 2,000 outages \u00b7 100 crews",
-    "size_kb": 756.0,
-    "total_time_hours": 32.14
+    "size_kb": 756.5,
+    "total_time_hours": 35.19
   },
   {
     "name": "sandy_scale_optimistic",
     "label": "Sandy-scale (optimistic) \u00b7 10,000 outages \u00b7 500 crews",
-    "size_kb": 1378.5,
-    "total_time_hours": 31.49
+    "size_kb": 1379.1,
+    "total_time_hours": 34.52
   }
 ]

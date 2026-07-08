@@ -100,10 +100,10 @@ def serialize_scenario(name, label, outages_count, crews_count, realistic,
 
     # Estimate customers affected. art.simulate_storm returns just lat/lon
     # tuples; population impact is computed from the segment's customer share.
-    # For preset purposes we estimate from the total county population × fraction
+    # For preset purposes we estimate from the total state population × fraction
     # of segments hit. This is an approximation since we don't track per-outage
     # popLoss in the Python port, but good enough for the preset display.
-    TOTAL_POP = 939773
+    TOTAL_POP = art.TOTAL_POP
     SECTIONALIZER_FACTOR = 0.5 if realistic else 1.0
     total_cust_affected = min(
         TOTAL_POP,

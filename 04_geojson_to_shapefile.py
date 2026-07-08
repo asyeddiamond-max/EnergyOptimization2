@@ -1,9 +1,9 @@
 """
-geojson_to_shapefile.py — Convert a Hartford simulation export to Esri Shapefiles.
+geojson_to_shapefile.py — Convert a Connecticut simulation export to Esri Shapefiles.
 
 Usage:
-    python geojson_to_shapefile.py path/to/hartford_grid_seed42_*.zip
-    python geojson_to_shapefile.py path/to/hartford_grid_seed42_*.json
+    python geojson_to_shapefile.py path/to/connecticut_grid_seed42_*.zip
+    python geojson_to_shapefile.py path/to/connecticut_grid_seed42_*.json
     python geojson_to_shapefile.py path/to/folder_of_geojsons
 
 Outputs a folder of shapefiles next to the input, one .shp/.shx/.dbf/.prj per layer.

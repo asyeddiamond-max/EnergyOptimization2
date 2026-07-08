@@ -1,5 +1,5 @@
 """
-07_server.py — FastAPI backend for the Hartford County simulation.
+07_server.py — FastAPI backend for the Connecticut grid simulation.
 
 Hosts the same restoration scheduler algorithm as the browser, plus
 research-grade capabilities that the browser can't easily do:
@@ -78,7 +78,7 @@ def _get_pool():
 
 
 app = FastAPI(
-    title="Hartford County Grid Simulation Backend",
+    title="Connecticut Grid Simulation Backend",
     description=(
         "HTTP API for the restoration scheduler and Monte Carlo ensemble "
         "analysis. Designed to be called from the browser-based interactive."
@@ -386,7 +386,7 @@ def _split_for_specialization(req_outages: list[Outage], crews: int, seed: int,
 
     Per-outage tree_blocked classification (frontend can set tree_blocked
     explicitly, e.g. higher rate in rural / older-trim territories, lower in
-    urban Hartford). For outages with tree_blocked == -1 we fall back to the
+    urban areas). For outages with tree_blocked == -1 we fall back to the
     legacy stochastic assignment using tree_blocked_rate × multiplier (e.g.
     multiplier > 1 under soil_saturation = wet, more roots pulled out).
 
@@ -642,7 +642,7 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
 @app.get("/")
 def root():
     return {
-        "name": "Hartford County Grid Simulation Backend",
+        "name": "Connecticut Grid Simulation Backend",
         "endpoints": [
             "GET  /              — this index",
             "GET  /health        — health check",
