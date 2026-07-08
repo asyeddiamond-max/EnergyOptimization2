@@ -438,6 +438,82 @@ The report now contains 19 fully-written sections:
 
 ---
 
+## Phase — Statewide expansion: Hartford County → all of Connecticut (July 2026)
+
+**Goal:** the user asked to expand from Hartford County to the entire state,
+with an explicit requirement that every county get the same real-data rigor
+Hartford had — not a bigger boundary drawn around the old Hartford-only data.
+Scoped as a 4-phase plan with checkpoints: (1) real data + core refactor,
+(2) statewide HRRR wind grid + flood corridors, (3) performance
+(parallelization + server caching), (4) this doc pass.
+
+**Phase 1 — real data, statewide:**
+- Re-fetched the state boundary, town boundaries (169 real towns, filtered
+  against the real polygon to drop 44 bounding-box-spillover towns in
+  MA/RI/NY), and substations (299, statewide HIFLD `STATE='CT'` query).
+- Wrote three new fetch scripts: `09_fetch_critical_facilities.py` (1,143
+  real HIFLD/EPA facilities), `10_fetch_tree_canopy.py` (live NLCD WMS
+  buffer-mean per substation), `11_fetch_census_tracts.py` (883 real tracts +
+  169 town populations from the Census Bureau's keyless P.L. 94-171 static
+  file — this sidestepped the Census API key requirement entirely).
+- **Two real bugs found and fixed along the way:** HIFLD's substation `NAME`
+  field isn't unique (5 different real substations are all named "Bridgeport
+  substation"), which silently collapsed a name-keyed tree-canopy lookup down
+  from 299 to 223 entries — fixed by keying on coordinates instead, in both
+  the fetch script and the frontend. And the EPA Wastewater Treatment Plant
+  layer's `cwp_status` field turned out to be *regulatory compliance* status
+  ("Noncompliance" / "No Violation"), not an operational flag — a filter on
+  it was silently dropping every real CT water treatment plant.
+- **Two fabricated datasets discovered and replaced:** the original
+  `hartford_critical_facilities.js` (52 facilities) had no backing fetch
+  script and didn't match any live HIFLD query. The original
+  `hartford_census_tracts.js` (148 records) had 10-digit "GEOIDs" (real ones
+  are 11 digits) and an embedded county-FIPS substring that didn't match
+  Hartford's real FIPS code. Both were almost certainly hand-typed, not
+  pulled from a real API, despite header comments citing real source URLs.
+- Refactored `03_grid_simulation.html`, `05_generate_artifacts.py`,
+  `06_precompute_scenarios.py`, `07_server.py` off the hardcoded 29-town /
+  49-substation arrays onto the new statewide datasets.
+
+**Phase 2 — HRRR wind grid + flood corridors:**
+- Ported `fetch_hrrr_storm_wind.ipynb` (a Hartford-County-only 15×21 grid,
+  built for a notebook environment) to a plain script,
+  `12_fetch_hrrr_storm_wind.py`, densified to a 41×65 statewide grid at
+  HRRR's native ~3km resolution, same 5 storms. Soil moisture wasn't
+  available in this HRRR product for any of the 5 storm hours (confirmed
+  against the raw GRIB index, not just a failed guess) — left `null` rather
+  than substituting a low-confidence proxy field that returned a suspicious
+  flat 100% everywhere.
+- Wrote `13_fetch_flood_corridors.py`: pulled real river geometry from the
+  USGS National Hydrography Dataset for 12 major rivers across the other 7
+  counties, algorithmically stitched the many short NHD reach segments
+  (15-126 per river) into continuous paths, and merged them with the
+  existing 5 hand-placed Hartford corridors.
+
+**Phase 3 — performance:**
+- The real bottleneck at statewide scale turned out to be the
+  nearest-substation-per-pixel territory-coloring loop
+  (O(rows×cols×substations) — roughly 37× more work at 299 vs. 49
+  substations) and ~10,000 individual `L.polyline()` objects for
+  feeders/laterals. Moved the territory computation into a Web Worker
+  (`TERRITORY_WORKER_CODE`) and replaced the per-object polylines with a
+  canvas-batched `PolylineCloudLayer` (mirrors the existing `PointCloudLayer`
+  pattern for outages) — both with a fallback to the exact original
+  synchronous code if Workers are unavailable.
+- Added a disk-backed result cache to `07_server.py` for `/api/schedule` and
+  `/api/monte_carlo` (the two most expensive endpoints), keyed by a hash of
+  the full request body. Verified end-to-end by tampering with a cached
+  response file directly and confirming the tampered value came back on the
+  next identical request — proof the cache path, not recomputation, served it.
+
+**What stayed Hartford-only (by design, disclosed in the UI):** the flood
+corridors are 5 hand-placed Hartford corridors + 12 real USGS ones for the
+rest of the state (done, no longer a gap). The HRRR grid now covers the
+whole state for 5 storms; Sandy (2012) and Irene (2011) still have no
+gridded wind data since they predate the HRRR archive.
+
+---
+
 ## Major open questions
 
 1. **Should we calibrate against real Eversource outage data?** This was identified as the natural next research direction. Would require Eversource cooperation or PURA-filed records. Outcome: potentially publishable.
@@ -446,6 +522,6 @@ The report now contains 19 fully-written sections:
 
 3. **Pre-computed scenario library?** Identified as a near-term engineering fix for the "page freeze at max settings" complaint. Would let the most-common scenarios load instantly.
 
-4. **Statewide scaling?** Documented but not implemented. Largest piece of remaining engineering work.
+4. **Statewide scaling?** Done (see the Statewide expansion phase above) — real data, statewide HRRR/flood coverage, and performance work (Web Worker + server caching) all shipped.
 
 ---

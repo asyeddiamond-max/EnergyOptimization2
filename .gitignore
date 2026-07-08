@@ -2,6 +2,9 @@
 output/exports/*
 !output/exports/.gitkeep
 
+# 07_server.py disk-backed request cache — runtime-generated, regenerate on demand.
+cache/
+
 # Python
 __pycache__/
 *.pyc

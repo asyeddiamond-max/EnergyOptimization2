@@ -164,7 +164,7 @@ def build_journal():
 
     h1(doc, "Development Journal")
     p = doc.add_paragraph()
-    add_styled(p, "Hartford County Power Grid Resilience Simulation",
+    add_styled(p, "Connecticut Power Grid Resilience Simulation",
                italic=True, color=MARGIN, size=12)
     p = doc.add_paragraph()
     add_styled(p, "A. Syed Diamond  ·  Spring–Summer 2026",
@@ -1469,6 +1469,29 @@ def build_journal():
         "Visualisation parity is part of correctness. The vanishing markers regression wasn't caught by tests — it was caught by a user looking at the map. Speed without the right output isn't a win.",
     ])
 
+    section_break(doc)
+    h2(doc, "Addendum — Statewide Expansion")
+    margin_note(doc, "Hartford County to all of Connecticut, with the same real-data rigor everywhere -- not a bigger boundary drawn around the old data.")
+    body(doc, "The user asked to expand the simulator from Hartford County to the entire state, with one explicit, non-negotiable requirement:")
+    quote(doc, "User", "wait make sure the new counties all have the real substations within them. I want all the realistic features hartford county is based on to be found within the other counties that make up connecticut.")
+    body(doc, "Scoped as a 4-phase plan with checkpoints, so the full roadmap was visible up front but only Phase 1 started immediately: (1) real data + core refactor, (2) statewide HRRR wind grid + flood corridors, (3) performance, (4) this documentation pass.")
+
+    h3(doc, "Phase 1 -- real data, statewide")
+    body(doc, "Re-fetched the state boundary, all 169 real town polygons (filtered against the real state polygon to drop 44 bounding-box-spillover towns in Massachusetts, Rhode Island, and New York), and 299 real HIFLD substations statewide. Wrote three new fetch scripts for critical facilities (1,143, HIFLD/EPA), tree canopy (live NLCD WMS buffer-mean per substation), and census tracts (883 real tracts + 169 town populations, pulled from the Census Bureau's keyless P.L. 94-171 static file -- this sidestepped the Census API key requirement that had briefly looked like a hard blocker).")
+    bullets(doc, [
+        "Bug: HIFLD substation names aren't unique. Five different real substations are all literally named \"Bridgeport substation\" at different coordinates. A name-keyed tree-canopy lookup silently collapsed 299 substations down to 223 before this was caught -- fixed by keying on coordinates instead, in both the fetch script and the frontend.",
+        "Bug: EPA wastewater-plant status field misread. cwp_status turned out to be regulatory compliance status (\"Noncompliance\" / \"No Violation\"), not an operational open/closed flag -- a filter on it was silently dropping every real CT water treatment plant.",
+        "Two fabricated datasets found and replaced. The original hartford_critical_facilities.js had no backing fetch script and didn't match any live HIFLD query. The original hartford_census_tracts.js had 10-digit \"GEOIDs\" (real ones are 11 digits) and an embedded county-FIPS substring that didn't match Hartford's real FIPS code. Both were almost certainly hand-typed despite header comments citing real source URLs.",
+    ])
+
+    h3(doc, "Phase 2 -- HRRR wind grid + flood corridors")
+    body(doc, "Ported the Hartford-only 15x21 HRRR wind/temperature notebook to a plain script and densified it to a 41x65 statewide grid at HRRR's native ~3km resolution, for the same 5 storms (Isaias 2020, Henri 2021, May 2018, Jan 2024, Dec 2023). Soil moisture wasn't present in this HRRR product for any of the 5 storm hours -- confirmed against the raw GRIB index rather than just a failed field-name guess -- and the one semantically-close substitute field returned a suspicious flat 100% everywhere, so it was left null rather than filled with a low-confidence guess.")
+    body(doc, "Added 12 real river corridors for the other 7 counties, traced from the USGS National Hydrography Dataset. NHD represents each named river as many short connected reach segments (15-126 per river here) -- the fetch script chains matching reaches end-to-end by snapping close endpoints, keeps the longest connected chain per river, and simplifies to ~19 points, merged with the 5 existing hand-placed Hartford corridors.")
+
+    h3(doc, "Phase 3 -- performance")
+    body(doc, "The real bottleneck at statewide scale wasn't the feeder/lateral generation math (a few tens of thousands of cheap operations) -- it was the nearest-substation territory-coloring loop, O(rows x cols x substations), which scales roughly with substation count squared: ~37x more work at 299 substations than the original 49. Moved that computation into a Web Worker, with a synchronous fallback if Workers aren't available. Separately, ~10,000 individual Leaflet polyline objects for feeders/laterals (up from ~3,500 at the old scale) were replaced with a canvas-batched layer mirroring the existing point-cloud pattern already used for outages.")
+    body(doc, "Added a disk-backed result cache to the FastAPI backend for the two most expensive endpoints, keyed by a hash of the full request body. Verified it was actually being read from disk (not just re-computing the same deterministic result) by tampering with a cached file directly and confirming the tampered value came back on the next identical request.")
+
     doc.save("Hartford_Grid_Dev_Journal.docx")
     print("Wrote Hartford_Grid_Dev_Journal.docx")
 
@@ -1485,7 +1508,7 @@ def build_research():
 
     h1(doc, "Research Context & Literature Map")
     p = doc.add_paragraph()
-    add_styled(p, "Hartford County Power Grid Resilience Simulation",
+    add_styled(p, "Connecticut Power Grid Resilience Simulation",
                italic=True, color=MARGIN, size=12)
     p = doc.add_paragraph()
     add_styled(p, "Companion to the development journal",

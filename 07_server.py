@@ -77,6 +77,59 @@ def _get_pool():
     return _POOL
 
 
+# --- Disk-backed result cache -------------------------------------------
+# Statewide requests (up to 25k outages, 1000 crews, or a 200-run Monte Carlo
+# ensemble) are expensive enough that repeat requests -- the same canonical
+# preset hit by multiple users, or a user re-running a scenario they already
+# computed -- are worth serving from cache instead of recomputing. Keyed by a
+# hash of the full request body (including every outage coordinate), so any
+# difference in input produces a different cache entry. Survives server
+# restarts (unlike an in-memory dict) since Render's free tier can idle/sleep
+# and cold-start between requests.
+import hashlib
+import json
+from pathlib import Path
+
+_CACHE_DIR = Path(__file__).parent / "cache"
+_CACHE_DIR.mkdir(exist_ok=True)
+_CACHE_MAX_FILES = 500  # basic hygiene cap; prune oldest when exceeded
+
+
+def _cache_path(prefix: str, req: BaseModel) -> Path:
+    payload = req.model_dump_json(exclude_defaults=False).encode("utf-8")
+    digest = hashlib.sha256(payload).hexdigest()[:24]
+    return _CACHE_DIR / f"{prefix}_{digest}.json"
+
+
+def _prune_cache_if_needed() -> None:
+    files = sorted(_CACHE_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime)
+    if len(files) > _CACHE_MAX_FILES:
+        for f in files[: len(files) - _CACHE_MAX_FILES]:
+            try:
+                f.unlink()
+            except OSError:
+                pass
+
+
+def cached_response(prefix: str, req: BaseModel, response_model: type[BaseModel], compute):
+    """Return compute()'s cached result if this exact request was seen
+    before, otherwise compute, persist to disk, and return it."""
+    path = _cache_path(prefix, req)
+    if path.exists():
+        try:
+            return response_model.model_validate_json(path.read_text())
+        except Exception:
+            pass  # corrupt/stale cache entry -- fall through and recompute
+    result = compute()
+    try:
+        _CACHE_DIR.mkdir(exist_ok=True)  # self-heal if the dir was removed underneath us
+        path.write_text(result.model_dump_json())
+        _prune_cache_if_needed()
+    except OSError:
+        pass  # cache write failures shouldn't fail the request
+    return result
+
+
 app = FastAPI(
     title="Connecticut Grid Simulation Backend",
     description=(
@@ -674,44 +727,47 @@ def version() -> dict[str, Any]:
 
 @app.post("/api/schedule", response_model=ScheduleResponse)
 def schedule(req: ScheduleRequest) -> ScheduleResponse:
-    # Multi-day storm drag: when the storm is "big" (long duration or many
-    # outages), apply joint behavioural/sociotechnical slowdowns capturing
-    # crew fatigue, out-of-town-crew unfamiliarity, resource exhaustion, and
-    # the documented paradox that triple-time pay incentives can lengthen
-    # major-event timelines. +6 hours of staging/coordination delay, and a
-    # 15% bump on the road multiplier to capture cumulative debris + slower
-    # mutual-aid driving + out-of-area routing.
-    # ---- Multi-day storm drag (behavioral / sociotechnical) ----
-    eff_storm = req.storm_duration
-    eff_road = 1.5
-    if req.storm_drag and (req.storm_duration > 12 or len(req.outages) > 5000):
-        eff_storm = req.storm_duration + 6.0
-        eff_road = 1.5 * 1.15
-    # ---- Soil saturation (environmental) ----
-    # Wet ground pulls roots out more easily (more tree damage), and slows
-    # equipment + repair operations (mud, hydraulic stuck).
-    tree_blocked_mult = 1.0
-    if req.soil_saturation:
-        eff_road *= 1.25
-        tree_blocked_mult = 1.30
-    # ---- Pre-storm staging (logistical) ----
-    # Pre-positioned crews skip the 12 h post-storm assessment; work starts
-    # as soon as winds drop below the safety threshold.
-    eff_assess = 0.0 if req.pre_storm_staging else 12.0
-    total, crews = _run_scheduler(
-        req.outages, req.crews, req.seed, req.realistic, req.customer_weight,
-        crew_specialization=req.crew_specialization,
-        tree_blocked_rate=req.tree_blocked_rate,
-        tree_crew_share=req.tree_crew_share,
-        hierarchical=req.hierarchical,
-        tiered_priority=req.tiered_priority,
-        storm_duration=eff_storm,
-        crew_stickiness=req.crew_stickiness,
-        road_multiplier=eff_road,
-        assessment_delay=eff_assess,
-        tree_blocked_rate_multiplier=tree_blocked_mult,
-    )
-    return ScheduleResponse(total_time_h=total, crews=crews)
+    def _compute() -> ScheduleResponse:
+        # Multi-day storm drag: when the storm is "big" (long duration or many
+        # outages), apply joint behavioural/sociotechnical slowdowns capturing
+        # crew fatigue, out-of-town-crew unfamiliarity, resource exhaustion, and
+        # the documented paradox that triple-time pay incentives can lengthen
+        # major-event timelines. +6 hours of staging/coordination delay, and a
+        # 15% bump on the road multiplier to capture cumulative debris + slower
+        # mutual-aid driving + out-of-area routing.
+        # ---- Multi-day storm drag (behavioral / sociotechnical) ----
+        eff_storm = req.storm_duration
+        eff_road = 1.5
+        if req.storm_drag and (req.storm_duration > 12 or len(req.outages) > 5000):
+            eff_storm = req.storm_duration + 6.0
+            eff_road = 1.5 * 1.15
+        # ---- Soil saturation (environmental) ----
+        # Wet ground pulls roots out more easily (more tree damage), and slows
+        # equipment + repair operations (mud, hydraulic stuck).
+        tree_blocked_mult = 1.0
+        if req.soil_saturation:
+            eff_road *= 1.25
+            tree_blocked_mult = 1.30
+        # ---- Pre-storm staging (logistical) ----
+        # Pre-positioned crews skip the 12 h post-storm assessment; work starts
+        # as soon as winds drop below the safety threshold.
+        eff_assess = 0.0 if req.pre_storm_staging else 12.0
+        total, crews = _run_scheduler(
+            req.outages, req.crews, req.seed, req.realistic, req.customer_weight,
+            crew_specialization=req.crew_specialization,
+            tree_blocked_rate=req.tree_blocked_rate,
+            tree_crew_share=req.tree_crew_share,
+            hierarchical=req.hierarchical,
+            tiered_priority=req.tiered_priority,
+            storm_duration=eff_storm,
+            crew_stickiness=req.crew_stickiness,
+            road_multiplier=eff_road,
+            assessment_delay=eff_assess,
+            tree_blocked_rate_multiplier=tree_blocked_mult,
+        )
+        return ScheduleResponse(total_time_h=total, crews=crews)
+
+    return cached_response("schedule", req, ScheduleResponse, _compute)
 
 
 def _scheduler_time_only(outage_tuples, m_crews, seed, realistic,
@@ -1029,64 +1085,69 @@ def _mc_worker(args):
 def monte_carlo(req: MonteCarloRequest) -> MonteCarloResponse:
     """Run the scheduler N times with different seeds and return aggregate
     statistics over the resulting restoration times. Parallelized across CPU
-    cores via ProcessPoolExecutor so 30 seeds finish in ~30/n_cores the time."""
-    outage_tuples = [(o.lat, o.lon) for o in req.outages]
-    # Compute effective flags (mirrors schedule() logic).
-    eff_storm = req.storm_duration + (6.0 if req.storm_drag else 0.0)
-    eff_road  = 1.5 * (1.25 if req.soil_saturation else 1.0)
-    tree_mult = 1.3 if req.soil_saturation else 1.0
-    eff_assess = 0.0 if req.pre_storm_staging else 12.0
-    has_sub_flags = (
-        req.crew_specialization or req.crew_stickiness or req.hierarchical
-        or req.tiered_priority or req.customer_weight > 0 or req.storm_duration > 0
-        or req.storm_drag or req.soil_saturation or req.pre_storm_staging
-    )
-    # Only use the process pool when sub-flags are all off (the pool worker uses
-    # bare numba which ignores sub-flags). When any sub-flag is active, run
-    # serially through _run_scheduler so results match the main simulation.
-    N = len(outage_tuples)
-    use_pool = not has_sub_flags and (N * req.crews) > 10_000_000
-    if use_pool:
-        jobs = [(outage_tuples, req.crews,
-                 (req.base_seed + k * 9973) & 0xFFFFFFFF, req.realistic)
-                for k in range(req.n_runs)]
-        pool = _get_pool()
-        times = list(pool.map(_mc_worker, jobs))
-    else:
-        times = []
-        for k in range(req.n_runs):
-            seed = (req.base_seed + k * 9973) & 0xFFFFFFFF
-            total, _ = _run_scheduler(
-                req.outages, req.crews, seed, req.realistic,
-                customer_weight=req.customer_weight,
-                crew_specialization=req.crew_specialization,
-                tree_blocked_rate=req.tree_blocked_rate,
-                tree_crew_share=req.tree_crew_share,
-                hierarchical=req.hierarchical,
-                tiered_priority=req.tiered_priority,
-                storm_duration=eff_storm,
-                crew_stickiness=req.crew_stickiness,
-                road_multiplier=eff_road,
-                assessment_delay=eff_assess,
-                tree_blocked_rate_multiplier=tree_mult,
-            )
-            times.append(total)
-    times_sorted = sorted(times)
-    n = len(times_sorted)
-    def pct(p: float) -> float:
-        idx = max(0, min(n - 1, int(p * (n - 1))))
-        return times_sorted[idx]
-    return MonteCarloResponse(
-        n_runs=n,
-        mean_h=statistics.mean(times),
-        median_h=statistics.median(times),
-        stddev_h=statistics.stdev(times) if n >= 2 else 0.0,
-        p05_h=pct(0.05),
-        p95_h=pct(0.95),
-        min_h=min(times),
-        max_h=max(times),
-        individual_h=times,
-    )
+    cores via ProcessPoolExecutor so 30 seeds finish in ~30/n_cores the time.
+    Results are disk-cached (see cached_response) since a full ensemble at
+    statewide scale is the single most expensive request this server serves."""
+    def _compute() -> MonteCarloResponse:
+        outage_tuples = [(o.lat, o.lon) for o in req.outages]
+        # Compute effective flags (mirrors schedule() logic).
+        eff_storm = req.storm_duration + (6.0 if req.storm_drag else 0.0)
+        eff_road  = 1.5 * (1.25 if req.soil_saturation else 1.0)
+        tree_mult = 1.3 if req.soil_saturation else 1.0
+        eff_assess = 0.0 if req.pre_storm_staging else 12.0
+        has_sub_flags = (
+            req.crew_specialization or req.crew_stickiness or req.hierarchical
+            or req.tiered_priority or req.customer_weight > 0 or req.storm_duration > 0
+            or req.storm_drag or req.soil_saturation or req.pre_storm_staging
+        )
+        # Only use the process pool when sub-flags are all off (the pool worker uses
+        # bare numba which ignores sub-flags). When any sub-flag is active, run
+        # serially through _run_scheduler so results match the main simulation.
+        N = len(outage_tuples)
+        use_pool = not has_sub_flags and (N * req.crews) > 10_000_000
+        if use_pool:
+            jobs = [(outage_tuples, req.crews,
+                     (req.base_seed + k * 9973) & 0xFFFFFFFF, req.realistic)
+                    for k in range(req.n_runs)]
+            pool = _get_pool()
+            times = list(pool.map(_mc_worker, jobs))
+        else:
+            times = []
+            for k in range(req.n_runs):
+                seed = (req.base_seed + k * 9973) & 0xFFFFFFFF
+                total, _ = _run_scheduler(
+                    req.outages, req.crews, seed, req.realistic,
+                    customer_weight=req.customer_weight,
+                    crew_specialization=req.crew_specialization,
+                    tree_blocked_rate=req.tree_blocked_rate,
+                    tree_crew_share=req.tree_crew_share,
+                    hierarchical=req.hierarchical,
+                    tiered_priority=req.tiered_priority,
+                    storm_duration=eff_storm,
+                    crew_stickiness=req.crew_stickiness,
+                    road_multiplier=eff_road,
+                    assessment_delay=eff_assess,
+                    tree_blocked_rate_multiplier=tree_mult,
+                )
+                times.append(total)
+        times_sorted = sorted(times)
+        n = len(times_sorted)
+        def pct(p: float) -> float:
+            idx = max(0, min(n - 1, int(p * (n - 1))))
+            return times_sorted[idx]
+        return MonteCarloResponse(
+            n_runs=n,
+            mean_h=statistics.mean(times),
+            median_h=statistics.median(times),
+            stddev_h=statistics.stdev(times) if n >= 2 else 0.0,
+            p05_h=pct(0.05),
+            p95_h=pct(0.95),
+            min_h=min(times),
+            max_h=max(times),
+            individual_h=times,
+        )
+
+    return cached_response("monte_carlo", req, MonteCarloResponse, _compute)
 
 
 if __name__ == "__main__":

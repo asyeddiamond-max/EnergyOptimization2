@@ -1,6 +1,6 @@
-# Hartford County Power-Grid Resilience Simulation
+# Connecticut Power-Grid Resilience Simulation
 
-A browser-first, server-augmented interactive simulator for distribution-grid storm restoration in Hartford County, Connecticut. Models up to 25,000 outages and 5,000 crews per scenario in under a second, with seven realism factors, a calibration framework for future tuning against real Eversource data, customer-impact-weighted dispatch, and Monte Carlo ensemble analysis.
+A browser-first, server-augmented interactive simulator for distribution-grid storm restoration across the entire state of Connecticut. Models up to 25,000 outages and 5,000 crews per scenario in under a second, with seven realism factors, a calibration framework for future tuning against real Eversource data, customer-impact-weighted dispatch, and Monte Carlo ensemble analysis.
 
 Designed as a research instrument for the **restoration side** of the distribution-grid resilience problem — a downstream complement to the UConn Eversource Energy Center group's outage-prediction work.
 
@@ -21,13 +21,14 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
 
 | Capability | How |
 |---|---|
-| Real Hartford County distribution grid | 49 HIFLD substations, branching feeders + laterals, census-tract-weighted demand (~196 tracts) |
+| Real statewide Connecticut distribution grid | 299 HIFLD substations across all 8 counties, branching feeders + laterals, census-tract-weighted demand (883 tracts) |
 | Realistic-mode scheduler with seven factors | assessment delay, log-normal repair, discovery ramp, mutual-aid waves, road proxy, workday clamp, critical priority |
-| Real critical facilities (HIFLD) | 52 hospitals, fire stations, EMS, water plants — outages near real facilities get priority-1 restoration |
-| NLCD tree canopy per substation | USGS 30m canopy cover replaces the distance-based urban/suburban/rural heuristic |
+| Real critical facilities (HIFLD/EPA) | 1,143 hospitals, fire stations, EMS, water plants statewide — outages near real facilities get priority-1 restoration |
+| NLCD tree canopy per substation | USGS 30m canopy cover (live-computed 1km buffer mean per substation) replaces the distance-based urban/suburban/rural heuristic |
 | NOAA HURDAT2 storm tracks | Sandy, Isaias, Irene, Henri track overlays on the map with wind-speed markers |
+| Statewide HRRR wind/temp grid | 41×65 grid (~3km resolution) for 5 storms (Isaias, Henri, May 2018, Jan 2024, Dec 2023); sourced live via the NOAA AWS archive |
 | DOE OE-417 disturbance database | 8 real CT outage events for calibrating simulated vs. actual restoration timelines |
-| Census tract population | ~196 tracts (2020 Census) for ~5× finer demand placement than the 29-town model |
+| Census tract population | 883 tracts (2020 Census P.L. 94-171) for much finer demand placement than the 169-town model |
 | Customer-impact-weighted dispatch | scheduler can favor outages serving more customers, not just nearest |
 | Crew specialization (line vs tree) | 80/20 fleet split, 30% tree-blocked outages, parallel subsystems |
 | Optimal-crew-count recommendation | server-side binary search via Numba (10 s at 250 k outages) |
@@ -41,7 +42,7 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
 | Crew mobilization chart | Time-series chart showing simulated crew arrivals vs. real daily crew counts from Isaias 2020 |
 | Behavioral overtime analysis | Triple-time pay effect: models reduced urgency on non-critical repairs (15–30% productivity loss by day 5) |
 | Academic references | Full citations: Wanik et al. (2015) storm outage modeling, Journal of Homeland Security infrastructure resilience, IBEW/Circadian crew fatigue research |
-| Flood-zone road closures | FEMA NFHL river corridors add +35% road impedance for outages near flood zones |
+| Flood-zone road closures | 17 real river corridors statewide (5 FEMA NFHL in Hartford County + 12 USGS NHD-traced across the other 7 counties) add +35% road impedance for outages nearby |
 | Equipment/material shortage | progressive repair delay after 60% completion in major events (Eversource Isaias model) |
 | Customer callback lag | 2–8h discovery delay for ~15% of rural lateral outages not covered by SCADA |
 | Crew time-series ramp | Logistic mobilization curve calibrated to Isaias 2020 PURA daily crew counts (16% day 1 → 100% day 7) |
@@ -98,20 +99,30 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
 
 ```
 .
-├── 01_fetch_county_boundary.py    # cache Hartford polygon from OSM
-├── 02_fetch_town_boundaries.py    # cache the 29 town polygons from OSM
+├── 01_fetch_county_boundary.py    # cache the Connecticut state polygon from OSM
+├── 02_fetch_town_boundaries.py    # cache all 169 CT town polygons from OSM
 ├── 03_grid_simulation.html        # the main interactive (~4k LOC, runs in any browser)
 ├── 04_geojson_to_shapefile.py     # offline GeoJSON → shapefile converter (optional)
 ├── 05_generate_artifacts.py       # offline matplotlib PNG generator (used by scenario precomputer)
 ├── 06_precompute_scenarios.py     # batches scenario library JSON for the Alternative #2 dropdown
-├── 07_server.py                   # FastAPI backend (~780 LOC)
+├── 07_server.py                   # FastAPI backend (~780 LOC), disk-backed result cache
+├── 08_fetch_substations.py        # cache 299 real HIFLD substations statewide
+├── 09_fetch_critical_facilities.py # cache 1,143 real HIFLD/EPA critical facilities statewide
+├── 10_fetch_tree_canopy.py        # live-compute NLCD tree canopy per substation (1km buffer)
+├── 11_fetch_census_tracts.py      # cache 883 real census tracts + 169 town populations (keyless)
+├── 12_fetch_hrrr_storm_wind.py    # statewide HRRR wind/temp grid (41x65) for 5 storms
+├── 13_fetch_flood_corridors.py    # 12 real USGS NHD river corridors for the other 7 counties
 ├── scheduler_fast.py              # NumPy-vectorized fallback scheduler
 ├── scheduler_numba.py             # Numba-JIT production scheduler (~730 LOC)
 ├── build_docx.py                  # regenerates the two .docx deliverables
-├── data/                          # real-data inputs (HIFLD, NLCD, Census, NOAA, DOE)
-│   ├── hartford_substations.json  #   49 real HIFLD substations
-│   ├── hartford_critical_facilities.js  # 52 HIFLD hospitals/fire/EMS/water
-│   ├── hartford_census_tracts.js  #   ~196 census tract centroids + populations
+├── data/                          # real-data inputs (HIFLD, EPA, NLCD, Census, NOAA, DOE, USGS)
+│   ├── connecticut_substations.json    #   299 real HIFLD substations statewide
+│   ├── connecticut_critical_facilities.js # 1,143 HIFLD/EPA hospitals/fire/EMS/water
+│   ├── connecticut_census_tracts.js    #   883 real census tract centroids + populations
+│   ├── connecticut_towns_population.js #   169 real town populations + centroids
+│   ├── connecticut_tree_canopy.js      #   live-computed NLCD canopy per substation
+│   ├── connecticut_storm_wind.js       #   statewide HRRR wind/temp grid (41x65)
+│   ├── connecticut_flood_corridors.js  #   12 USGS-traced river corridors (7 counties)
 │   ├── hartford_storm_tracks.js   #   NOAA HURDAT2 tracks (Sandy, Isaias, Irene, Henri)
 │   ├── hartford_doe_oe417.js      #   DOE OE-417 disturbance events for CT
 │   └── ...                        #   boundary, towns, etc.
@@ -173,7 +184,7 @@ End-to-end times for a single Plan restoration at varying scales, with the Numba
 | 25 k × 5 000 (worst case, realistic) | ~480 ms |
 | 25 k × 5 000 + customer-priority + crew-specialization | ~2.3 s |
 | 50 k × 1 000 | ~220 ms |
-| **100 k × 2 000 (Connecticut projection)** | **~660 ms** |
+| **100 k × 2 000 (statewide Connecticut scale)** | **~660 ms** |
 
 History of the speedup at 25k × 5000 over the project:
 
@@ -194,13 +205,13 @@ Three documents in the repo capture the project's full development arc and resea
 - **`Hartford_Grid_Dev_Journal.docx`** — same content as a Word document for upload to Google Docs (drag into `drive.google.com` → right-click → Open with Google Docs → auto-converts). Regenerate with `python build_docx.py`.
 - **`Hartford_Grid_Research_Context.docx`** — 19 cited research papers across 6 themes (each with author/title/venue + "Why it matters" + "What it does" + "Key terms" vocab), niche analysis, sketch of paper introduction, open research questions, and PURA / Eversource data sources to pursue.
 - **`ROADMAP.md`** — advisor-feedback incorporation plan: the feedback organized by theme, a prioritized track-by-track implementation plan, and the data/links to collect.
-- **`DATA_SOURCES.md`** — provenance file for every real-world dataset the simulation uses (Hartford County boundary, towns, real HIFLD substations) plus planned sources (ISO-NE, DW crew curves, Eversource outage data, weather forcing). Source URLs, fetch scripts, licenses, refresh commands, and honest coverage notes for each.
+- **`DATA_SOURCES.md`** — provenance file for every real-world dataset the simulation uses (Connecticut state boundary, 169 towns, 299 real HIFLD substations, 1,143 critical facilities, 883 census tracts, statewide HRRR wind grid, 17 flood corridors) plus planned sources (ISO-NE, DW crew curves, Eversource outage data). Source URLs, fetch scripts, licenses, refresh commands, and honest coverage notes for each.
 
 ---
 
 ## Status & roadmap
 
-**Engineering side:** essentially complete for the Hartford County / Connecticut scope. Calibration framework is ready, multi-server batch is ready, all toggles work at max settings.
+**Engineering side:** the grid, critical facilities, census tracts, towns, tree canopy, HRRR wind grid, and flood corridors are all real data covering the entire state of Connecticut (8 counties). Territory/feeder rendering is canvas-batched and the territory-coloring pass runs in a Web Worker; the FastAPI backend disk-caches expensive `/api/schedule` and `/api/monte_carlo` results. Calibration framework is ready, multi-server batch is ready, all toggles work at max settings.
 
 **The Realism Fix (done):** three composable realism phases shipped and tested —
 **Phase 1** hierarchical restoration (laterals can't energize until their feeder is back),
@@ -235,4 +246,4 @@ MIT. See [LICENSE](LICENSE).
 
 If this work informs research, please cite the GitHub repository:
 
-> Diamond, A. S. (2026). *Hartford County Power-Grid Resilience Simulation.* GitHub repository: https://github.com/asyeddiamond-max/EnergyOptimization2
+> Diamond, A. S. (2026). *Connecticut Power-Grid Resilience Simulation.* GitHub repository: https://github.com/asyeddiamond-max/EnergyOptimization2

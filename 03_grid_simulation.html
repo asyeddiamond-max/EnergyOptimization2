@@ -172,7 +172,7 @@
         </div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="crewTimeSeriesRamp" checked /><span class="rf-name">Crew ramp (Isaias model)</span></label><div class="rf-desc">Logistic mobilization curve: 16% day 1, 40% day 3, 73% day 5, full by day 7. PURA Docket 20-08-03.</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="crewFatigueOT" checked /><span class="rf-name">Crew fatigue & overtime</span></label><div class="rf-desc">+5%/day repair penalty after day 2, up to +30% by day 8. IBEW/Circadian research.</div></div>
-        <div class="rf-item"><label class="rf-label"><input type="checkbox" id="floodZoneClosures" checked /><span class="rf-name">Flood-zone road closures</span></label><div class="rf-desc">+35% road impedance near the Connecticut/Park/Hockanum/Farmington/Salmon Brook river corridors. FEMA flood-zone maps. These 5 corridors are all in Hartford County — statewide flood corridors are a planned Phase 2 addition, so other counties see no flood effect yet.</div></div>
+        <div class="rf-item"><label class="rf-label"><input type="checkbox" id="floodZoneClosures" checked /><span class="rf-name">Flood-zone road closures</span></label><div class="rf-desc">+35% road impedance near 17 real river corridors statewide: 5 in Hartford County (Connecticut, Park, Hockanum, Farmington, Salmon Brook — FEMA flood-zone maps) plus 12 more across the other 7 counties (Housatonic, Naugatuck, Quinnipiac, Norwalk, Shepaug, Salmon, Thames, Yantic, Shetucket, Quinebaug, Willimantic, Natchaug — USGS NHD-traced).</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="equipmentShortage" checked /><span class="rf-name">Equipment shortage</span></label><div class="rf-desc">After 60% of repairs done, parts run thin — up to +40% penalty on final third. Eversource Isaias reports.</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="customerCallbackLag" checked /><span class="rf-name">Customer callback lag</span></label><div class="rf-desc">15% of rural outages discovered only by customer call. +2-8 h discovery delay. CT PURA testimony.</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="undergroundLines" checked /><span class="rf-name">Underground lines</span></label><div class="rf-desc">Urban areas ~40% underground laterals, 90% less storm damage. Eversource filings.</div></div>
@@ -209,7 +209,7 @@
     <div class="ctrl" style="background:#fef3c7;border-color:#fcd34d;">
       <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#78350f;line-height:1.4;">
         <input type="checkbox" id="windFieldWeighting" checked style="margin-top:2px;flex-shrink:0;" />
-        <span><b style="color:#b45309">Wind-field weighted placement</b> — when a storm track is selected, outages concentrate near the track path proportional to interpolated wind speed. Segments closer to the track and in higher-wind zones get 3–5× more outages than distant areas. Uses HURDAT2 track data. When no track is selected, falls back to uniform placement. The interpolated wind grid currently only has real HRRR resolution over Hartford County — other counties reuse the nearest grid-edge value until Phase 2 adds statewide HRRR data.</span>
+        <span><b style="color:#b45309">Wind-field weighted placement</b> — when a storm track is selected, outages concentrate near the track path proportional to interpolated wind speed. Segments closer to the track and in higher-wind zones get 3–5× more outages than distant areas. Uses HURDAT2 track data and a statewide HRRR wind grid (41×65, ~3km resolution) for 5 storms (Isaias 2020, Henri 2021, May 2018, Jan 2024, Dec 2023). When no track is selected, or the selected storm predates the HRRR archive (Sandy 2012, Irene 2011), falls back to uniform placement.</span>
       </label>
     </div>
 
@@ -397,7 +397,8 @@
 <script src="./data/connecticut_tree_canopy.js"></script>
 <script src="./data/hartford_storm_tracks.js"></script>
 <script src="./data/hartford_doe_oe417.js"></script>
-<script src="./data/hartford_storm_wind.js"></script>
+<script src="./data/connecticut_storm_wind.js"></script>
+<script src="./data/connecticut_flood_corridors.js"></script>
 <script>
 // Real Connecticut town population + centroid (169 towns), from the 2020
 // Census P.L. 94-171 Redistricting Data (11_fetch_census_tracts.py). Used as
@@ -467,16 +468,20 @@ const EVERSOURCE_CT = {
 };
 
 // --- Flood-zone river corridors (FEMA flood zones, simplified to centerlines) ---
-// Major flood-prone corridors in Hartford County -- statewide corridors for the
-// other 7 counties are a planned Phase 2 addition. Outages within ~1.5 mi of
-// these corridors get a road-impedance penalty when the flood-zone toggle is on.
-// Source: FEMA National Flood Hazard Layer (NFHL), simplified.
+// Statewide: 5 hand-placed Hartford County corridors (below) plus 12 real
+// USGS NHD-traced river corridors covering the other 7 counties (loaded from
+// data/connecticut_flood_corridors.js -- see 13_fetch_flood_corridors.py).
+// Outages within ~1.5 mi of any corridor get a road-impedance penalty when
+// the flood-zone toggle is on.
+// Source: FEMA National Flood Hazard Layer (NFHL) for the Hartford 5,
+//         USGS National Hydrography Dataset for the other 12.
 const FLOOD_CORRIDORS = [
   {name:"Connecticut River", pts:[[42.05,-72.61],[41.95,-72.62],[41.85,-72.64],[41.77,-72.65],[41.70,-72.65],[41.63,-72.66]]},
   {name:"Park River", pts:[[41.79,-72.72],[41.77,-72.70],[41.76,-72.68],[41.75,-72.67]]},
   {name:"Hockanum River", pts:[[41.80,-72.58],[41.79,-72.60],[41.78,-72.62],[41.77,-72.65]]},
   {name:"Farmington River", pts:[[42.00,-72.85],[41.95,-72.82],[41.88,-72.80],[41.82,-72.78],[41.78,-72.74],[41.76,-72.68]]},
   {name:"Salmon Brook", pts:[[42.00,-72.79],[41.96,-72.78],[41.92,-72.77],[41.88,-72.78]]},
+  ...(window.CONNECTICUT_FLOOD_CORRIDORS_EXTRA || []),
 ];
 function distToFloodCorridor(lat, lon){
   let minD = Infinity;
@@ -552,8 +557,9 @@ legend.onAdd=function(){
 legend.addTo(map);
 
 // --- Layers ---
-const lateralLayer=L.layerGroup().addTo(map);
-const feederLayer=L.layerGroup().addTo(map);
+// Canvas-batched lateral/feeder clouds (see PolylineCloudLayer above) -- created
+// lazily on first renderGrid() call since they need points before onAdd matters.
+let lateralCloud = null, feederCloud = null;
 const subLayer=L.layerGroup().addTo(map);
 // Web Worker for the scheduler — moves all per-iteration compute off the main
 // thread so the UI never freezes. The worker contains its own copies of the
@@ -715,10 +721,84 @@ function getSchedulerWorker(){
   return schedulerWorker;
 }
 
+// --- Territory-coloring Web Worker ---
+// The nearest-substation-per-pixel loop is O(rows * cols * substations). At
+// statewide scale (299 substations vs Hartford's 49) that's ~37x more work
+// than before -- easily multiple seconds of blocking main-thread compute.
+// This worker computes the RGBA pixel buffer off-thread; the main thread
+// only does the cheap final ctx.putImageData() bulk copy.
+const TERRITORY_WORKER_CODE = `
+function insideFast(lon, lat, bits, gridN, latMin, latMax, lonMin, lonMax, dLat, dLon){
+  if (lat < latMin || lat >= latMax || lon < lonMin || lon >= lonMax) return false;
+  const i = (lat - latMin) / dLat | 0, j = (lon - lonMin) / dLon | 0;
+  return bits[i * gridN + j] === 1;
+}
+function hex2rgb(h){ const n = parseInt(h.slice(1), 16); return [(n>>16)&255, (n>>8)&255, n&255]; }
+
+self.onmessage = function(e){
+  const d = e.data;
+  const { rows, cols, step, substations, gridN, latMin, latMax, lonMin, lonMax, dLat, dLon } = d;
+  const bits = new Uint8Array(d.insideBits);
+  const buf = new Uint8ClampedArray(rows * cols * 4);
+  const subLat = new Float64Array(substations.length), subLon = new Float64Array(substations.length);
+  const subRGB = substations.map(s => hex2rgb(s.color || '#888888'));
+  for (let i=0;i<substations.length;i++){ subLat[i]=substations[i].lat; subLon[i]=substations[i].lon; }
+
+  for (let r = 0; r < rows; r++){
+    const lat = latMax - r * step;
+    for (let c = 0; c < cols; c++){
+      const lon = lonMin + c * step;
+      const idx = (r * cols + c) * 4;
+      if (!insideFast(lon, lat, bits, gridN, latMin, latMax, lonMin, lonMax, dLat, dLon)){ buf[idx+3] = 0; continue; }
+      let best = 0, bestD = Infinity;
+      for (let i = 0; i < subLat.length; i++){
+        const dx = (subLat[i] - lat) * 69;
+        const dy = (subLon[i] - lon) * 51;
+        const dd = dx*dx + dy*dy;
+        if (dd < bestD){ bestD = dd; best = i; }
+      }
+      const rgb = subRGB[best];
+      buf[idx]=rgb[0]; buf[idx+1]=rgb[1]; buf[idx+2]=rgb[2]; buf[idx+3]=25;
+    }
+  }
+  self.postMessage({buf: buf.buffer}, [buf.buffer]);
+};
+`;
+let territoryWorker = null;
+function getTerritoryWorker(){
+  if (!territoryWorker && typeof Worker !== 'undefined'){
+    try {
+      const blob = new Blob([TERRITORY_WORKER_CODE], {type:'application/javascript'});
+      const url = URL.createObjectURL(blob);
+      territoryWorker = new Worker(url);
+    } catch(e){
+      console.warn("Territory Web Worker unavailable, falling back to main thread:", e);
+      territoryWorker = null;
+    }
+  }
+  return territoryWorker;
+}
+function computeTerritoryPixelsAsync(rows, cols, step){
+  const worker = getTerritoryWorker();
+  if (!worker) return null; // caller falls back to synchronous computation
+  return new Promise((resolve, reject) => {
+    const onMsg = (e) => { worker.removeEventListener('message', onMsg); resolve(new Uint8ClampedArray(e.data.buf)); };
+    const onErr = (e) => { worker.removeEventListener('error', onErr); reject(e); };
+    worker.addEventListener('message', onMsg);
+    worker.addEventListener('error', onErr);
+    // _insideBits.buffer is NOT transferred (only copied) since the main
+    // thread still needs it for other insideFast() calls (feeder generation,
+    // uniform demand-point sampling) on subsequent runs.
+    worker.postMessage({
+      rows, cols, step,
+      substations: substations.map(s => ({lat:s.lat, lon:s.lon, color:s.color})),
+      insideBits: _insideBits.buffer.slice(0),
+      gridN: GRID_N, latMin:_gLatMin, latMax:_gLatMax, lonMin:_gLonMin, lonMax:_gLonMax, dLat:_gDLat, dLon:_gDLon,
+    }, [/* transfer nothing from main thread's own copy */]);
+  });
+}
+
 const outageCanvas=L.canvas({padding:0.2});
-// Canvas renderers for feeders/laterals/repair-dots so we don't generate
-// thousands of SVG DOM elements at high substation/storm/crew counts.
-const gridCanvas=L.canvas({padding:0.4});
 const repairCanvas=L.canvas({padding:0.2});
 
 // Custom point-cloud Leaflet layer — draws an entire array of points in a
@@ -792,6 +872,86 @@ const PointCloudLayer = L.Layer.extend({
         if (o.lineWidth>0) ctx.stroke();
       }
     }
+  }
+});
+// Custom polyline-cloud layer — draws an entire set of polylines (feeders or
+// laterals) in a single canvas pass instead of one L.polyline per line. At
+// statewide scale (299 substations -> ~1500 feeders + ~9000 laterals) the
+// per-object overhead of individual Leaflet Layers becomes the real
+// bottleneck; this mirrors PointCloudLayer's approach but for lines. Lines
+// are grouped by color so a multi-colored set (feeders) still only needs one
+// ctx.stroke() call per distinct color instead of one per line.
+const PolylineCloudLayer = L.Layer.extend({
+  initialize: function(lines, opts){
+    this._lines = lines || []; // [{pts:[[lat,lon],...], color}]
+    this._opts = Object.assign({ uniformColor:false, color:"#888", weight:1, opacity:1 }, opts || {});
+  },
+  setLines: function(lines){
+    this._lines = lines || [];
+    if (this._map) this._draw();
+  },
+  onAdd: function(map){
+    this._map = map;
+    const pane = map.getPanes().overlayPane;
+    this._canvas = L.DomUtil.create('canvas', 'leaflet-polylinecloud-layer');
+    this._canvas.style.position = 'absolute';
+    this._canvas.style.pointerEvents = 'none';
+    pane.appendChild(this._canvas);
+    map.on('moveend zoomend viewreset resize', this._reset, this);
+    this._reset();
+  },
+  onRemove: function(map){
+    if (this._canvas) L.DomUtil.remove(this._canvas);
+    map.off('moveend zoomend viewreset resize', this._reset, this);
+    this._canvas = null;
+  },
+  _reset: function(){
+    if (!this._map || !this._canvas) return;
+    const size = this._map.getSize();
+    this._canvas.width = size.x;
+    this._canvas.height = size.y;
+    L.DomUtil.setPosition(this._canvas, this._map.containerPointToLayerPoint([0,0]));
+    this._draw();
+  },
+  _strokeGroup: function(ctx, lines){
+    const map = this._map;
+    ctx.beginPath();
+    for (let k=0;k<lines.length;k++){
+      const pts = lines[k].pts;
+      if (!pts || pts.length < 2) continue;
+      let xy = map.latLngToContainerPoint([pts[0][0], pts[0][1]]);
+      ctx.moveTo(xy.x, xy.y);
+      for (let i=1;i<pts.length;i++){
+        xy = map.latLngToContainerPoint([pts[i][0], pts[i][1]]);
+        ctx.lineTo(xy.x, xy.y);
+      }
+    }
+    ctx.stroke();
+  },
+  _draw: function(){
+    if (!this._map || !this._canvas) return;
+    const ctx = this._canvas.getContext('2d');
+    ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+    const o = this._opts;
+    ctx.lineWidth = o.weight;
+    ctx.globalAlpha = o.opacity;
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    if (o.uniformColor){
+      ctx.strokeStyle = o.color;
+      this._strokeGroup(ctx, this._lines);
+    } else {
+      const byColor = new Map();
+      for (const l of this._lines){
+        const c = l.color || o.color;
+        if (!byColor.has(c)) byColor.set(c, []);
+        byColor.get(c).push(l);
+      }
+      for (const [color, lines] of byColor){
+        ctx.strokeStyle = color;
+        this._strokeGroup(ctx, lines);
+      }
+    }
+    ctx.globalAlpha = 1;
   }
 });
 const outageLayer=L.layerGroup().addTo(map);
@@ -1222,23 +1382,19 @@ function generateGrid(){
 }
 
 let territoryLayer = null;
-function renderTerritories(){
-  if (territoryLayer){ map.removeLayer(territoryLayer); territoryLayer = null; }
-  if (!substations.length || !_bitmapReady) return;
-  const step = 0.008;
-  const rows = Math.ceil((_gLatMax - _gLatMin) / step);
-  const cols = Math.ceil((_gLonMax - _gLonMin) / step);
-  const can = document.createElement('canvas');
-  can.width = cols; can.height = rows;
-  const ctx = can.getContext('2d');
+let _territoryRunId = 0;
+// Fills an RGBA Uint8ClampedArray synchronously on the main thread -- the
+// same algorithm as the worker, used only as a fallback if Web Workers
+// aren't available.
+function fillTerritoryPixelsSync(rows, cols, step){
   const hex2rgb = h => { const n = parseInt(h.slice(1),16); return [(n>>16)&255,(n>>8)&255,n&255]; };
-  const img = ctx.createImageData(cols, rows);
+  const buf = new Uint8ClampedArray(rows * cols * 4);
   for (let r = 0; r < rows; r++){
     const lat = _gLatMax - r * step;
     for (let c = 0; c < cols; c++){
       const lon = _gLonMin + c * step;
       const idx = (r * cols + c) * 4;
-      if (!insideFast(lon, lat)){ img.data[idx+3] = 0; continue; }
+      if (!insideFast(lon, lat)){ buf[idx+3] = 0; continue; }
       let best = 0, bestD = Infinity;
       for (let i = 0; i < substations.length; i++){
         const dx = (substations[i].lat - lat) * 69;
@@ -1247,11 +1403,34 @@ function renderTerritories(){
         if (d < bestD){ bestD = d; best = i; }
       }
       const rgb = hex2rgb(substations[best].color || '#888888');
-      img.data[idx] = rgb[0]; img.data[idx+1] = rgb[1]; img.data[idx+2] = rgb[2];
-      img.data[idx+3] = 25;
+      buf[idx] = rgb[0]; buf[idx+1] = rgb[1]; buf[idx+2] = rgb[2];
+      buf[idx+3] = 25;
     }
   }
-  ctx.putImageData(img, 0, 0);
+  return buf;
+}
+async function renderTerritories(){
+  if (territoryLayer){ map.removeLayer(territoryLayer); territoryLayer = null; }
+  if (!substations.length || !_bitmapReady) return;
+  const step = 0.008;
+  const rows = Math.ceil((_gLatMax - _gLatMin) / step);
+  const cols = Math.ceil((_gLonMax - _gLonMin) / step);
+  const runId = ++_territoryRunId;
+
+  let buf;
+  try {
+    buf = await computeTerritoryPixelsAsync(rows, cols, step);
+  } catch(e){
+    console.warn('Territory worker failed, falling back to main thread:', e);
+    buf = null;
+  }
+  if (runId !== _territoryRunId) return; // a newer generateGrid() call superseded this one
+  if (!buf) buf = fillTerritoryPixelsSync(rows, cols, step);
+
+  const can = document.createElement('canvas');
+  can.width = cols; can.height = rows;
+  const ctx = can.getContext('2d');
+  ctx.putImageData(new ImageData(buf, cols, rows), 0, 0);
   const bounds = [[_gLatMax, _gLonMin],[_gLatMin, _gLonMax]];
   territoryLayer = L.imageOverlay(can.toDataURL(), bounds, {opacity: 1, interactive: false});
   territoryLayer.addTo(map);
@@ -1259,10 +1438,18 @@ function renderTerritories(){
 }
 
 function renderGrid(){
-  lateralLayer.clearLayers(); feederLayer.clearLayers(); subLayer.clearLayers();
-  try { renderTerritories(); } catch(e){ console.error('Territory render failed:', e); }
-  laterals.forEach(l=>L.polyline(l.pts,{renderer:gridCanvas,color:"#bfc4cb",weight:0.6,opacity:0.75,interactive:false}).addTo(lateralLayer));
-  feeders.forEach(f=>L.polyline(f.pts,{renderer:gridCanvas,color:f.color,weight:1.3,opacity:0.95,interactive:false}).addTo(feederLayer));
+  subLayer.clearLayers();
+  renderTerritories().catch(e => console.error('Territory render failed:', e));
+  if (!lateralCloud){
+    lateralCloud = new PolylineCloudLayer(laterals, {uniformColor:true, color:"#bfc4cb", weight:0.6, opacity:0.75}).addTo(map);
+  } else {
+    lateralCloud.setLines(laterals);
+  }
+  if (!feederCloud){
+    feederCloud = new PolylineCloudLayer(feeders, {weight:1.3, opacity:0.95}).addTo(map);
+  } else {
+    feederCloud.setLines(feeders);
+  }
   substations.forEach((s,i)=>{
     const icon=L.divIcon({className:"sub-star",html:starSVG(s.color,26),iconSize:[26,26],iconAnchor:[13,13]});
     const label = s.name ? s.name : `Substation ${i+1}`;
@@ -1273,7 +1460,7 @@ function renderGrid(){
   if (window._mask) window._mask.bringToFront();
 }
 
-// Bilinear interpolation of wind speed (mph) from the HRRR 15×21 Hartford grid.
+// Bilinear interpolation of wind speed (mph) from the HRRR 41×65 statewide CT grid.
 function getHrrrWindMph(lat, lon, hrrrStorm, grid) {
   const wind = hrrrStorm.peak_wind_mph;
   if (!wind) return 30;
@@ -1322,13 +1509,13 @@ function simulateStorm(){
   const useWindField = document.getElementById('windFieldWeighting').checked;
   const trackKey = document.getElementById('stormTrackSelect').value;
   const trackData = trackKey && window.HARTFORD_STORM_TRACKS && window.HARTFORD_STORM_TRACKS[trackKey];
-  const _hw = window.HARTFORD_STORM_WIND;
+  const _hw = window.CONNECTICUT_STORM_WIND;
   const _hrrrStorm = _hw?._populated && _hw.storms?.[trackKey];
   const useHrrrGrid = !!(_hrrrStorm && _hrrrStorm.peak_wind_mph);
   let segWeights = null;
   let totalWeight = 0;
   if (useHrrrGrid) {
-    // HRRR path: bilinear interpolation from 15×21 grid, weight ∝ wind² (kinetic energy).
+    // HRRR path: bilinear interpolation from the statewide grid, weight ∝ wind² (kinetic energy).
     const grid = _hw.grid;
     segWeights = new Float64Array(allSegs.length);
     for (let si = 0; si < allSegs.length; si++){
@@ -1725,8 +1912,8 @@ async function planRestoration(){
   }
   // HRRR temperature + precipitation repair multiplier (constant per simulation call).
   // Cold slows fieldwork; ice storms add re-sag risk and hazard time.
-  const _hrrS = window.HARTFORD_STORM_WIND?._populated
-    ? window.HARTFORD_STORM_WIND?.storms?.[document.getElementById('stormTrackSelect').value]
+  const _hrrS = window.CONNECTICUT_STORM_WIND?._populated
+    ? window.CONNECTICUT_STORM_WIND?.storms?.[document.getElementById('stormTrackSelect').value]
     : null;
   const _hrrTempF  = _hrrS?.avg_temp_f ?? 65;
   const _hrrPrecip = _hrrS?.precip_type ?? 'rain';
@@ -3329,7 +3516,7 @@ document.getElementById('showStormTrack').onchange = renderStormTrack;
 document.getElementById('stormTrackSelect').onchange = renderStormTrack;
 // When HRRR data is populated, auto-set soil saturation based on measured soil moisture.
 document.getElementById('stormTrackSelect').addEventListener('change', function() {
-  const hw = window.HARTFORD_STORM_WIND;
+  const hw = window.CONNECTICUT_STORM_WIND;
   if (!hw?._populated) return;
   const s = hw.storms?.[this.value];
   if (!s || s.soil_wetness == null) return;

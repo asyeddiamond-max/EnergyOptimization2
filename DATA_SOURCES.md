@@ -1,8 +1,10 @@
 # Data Sources
 
-The provenance file for every piece of real-world data the Hartford County
+The provenance file for every piece of real-world data the Connecticut
 simulation depends on. Started when the model began incorporating real data
-(commit `42a9743`, real substations); will grow as more datasets come in.
+(commit `42a9743`, real substations); grew from Hartford-County-only to
+statewide coverage across all 8 counties in a later pass — will keep growing
+as more datasets come in.
 
 For each source: **what** it is, **where** it comes from, **how** to refresh
 it, **where** it lives in the repo, and **what** it's used for. Honest notes
@@ -10,53 +12,58 @@ on coverage gaps go at the bottom of each entry.
 
 ---
 
-## 1 · Hartford County boundary
+## 1 · Connecticut state boundary
 
 | | |
 |---|---|
-| **What** | The polygon of Hartford County, Connecticut |
+| **What** | The polygon of the state of Connecticut |
 | **Source** | OpenStreetMap via Nominatim |
-| **Endpoint** | `nominatim.openstreetmap.org/search.php?q=Hartford+County,+Connecticut&polygon_geojson=1` |
+| **Endpoint** | `nominatim.openstreetmap.org/search.php?q=Connecticut,+United+States&polygon_geojson=1` |
 | **Fetch script** | [`01_fetch_county_boundary.py`](01_fetch_county_boundary.py) |
-| **Cached file** | [`data/hartford_boundary.json`](data/hartford_boundary.json) |
-| **Used by** | The interactive (county outline rendering, point-in-polygon filtering for other datasets), the artifact generator |
+| **Cached file** | [`data/connecticut_boundary.json`](data/connecticut_boundary.json) |
+| **Used by** | The interactive (state outline rendering, point-in-polygon filtering for other datasets), the artifact generator |
 | **License** | © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright) |
 | **Refresh** | `python 01_fetch_county_boundary.py` — only needed if OSM updates the boundary |
 
+**History**: originally scoped to Hartford County only (`data/hartford_boundary.json`, still present but unused); replaced with the statewide polygon so every downstream dataset (towns, substations, tracts) could cover all 8 counties instead of one.
+
 ---
 
-## 2 · Hartford County towns (29 municipal polygons)
+## 2 · Connecticut towns (169 municipal polygons)
 
 | | |
 |---|---|
-| **What** | The 29 town polygons inside Hartford County, with names + populations |
-| **Source** | OpenStreetMap via Overpass (admin_level=8) |
+| **What** | All 169 real CT town polygons statewide, with names |
+| **Source** | OpenStreetMap via Overpass (admin_level=8), filtered by real point-in-polygon test against the state boundary (a bounding-box query alone also catches ~44 border towns in MA/RI/NY, which are dropped) |
 | **Fetch script** | [`02_fetch_town_boundaries.py`](02_fetch_town_boundaries.py) |
-| **Cached files** | [`data/hartford_towns.geojson`](data/hartford_towns.geojson), [`data/hartford_towns.js`](data/hartford_towns.js) |
-| **Used by** | The interactive (town overlay), demand-point weighting in the synthetic grid generator |
+| **Cached files** | [`data/connecticut_towns.geojson`](data/connecticut_towns.geojson), [`data/connecticut_towns.js`](data/connecticut_towns.js) |
+| **Used by** | The interactive (town overlay); demand-point weighting uses real per-town population from source 9 below, not this file |
 | **License** | © OpenStreetMap contributors, ODbL 1.0 |
 | **Refresh** | `python 02_fetch_town_boundaries.py` |
 
+**History**: originally a hardcoded 29-name allowlist for Hartford County only. Rewritten to accept whatever OSM returns inside the statewide bbox rather than a hand-typed name list, filtered against the real state polygon instead of a hardcoded threshold — matched 170 features (169 real CT towns + Fenmark's "Fenwick" borough, a real sub-entity of Old Saybrook that OSM tracks as a separate relation).
+
 ---
 
-## 3 · Hartford County substations *(real, as of commit `140931c`)*
+## 3 · Connecticut substations *(real, statewide)*
 
 | | |
 |---|---|
-| **What** | Real electric substation point locations in Hartford County — name, lat/lon, voltage (where known), city, in-service status |
+| **What** | Real electric substation point locations across all 8 CT counties — name, lat/lon, voltage (where known), city, county, in-service status |
 | **Primary source** | **HIFLD** — Homeland Infrastructure Foundation-Level Data, *Electric Substations* layer (U.S. federal infrastructure dataset) |
-| **Endpoint** | `services5.arcgis.com/HDRa0B57OVrv2E1q/ArcGIS/rest/services/Electric_Substations/FeatureServer/0/query?where=STATE='CT' AND COUNTY='HARTFORD'` |
+| **Endpoint** | `services5.arcgis.com/HDRa0B57OVrv2E1q/ArcGIS/rest/services/Electric_Substations/FeatureServer/0/query?where=STATE='CT'` |
 | **Fallback source** | OpenStreetMap (`power=substation` via Overpass), used automatically if HIFLD is unreachable |
 | **Fetch script** | [`08_fetch_substations.py`](08_fetch_substations.py) |
-| **Cached files** | [`data/hartford_substations.json`](data/hartford_substations.json), [`data/hartford_substations.js`](data/hartford_substations.js) |
-| **Used by** | The interactive — `generateGrid()` anchors all substations at the real HIFLD locations; synthetic feeders + laterals grow from these points. Map tooltips show real name + voltage. **The grid auto-builds on page load** (commit `be09088`) so real names appear immediately without the user having to click Generate first. Also used as the territory units for the crew-stickiness toggle (each outage routes to its nearest substation; crews assigned to that substation work only that territory). |
-| **Record count** | 49 substations inside the county (as of last fetch) |
+| **Cached files** | [`data/connecticut_substations.json`](data/connecticut_substations.json), [`data/connecticut_substations.js`](data/connecticut_substations.js) |
+| **Used by** | The interactive — `generateGrid()` anchors all substations at the real HIFLD locations; synthetic feeders + laterals grow from these points. Map tooltips show real name + voltage. **The grid auto-builds on page load** so real names appear immediately without the user having to click Generate first. Also used as the territory units for the crew-stickiness toggle (each outage routes to its nearest substation; crews assigned to that substation work only that territory). |
+| **Record count** | 299 substations statewide (Fairfield 80, New Haven 63, Hartford 49, New London 49, Litchfield 22, Windham 15, Middlesex 13, Tolland 8) |
 | **License** | HIFLD: public domain (U.S. government work). OSM fallback: © OpenStreetMap contributors, ODbL 1.0. |
 | **Refresh** | `python 08_fetch_substations.py` |
 
 **Honest coverage notes**
 - HIFLD covers transmission and sub-transmission substations well (115 kV, 345 kV). Smaller neighborhood **distribution** substations are below HIFLD's threshold and aren't in any public dataset.
 - HIFLD labels a handful of substations `UNKNOWN<id>` or `Deadend<id>` when the operator name isn't public. The fetch script relabels those by city (e.g. "Farmington substation") so markers are readable while locations stay exact.
+- **HIFLD's `NAME` field is not unique.** 36 name-groups (covering 76 records) share a name with a genuinely different physical substation at a different location — e.g. 5 distinct substations are all named "Bridgeport substation". Anything that looks up per-substation data by name (originally the NLCD tree-canopy lookup) must key by coordinates instead, or it silently collapses duplicates. See source 8 below.
 - A more complete view would require an **ISO New England** or **Eversource GIS** export (currently being pursued via the advisor). The fetch script is straightforward to repoint when that data arrives.
 
 ---
@@ -119,7 +126,7 @@ fit.
 
 | Anchor | Value | Where | Source / rationale |
 |---|---|---|---|
-| **Hartford downtown centroid** | (41.7637, -72.6851) | Frontend `treeFactor()` | Geographic centroid of Hartford city used as fallback when NLCD canopy data is missing for a substation. Standard map lookup. |
+| **State boundary centroid** | computed at runtime from `data/connecticut_boundary.json` | Frontend `treeFactor()` | Midpoint of the loaded state boundary's lat/lon bounds, used as the fallback distance-heuristic origin when NLCD canopy data is missing for a substation (rare — all 299 real substations have a live-computed value; see Data Source §8). Was a hardcoded Hartford-city centroid before the statewide expansion. |
 | **NLCD tree canopy** | 8%–72% per substation | Frontend `treeFactor()` | USGS NLCD 2021 tree canopy cover (30 m). Converted to a multiplier via `canopy_pct / 50` (so 50% canopy = 1.0× baseline). Falls back to the urban/suburban/rural distance heuristic if NLCD data is missing. See Data Source §8. |
 | **Vegetation trim cycle** | 4 years | Frontend `TRIM_CYCLE_YEARS` | Industry-standard distribution-feeder trim rotation. Eversource and most U.S. utilities trim primary feeders on a 4-year cycle (some 5-year for laterals). Per-feeder trim age uniformly drawn from [0, 4 yr]. |
 | **Trim-age effect** | 0.6× (fresh) → 1.6× (overdue) | Frontend `trimAgeMult()` | Linear ramp on tree-blocked rate as the trim ages. Reflects the well-documented relationship between time-since-trim and outage rate (Guikema et al. 2006a, cited in Wanik 2015). Slope is heuristic; calibratable. |
@@ -143,21 +150,24 @@ fit.
 
 ---
 
-## 7 · Critical facilities (HIFLD)
+## 7 · Critical facilities (HIFLD/EPA)
 
 | | |
 |---|---|
-| **What** | Real hospitals, fire stations, EMS stations, and water treatment plants in Hartford County |
-| **Source** | **HIFLD** — Homeland Infrastructure Foundation-Level Data (hospitals, fire stations, EMS stations layers) |
-| **Cached file** | [`data/hartford_critical_facilities.js`](data/hartford_critical_facilities.js) |
+| **What** | Real hospitals, fire stations, EMS stations, and water treatment plants statewide |
+| **Source** | **HIFLD** (hospitals, fire stations, EMS stations layers) + **EPA** (Wastewater Treatment Plant layer) |
+| **Fetch script** | [`09_fetch_critical_facilities.py`](09_fetch_critical_facilities.py) |
+| **Cached file** | [`data/connecticut_critical_facilities.js`](data/connecticut_critical_facilities.js) |
 | **Used by** | `simulateStorm()` — outages within 0.5 miles of a real facility are flagged priority-1 for restoration (replaces the previous random 2% sampling). Also rendered on the map as emoji markers (🏥🚒🚑💧) with a toggle. |
-| **Record count** | 52 facilities (9 hospitals, 32 fire stations, 3 EMS, 8 water plants) |
-| **License** | HIFLD: public domain (U.S. government work) |
+| **Record count** | 1,143 facilities statewide (42 hospitals, 568 fire stations, 463 EMS, 70 water plants) |
+| **License** | HIFLD/EPA: public domain (U.S. government work) |
 
 **Honest coverage notes**
 - Coordinates are approximate to the facility address, not to the exact electrical service entrance.
 - Some smaller volunteer fire departments may be missing; HIFLD focuses on career/combination departments.
 - The 0.5-mile proximity radius is a heuristic — real priority assignment would use the utility's customer-to-circuit mapping.
+- The EPA Wastewater Treatment Plant layer's `cwp_status` field is *regulatory compliance* status ("Noncompliance" / "No Violation"), not an operational open/closed flag — a plant in "Noncompliance" is still physically running and still needs power. The fetch script does not filter on it.
+- **History**: the original 52-facility Hartford-only file had no backing fetch script and doesn't match any live HIFLD query — likely hand-typed rather than pulled from the API. The statewide 1,143-facility count above is a genuine, reproducible HIFLD/EPA pull (`09_fetch_critical_facilities.py`), not a bigger version of the old hand-picked list.
 
 ---
 
@@ -165,32 +175,40 @@ fit.
 
 | | |
 |---|---|
-| **What** | Mean tree canopy percentage within a 1 km buffer of each HIFLD substation, from the USGS National Land Cover Database 2021 Tree Canopy Cover layer (30 m resolution, CONUS) |
-| **Source** | USGS MRLC — `mrlc.gov/data/nlcd-2021-usgs-tree-canopy-cover-conus` |
-| **Cached in** | Inline `NLCD_CANOPY_BY_SUBSTATION` object in `03_grid_simulation.html` |
-| **Used by** | `generateGrid()` → `treeFactor()` — converts canopy % to a tree-blocked multiplier (0% → 0.15×, 50% → 1.0×, 75% → 1.5×). Replaces the previous urban/suburban/rural distance heuristic with actual measured tree cover. |
+| **What** | Mean tree canopy percentage within a 1 km buffer of each real HIFLD substation, from the USGS National Land Cover Database 2021 Tree Canopy Cover layer (30 m resolution, CONUS) |
+| **Source** | USGS MRLC WMS — `mrlc.gov/geoserver/mrlc_display/wms`, layer `NLCD_Canopy` |
+| **Fetch script** | [`10_fetch_tree_canopy.py`](10_fetch_tree_canopy.py) |
+| **Cached file** | [`data/connecticut_tree_canopy.js`](data/connecticut_tree_canopy.js), keyed by `"lat,lon"` (not substation name — see below) |
+| **Used by** | `generateGrid()` → `treeFactor()` (via `canopyOf()`) — converts canopy % to a tree-blocked multiplier (0% → 0.15×, 50% → 1.0×, 75% → 1.5×). Also used by the underground-immunity check and the AMI-detection model. Replaces the previous urban/suburban/rural distance heuristic with actual measured tree cover. |
+| **Record count** | 299 values statewide (min 17.4%, max 72.4%, mean 44.2%) |
 | **License** | USGS: public domain (U.S. government work) |
 
+**Method**: one WMS `GetMap` request per substation (`FORMAT=image/geotiff8`, a single-band unstyled raster — cross-checked against `GetFeatureInfo` at known points: dense forest → 88%, downtown Hartford → 0%, a substation's own clearing → 0%), covering a real 2km×2km box centered on the substation, decoded locally and averaged over the actual 1km-radius circle.
+
 **Honest coverage notes**
-- Values are pre-computed means, not live raster queries. A future improvement would be a fetch script that clips the NLCD GeoTIFF to each substation's Voronoi polygon for a more precise per-territory canopy fraction.
-- The linear conversion (canopy_pct / 50) is a heuristic; calibratable against real storm data.
+- **HIFLD's substation `NAME` field is not unique** (see source 3) — the original Hartford-only 49-entry dict was keyed by name, which is fine at 49 substations with no collisions, but breaks at statewide scale (36 name-groups collide across 76 of the 299 real records, e.g. 5 different "Bridgeport substation"s). The statewide file and the JS lookup (`canopyOf()`) key by rounded coordinates instead.
+- Values are now live-computed (not hand-typed), a change from the original disclosed limitation ("pre-computed means, not live raster queries").
+- The linear conversion (canopy_pct / 50) is still a heuristic; calibratable against real storm data.
 
 ---
 
-## 9 · Census tract population (2020 Decennial Census)
+## 9 · Census tract population and town population (2020 Census P.L. 94-171)
 
 | | |
 |---|---|
-| **What** | Census tract centroids with 2020 population for Hartford County (~196 tracts) |
-| **Source** | US Census Bureau, 2020 Decennial Census, Table P1; centroids from TIGER/Line shapefiles |
-| **URL** | `data.census.gov` + `census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html` |
-| **Cached file** | [`data/hartford_census_tracts.js`](data/hartford_census_tracts.js) |
-| **Used by** | `buildDemandPoints()` — replaces the 29-town centroid demand model with ~196 tract centroids for ~5× finer spatial granularity in customer-count assignment. Toggle-controlled. |
+| **What** | Census tract centroids + population (883 tracts) and town-level (county subdivision) population + centroids (169 towns), statewide |
+| **Source** | US Census Bureau, 2020 Census **P.L. 94-171 Redistricting Data** — a keyless static flat-file download, not the api.census.gov API (which requires a free key) |
+| **URL** | `www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Connecticut/ct2020.pl.zip` |
+| **Fetch script** | [`11_fetch_census_tracts.py`](11_fetch_census_tracts.py) |
+| **Cached files** | [`data/connecticut_census_tracts.js`](data/connecticut_census_tracts.js), [`data/connecticut_towns_population.js`](data/connecticut_towns_population.js) |
+| **Used by** | `buildDemandPoints()` — census-tract-level demand (883 tracts) when the toggle is on, falling back to the 169-town centroid model otherwise. `05_generate_artifacts.py` also loads the town file for `TOTAL_POP` and demand-point generation. |
+| **Record count** | 883 tracts; 169 towns, total population 3,605,944 (verified exact match to CT's real 2020 Census population) |
 | **License** | Public domain (U.S. government work) |
 
 **Honest coverage notes**
-- Centroids are geometric centroids of TIGER tract polygons, not population-weighted centroids.
-- Population is total population, not households or electric customers. Electric customer count would be more precise but isn't publicly available at tract level for Eversource.
+- Centroids (`INTPTLAT`/`INTPTLON`) are the Census Bureau's own internal points, not simple geometric centroids.
+- Population is total population (POP100, the 100% count), not households or electric customers.
+- **History**: the original Hartford-only `hartford_census_tracts.js` (148 records) had 10-digit "GEOIDs" — real Census tract GEOIDs are 11 digits — and an embedded county-FIPS substring that didn't match Hartford County's real FIPS code (003). Both are strong evidence it was hand-typed rather than pulled from a real API. The statewide file's GEOIDs are verified correctly formatted (e.g. `09001010101` = state 09, county 001, tract 010101) and cross-checked against known real town populations (Bridgeport 148,654; Greenwich 63,518).
 
 ---
 
@@ -198,15 +216,15 @@ fit.
 
 | | |
 |---|---|
-| **What** | Best-track positions for 4 storms that affected Hartford County: Sandy (2012), Isaias (2020), Irene (2011), Henri (2021) |
+| **What** | Best-track positions for 4 storms that affected Connecticut: Sandy (2012), Isaias (2020), Irene (2011), Henri (2021) |
 | **Source** | NOAA National Hurricane Center, HURDAT2 (Atlantic basin best track database) |
 | **URL** | `nhc.noaa.gov/data/#hurdat` |
-| **Cached file** | [`data/hartford_storm_tracks.js`](data/hartford_storm_tracks.js) |
-| **Used by** | Storm-track overlay on the map (toggle-controlled polyline with wind-speed markers). Future: wind-exposure-weighted outage placement along the track. |
+| **Cached file** | [`data/hartford_storm_tracks.js`](data/hartford_storm_tracks.js) (filename predates the statewide expansion; the data itself was already regional, not Hartford-specific — see coverage note) |
+| **Used by** | Storm-track overlay on the map (toggle-controlled polyline with wind-speed markers); wind-exposure-weighted outage placement along the track (paired with source 12a below for storms that have HRRR coverage). |
 | **License** | Public domain (U.S. government work) |
 
 **Honest coverage notes**
-- Tracks are clipped to the CT/NE region (lat 39–43°N). Full tracks extend much further south.
+- Tracks are clipped to a CT/NE regional box (lat 39–43°N, lon -75 to -71), which was already statewide-or-broader in scope — no change needed for the statewide expansion.
 - The wind fields are point estimates at the track center; real wind swaths extend tens of miles on each side. A proper wind-exposure model would use the asymmetric wind field (Rmax, Holland B parameter).
 
 ---
@@ -218,28 +236,54 @@ fit.
 | **What** | Major electric disturbance events affecting Eversource/CL&P in Connecticut, with customer counts and restoration durations |
 | **Source** | U.S. Department of Energy, Office of Electricity, OE-417 Annual Summary |
 | **URL** | `oe.netl.doe.gov/OE417_annual_summary.aspx` |
-| **Cached file** | [`data/hartford_doe_oe417.js`](data/hartford_doe_oe417.js) |
-| **Used by** | Events panel in the sidebar (toggle-controlled). Calibration benchmarks in the simulation report. Future: direct comparison of simulated vs. actual restoration curves. |
+| **Cached file** | [`data/hartford_doe_oe417.js`](data/hartford_doe_oe417.js) (filename predates the statewide expansion; DOE reports customer counts for the whole utility territory, not Hartford County alone — no change needed) |
+| **Used by** | Events panel in the sidebar (toggle-controlled). Calibration benchmarks in the simulation report. |
 | **Record count** | 8 events (2011–2024) |
 | **License** | Public domain (U.S. government work) |
 
 **Honest coverage notes**
-- OE-417 reports statewide customer counts, not Hartford County alone. Hartford County is roughly 30–40% of Eversource CT's service territory.
 - Duration is start-to-100% restoration; the bulk of customers are restored much earlier (typically 90% within half the total window).
 
 ---
 
-## 12 · FEMA Flood Zone Corridors (Hartford County)
+## 12 · HRRR wind / temperature / soil-moisture grid (statewide)
+
+| | |
+|---|---|
+| **What** | 10m wind speed, 2m temperature, and (where available) soil moisture on a 41×65 grid (~3km resolution, HRRR's native resolution) covering all of Connecticut, for 5 storms |
+| **Source** | NOAA HRRR model, AWS public archive, accessed via the `herbie-data` Python library |
+| **Endpoint** | `noaa-hrrr-bdp-pds.s3.amazonaws.com` |
+| **Fetch script** | [`12_fetch_hrrr_storm_wind.py`](12_fetch_hrrr_storm_wind.py) |
+| **Cached file** | [`data/connecticut_storm_wind.js`](data/connecticut_storm_wind.js) |
+| **Storms** | Isaias 2020, Henri 2021, May 2018 tornado/derecho outbreak, January 2024 wind storm, December 2023 nor'easter |
+| **Used by** | `getHrrrWindMph()` — bilinear interpolation weights outage placement toward higher-wind areas (wind² ∝ kinetic energy) when a storm track with HRRR coverage is selected. |
+| **License** | Public domain (U.S. government work) |
+
+**Method**: HRRR uses a Lambert Conformal projection (lat/lon are 2-D arrays), so each storm's `WIND:10 m above ground` / `TMP:2 m above ground` field is clipped to a CT bounding box and regridded onto the regular target grid via `scipy.interpolate.griddata`.
+
+**Honest coverage notes**
+- Sandy (2012) and Irene (2011) predate the HRRR archive (which starts ~2014) and have no gridded wind data — the wind-field toggle falls back to uniform placement for those two storms.
+- Soil moisture (`SOILW`) is not present in the HRRR surface product for any of the 5 storm hours checked (confirmed directly against the raw GRIB index files, not just a failed field-name guess). The one semantically-adjacent field available, `MSTAV` (moisture availability), returned a flat 100% across the entire region for at least one storm — not reliable enough to use as a substitute. `soil_wetness` is left `null` for all 5 storms rather than filled with a fabricated or low-confidence value; the soil-saturation auto-toggle already handles a null value gracefully (no-op).
+- **History**: originally a 15×21 grid covering only Hartford County; densified to the current 41×65 statewide grid at the same underlying ~3km native HRRR resolution.
+
+---
+
+## 12a · Flood-prone river corridors (statewide)
 
 | Field | Value |
 |---|---|
-| **What** | Simplified centerline geometries for major flood-prone river corridors in Hartford County |
-| **Source** | FEMA National Flood Hazard Layer (NFHL), simplified to 5 major corridors |
-| **URL** | https://www.fema.gov/flood-maps/national-flood-hazard-layer |
-| **Format** | Inline JS constant (`FLOOD_CORRIDORS`), 5 polylines with lat/lon points |
-| **Corridors** | Connecticut River, Park River, Hockanum River, Farmington River, Salmon Brook |
-| **Used by** | Flood-zone road-closure toggle — outages within 1.5 mi of a corridor get +35% road impedance |
-| **Coverage note** | Corridors are simplified to centerlines, not full floodplain polygons. The 1.5-mile buffer is a conservative proxy for FEMA Zone A/AE extent. Smaller tributaries (e.g., Podunk River, Mattabesset River) are not included. |
+| **What** | Simplified centerline geometries for 17 major flood-prone river corridors statewide: 5 in Hartford County + 12 across the other 7 counties |
+| **Hartford 5** | Connecticut River, Park River, Hockanum River, Farmington River, Salmon Brook — from FEMA National Flood Hazard Layer (NFHL), hand-simplified |
+| **Other 12** | Housatonic, Naugatuck, Quinnipiac, Norwalk, Shepaug, Salmon River (distinct from Salmon Brook), Thames, Yantic, Shetucket, Quinebaug, Willimantic, Natchaug — from USGS National Hydrography Dataset (NHD), fetched and algorithmically stitched |
+| **Source (12 new)** | USGS National Map, `hydro.nationalmap.gov/arcgis/rest/services/nhd/MapServer/4` (NHD Flowline - Small Scale), filtered by `GNIS_NAME` |
+| **Fetch script** | [`13_fetch_flood_corridors.py`](13_fetch_flood_corridors.py) |
+| **Cached file** | [`data/connecticut_flood_corridors.js`](data/connecticut_flood_corridors.js) — merged into `FLOOD_CORRIDORS` in `03_grid_simulation.html` alongside the 5 hand-placed Hartford corridors |
+| **Used by** | Flood-zone road-closure toggle — outages within 1.5 mi of any corridor get +35% road impedance |
+| **License** | FEMA/USGS: public domain (U.S. government work) |
+
+**Method**: NHD represents each named river as many short connected reach segments (15–126 reaches per river in this dataset). The fetch script chains matching reaches end-to-end by snapping endpoints within ~50-60m, keeps the longest connected chain per river, then decimates to ~19 points. Verified for stitching artifacts (no jump between consecutive points exceeds 0.13° — i.e. no segment cuts across the map connecting unrelated reaches).
+
+**Coverage note**: corridors are simplified to centerlines, not full floodplain polygons. The 1.5-mile buffer is a conservative proxy for FEMA Zone A/AE extent. Smaller tributaries not in the 17-river list are not included.
 | **Calibration anchor** | CT DOT road-closure records during Irene (2011) and Sandy (2012) confirm major road closures along these corridors |
 
 ---
@@ -299,7 +343,7 @@ fit.
 
 | Field | Value |
 |---|---|
-| **What** | Urban substations in Hartford County have significant underground distribution infrastructure that is nearly immune to storm damage. |
+| **What** | Urban substations statewide have significant underground distribution infrastructure that is nearly immune to storm damage. |
 | **Source** | Eversource rate case filings to CT PURA; industry standard underground penetration estimates for New England urban cores. |
 | **Parameters** | Urban threshold: <25% NLCD canopy. Underground fraction: 40% of laterals. Storm immunity: 90% outage rejection. |
 | **Used by** | Underground line model toggle in storm simulation. |
@@ -315,7 +359,7 @@ fit.
 | **Source** | Eversource distribution automation deployment reports; IEEE 1366 reliability metrics for automated switching. |
 | **Parameters** | 20% of feeder-level outages eligible for automatic switching. Restoration time ~30 minutes (remote operation). |
 | **Used by** | Switching/back-feed toggle in storm simulation. Switch-restored outages are pre-marked as done and excluded from crew dispatch. |
-| **Coverage note** | The 20% rate is a conservative estimate. Eversource's actual FLISR coverage in Hartford County may be higher in areas with newer automation infrastructure. Real FLISR eligibility depends on switch placement topology, load transfer capacity, and fault type — none of which are modeled here. |
+| **Coverage note** | The 20% rate is a conservative estimate. Eversource's actual FLISR coverage may be higher in areas with newer automation infrastructure. Real FLISR eligibility depends on switch placement topology, load transfer capacity, and fault type — none of which are modeled here. |
 
 ---
 
@@ -392,7 +436,7 @@ acquisition, not on engineering.
 ### Real crew counts / crews-over-time
 - **Why** the David Wanik ~10-year-old CT crews-over-time paper models statewide crew counts ramping over storm days, back-calculated to county. This is the core of the "temporal crew model" track in the roadmap.
 - **Status** waiting on the DW paper PDF + extracted curves.
-- **Drop-in plan** new `09_fetch_crew_curves.py`; new `data/crew_curves.json`; scheduler accepts a crew-over-time series instead of a single integer.
+- **Drop-in plan** new `14_fetch_crew_curves.py`; new `data/crew_curves.json`; scheduler accepts a crew-over-time series instead of a single integer.
 
 ### Eversource outage map / restoration data
 - **Why** real outage counts and restoration timelines from actual CT storm events (Isaias 2020, May 2018 tornadoes). Required for the calibration endpoint (`/api/calibrate`).
@@ -403,10 +447,9 @@ acquisition, not on engineering.
 - **Why** advisor mentioned Hartford Courant and similar local papers for "crews working per day" during big storms — used as a calibration target for the temporal crew model.
 - **Status** not yet collected. Manual extraction.
 
-### Weather forcing (wind + temperature)
-- **Why** advisor provided two Google Colab notebooks for downloading wind and temperature data. Eventual use: drive storm intensity / outage placement from real weather rather than uniform random.
-- **Status** Colab links to be saved; data not yet ingested.
-- **Drop-in plan** new `10_fetch_weather.py`; storm generator accepts a wind/temp grid and weights outage probability by exposure.
+### Weather forcing (wind + temperature) — done, statewide
+- Ingested: see Data Source §12 (`12_fetch_hrrr_storm_wind.py`, statewide 41×65 HRRR grid, 5 storms). Originally a Hartford-County-only 15×21 grid built from an advisor-provided Colab notebook (`fetch_hrrr_storm_wind.ipynb`); densified to statewide coverage.
+- **Remaining gap**: Sandy (2012) and Irene (2011) predate the HRRR archive and would need ERA5 reanalysis data instead — not pursued yet.
 
 ### Real storm catalogue (Sandy, Isaias, 2024 events)
 - **Why** scenario library upgrade — replace synthetic canned storms with real reconstructed events.
@@ -419,7 +462,7 @@ acquisition, not on engineering.
 - All scripts in this repo use Python **stdlib only** for HTTP/JSON to keep the dependency footprint small. (geopandas/numpy/numba are only used by the offline artifact generator and the server scheduler.)
 - All scripts write into `data/`, never `output/`.
 - All cached files are committed to the repo so the interactive works without a live API hit; the fetch scripts are run only to refresh.
-- Every fetch script identifies itself in the `User-Agent` header (`hartford-grid-resilience/1.0`) so the upstream service can rate-limit us politely if needed.
+- Every fetch script identifies itself in the `User-Agent` header (`connecticut-grid-resilience/1.0`) so the upstream service can rate-limit us politely if needed.
 
 ---
 

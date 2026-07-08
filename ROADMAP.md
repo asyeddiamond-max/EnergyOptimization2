@@ -1,15 +1,23 @@
 # Roadmap — Advisor Feedback Incorporation Plan
 
-This document captures the advisor feedback on the Hartford County simulation
-and turns it into an actionable, prioritized plan. It is the planning companion
-to the development journal (`JOURNAL.html`) and research context
-(`Hartford_Grid_Research_Context.docx`).
+This document captures the advisor feedback on the (now statewide Connecticut)
+simulation and turns it into an actionable, prioritized plan. It is the
+planning companion to the development journal (`JOURNAL.html`) and research
+context (`Hartford_Grid_Research_Context.docx`).
 
 **Status as of this writing:** The Realism Fix Phases 1–3 are done
 (hierarchical restoration, tiered priority, weather window). Phase 4
 (switching/back-feed) is deferred. The advisor feedback below reshapes the
 priority order going forward — several feedback items are higher-value than
 Phase 4 and should come first.
+
+**Statewide expansion (separate track, done):** the simulator was expanded
+from Hartford-County-only to all 8 CT counties with real data throughout —
+299 substations, 1,143 critical facilities, 883 census tracts, 169 towns,
+live-computed tree canopy, a statewide HRRR wind grid, and 17 flood corridors.
+See `DATA_SOURCES.md` for full provenance. This is orthogonal to the advisor
+feedback tracked below (which is about model realism, not geographic scope)
+and doesn't change any of the priorities in this document.
 
 ---
 
@@ -57,10 +65,11 @@ partially covered by what's built; ⏳ are new.
   newspapers (Hartford Courant, etc.), and the Journal of Homeland Security.
   "Put data in the paper since stuff disappears."
 - ⏳ **Eversource outage map:** real outage data source.
-- ⏳ **Wind & temperature data (Colab notebooks provided):** drive storm
-  generation from real weather rather than uniform-random outage placement.
-  - Wind data Colab: (link provided by advisor — to be saved)
-  - Temperature data Colab: (link provided by advisor — to be saved)
+- ✅ **Wind & temperature data (Colab notebooks provided):** done, statewide.
+  `fetch_hrrr_storm_wind.ipynb` (Hartford-only 15×21 grid) was ported to
+  `12_fetch_hrrr_storm_wind.py` and densified to a 41×65 statewide grid
+  covering all 8 counties, for the same 5 HRRR-era storms. Sandy (2012) and
+  Irene (2011) predate the HRRR archive and still have no gridded wind data.
 - ✅ **Calibration framework already built** (`/api/calibrate`) — ready to
   receive this real data.
 
@@ -164,8 +173,8 @@ with no external data.
 
 - [ ] ISO New England substation point dataset (with names)
 - [ ] David Wanik ~10-year-old crews-over-time CT paper (PDF + the crew curves)
-- [ ] Wind-data Colab notebook (link from advisor)
-- [ ] Temperature-data Colab notebook (link from advisor)
+- [x] Wind-data Colab notebook (link from advisor) — ingested, statewide (see `12_fetch_hrrr_storm_wind.py`)
+- [x] Temperature-data Colab notebook (link from advisor) — same script, 2m temperature
 - [ ] Eversource outage-map data export
 - [ ] Newspaper crews-per-day figures (Hartford Courant, etc.) for big storms
 - [ ] Journal of Homeland Security relevant articles

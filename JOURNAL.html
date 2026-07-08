@@ -138,6 +138,8 @@
       <li><a href="#ch15">The Realism Round &amp; the Polish Sprint</a></li>
       <li><a href="#appx">Appendix A — Problems Faced</a></li>
       <li><a href="#ch14">Coda</a></li>
+      <li><a href="#realismfix">Addendum — The Realism Fix &amp; Advisor Feedback</a></li>
+      <li><a href="#statewide">Addendum — Statewide Expansion</a></li>
     </ol>
   </div>
 
@@ -1691,6 +1693,87 @@
     storytelling and comparison</b>. The full structured plan lives in
     <code>ROADMAP.md</code>. Crew stickiness and the temporal crew model now rank ahead of
     Phase 4.
+  </p>
+
+  <hr class="section">
+  <h2 id="statewide">Addendum — Statewide Expansion</h2>
+  <div class="marginalia">Hartford County to all of Connecticut, with the same real-data rigor everywhere — not a bigger boundary drawn around the old data.</div>
+  <p class="narrative">
+    The user asked to expand the simulator from Hartford County to the entire state, with
+    one explicit, non-negotiable requirement:
+  </p>
+  <div class="quote"><span class="who">User</span> wait make sure the new counties all have the real substations within them. I want all the realistic features hartford county is based on to be found within the other counties that make up connecticut.</div>
+  <p class="narrative">
+    Scoped as a 4-phase plan with checkpoints, so the full roadmap was visible up front
+    but only Phase 1 started immediately: (1) real data + core refactor, (2) statewide
+    HRRR wind grid + flood corridors, (3) performance, (4) this documentation pass.
+  </p>
+
+  <h3>Phase 1 — real data, statewide</h3>
+  <p class="narrative">
+    Re-fetched the state boundary, all 169 real town polygons (filtered against the real
+    state polygon to drop 44 bounding-box-spillover towns in Massachusetts, Rhode Island,
+    and New York — a rectangle can't match Connecticut's actual shape), and 299 real HIFLD
+    substations statewide. Wrote three new fetch scripts for critical facilities (1,143,
+    HIFLD/EPA), tree canopy (live NLCD WMS buffer-mean per substation), and census tracts
+    (883 real tracts + 169 town populations, pulled from the Census Bureau's keyless
+    P.L. 94-171 static file — this sidestepped the Census API key requirement that had
+    briefly looked like a hard blocker).
+  </p>
+  <ul class="takeaways">
+    <li><b>Bug: HIFLD substation names aren't unique.</b> Five different real substations
+      are all literally named "Bridgeport substation" at different coordinates. A
+      name-keyed tree-canopy lookup silently collapsed 299 substations down to 223 before
+      this was caught — fixed by keying on coordinates instead, in both the fetch script
+      and the frontend.</li>
+    <li><b>Bug: EPA wastewater-plant status field misread.</b> `cwp_status` turned out to
+      be regulatory compliance status ("Noncompliance" / "No Violation"), not an
+      operational open/closed flag — a filter on it was silently dropping every real CT
+      water treatment plant.</li>
+    <li><b>Two fabricated datasets found and replaced.</b> The original
+      `hartford_critical_facilities.js` had no backing fetch script and didn't match any
+      live HIFLD query. The original `hartford_census_tracts.js` had 10-digit "GEOIDs"
+      (real ones are 11 digits) and an embedded county-FIPS substring that didn't match
+      Hartford's real FIPS code. Both were almost certainly hand-typed despite header
+      comments citing real source URLs.</li>
+  </ul>
+
+  <h3>Phase 2 — HRRR wind grid + flood corridors</h3>
+  <p class="narrative">
+    Ported the Hartford-only 15&times;21 HRRR wind/temperature notebook to a plain script
+    and densified it to a 41&times;65 statewide grid at HRRR's native ~3km resolution, for
+    the same 5 storms (Isaias 2020, Henri 2021, May 2018, Jan 2024, Dec 2023). Soil
+    moisture wasn't present in this HRRR product for any of the 5 storm hours &mdash;
+    confirmed against the raw GRIB index rather than just a failed field-name guess &mdash;
+    and the one semantically-close substitute field returned a suspicious flat 100%
+    everywhere, so it was left null rather than filled with a low-confidence guess.
+  </p>
+  <p class="narrative">
+    Added 12 real river corridors for the other 7 counties, traced from the USGS National
+    Hydrography Dataset. NHD represents each named river as many short connected reach
+    segments (15&ndash;126 per river here) &mdash; the fetch script chains matching
+    reaches end-to-end by snapping close endpoints, keeps the longest connected chain per
+    river, and simplifies to ~19 points, merged with the 5 existing hand-placed Hartford
+    corridors.
+  </p>
+
+  <h3>Phase 3 — performance</h3>
+  <p class="narrative">
+    The real bottleneck at statewide scale wasn't the feeder/lateral generation math (a
+    few tens of thousands of cheap operations) &mdash; it was the nearest-substation
+    territory-coloring loop, O(rows&times;cols&times;substations), which scales roughly
+    with substation count squared: ~37&times; more work at 299 substations than the
+    original 49. Moved that computation into a Web Worker, with a synchronous fallback if
+    Workers aren't available. Separately, ~10,000 individual Leaflet polyline objects for
+    feeders/laterals (up from ~3,500 at the old scale) were replaced with a canvas-batched
+    layer mirroring the existing point-cloud pattern already used for outages.
+  </p>
+  <p class="narrative">
+    Added a disk-backed result cache to the FastAPI backend for the two most expensive
+    endpoints, keyed by a hash of the full request body. Verified it was actually being
+    read from disk (not just re-computing the same deterministic result) by tampering with
+    a cached file directly and confirming the tampered value came back on the next
+    identical request.
   </p>
 
 </div>
