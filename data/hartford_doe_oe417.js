@@ -125,4 +125,35 @@ window.HARTFORD_DOE_OE417 = [
     daily_pct_out: [1.0, 0.60, 0.25, 0.08, 0.0],
     daily_crews: [300, 600, 700, 400, 100],
   },
+  {
+    // Sourced from live news coverage only (NBC CT, WFSB incl. its I-Team
+    // preparedness investigation, WTNH, CT Mirror) -- there is no PURA
+    // docket or after-action report yet, since this event is only days old
+    // as of this writing. Treat this entry as lower-confidence than the
+    // others above until an official filing supersedes it.
+    date: "2026-07-04",
+    event: "July 2026 Severe Thunderstorm Complex",
+    type: "Severe Weather — Thunderstorms/Wind (non-tropical, no HURDAT2 track)",
+    utility: "Eversource Energy",
+    state: "CT",
+    customers_affected: 103500,
+    demand_loss_mw: null,
+    duration_h: 72,
+    restoration_complete: "2026-07-07",
+    notes: "Peak ~94,000 (Eversource) + ~8,500 (UI). Hardest-hit towns per news " +
+      "reports: Harwinton, Montville, New Britain, New Fairfield, Winchester. " +
+      "CREW COUNT NOT DISCLOSED -- WFSB's I-Team asked Eversource directly how " +
+      "many crews were pre-positioned and got no response; daily_crews is left " +
+      "null rather than guessed. For scale context, use the comparably-sized " +
+      "real events above instead: May 2018 (125,000 cust, peaked at 1,000 " +
+      "crews) and Dec 2023 (89,000 cust, peaked at 700 crews) both suggest " +
+      "peak crews in the 700-1,000 range is the realistic ballpark for an " +
+      "event this size, not 200.",
+    // Approximate -- pieced together from several point-in-time news snapshots
+    // (WFSB "~40,000 without power" and "50,000+ remain" both dated July 5;
+    // "98% restored" dated Monday July 6; "nearly all by Tuesday night" July 7),
+    // not a single authoritative hourly outage feed.
+    daily_pct_out: [1.0, 0.45, 0.02, 0.0],
+    daily_crews: null,
+  },
 ];
