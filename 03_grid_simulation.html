@@ -2141,7 +2141,13 @@ async function planRestoration(){
     const k = 0.06;
     crewArrivals = [];
     for (let i = 0; i < M; i++){
-      const frac = (i + 1) / M;
+      // Midpoint sampling (i+0.5)/M, not (i+1)/M: the endpoint frac=1 for the
+      // very last crew makes 1/frac-1 = 0, so Math.log(0) = -Infinity and
+      // t_mid - (-Infinity)/k = +Infinity -- that single crew's arrival time
+      // then poisons totalTime (Infinity > every real number), producing the
+      // "Infinity d NaN h" result. Keeping frac strictly inside (0,1) avoids
+      // the singularity at both ends.
+      const frac = (i + 0.5) / M;
       const t = t_mid - Math.log(1/frac - 1) / k;
       crewArrivals.push(Math.max(ASSESSMENT_DELAY, t));
     }
