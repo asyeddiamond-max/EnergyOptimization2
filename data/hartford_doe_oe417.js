@@ -184,4 +184,36 @@ window.HARTFORD_DOE_OE417 = [
     daily_pct_out: [1.0, 0.20, 0.0],
     daily_crews: [700, 700, 100],
   },
+  {
+    // LOWER CONFIDENCE than the other entries above. Real sources agree CT's
+    // peak was "more than 120,000" Eversource customers (Wikipedia's March
+    // 6-8, 2018 nor'easter summary, cross-checked against a separate news
+    // search), but no source found gives a precise CT-specific restoration
+    // completion date, and CT PURA Docket 25-12-13 (covering 43 storms from
+    // 2018-2023 including this one) wasn't accessible in enough detail to
+    // pull an exact figure. duration_h/daily_crews below are an ESTIMATE,
+    // interpolated from comparably-scaled real wet-snow nor'easters already
+    // in this file (Dec 2023: 89,000 cust / 96h / peak 700 crews; Snowtober
+    // 2011: 830,000 cust / 264h / peak 4,800 crews) -- not sourced the way
+    // the other entries are. Treat any simulator comparison against this
+    // entry as a rougher sanity check, not a tight validation.
+    date: "2018-03-07",
+    event: "Winter Storm Quinn (nor'easter)",
+    type: "Severe Weather — Winter Storm (heavy wet snow)",
+    utility: "Eversource Energy",
+    state: "CT",
+    customers_affected: 140000,
+    demand_loss_mw: null,
+    duration_h: 120,
+    restoration_complete: "2018-03-12",
+    notes: "Part of a string of 4 nor'easters in 3 weeks (Riley, Quinn, Skylar, " +
+      "Toby); Quinn specifically brought the heaviest, wettest snow of the " +
+      "four to CT. Mutual aid crews came from MA, NH, and Canada. Included " +
+      "in PURA's $933M storm-cost-recovery decision (Docket 25-12-13, " +
+      "covering 43 storms 2018-2023) but a CT-specific restoration timeline " +
+      "wasn't found independently -- duration_h and daily_crews here are " +
+      "interpolated from comparable real events, not directly sourced.",
+    daily_pct_out: [1.0, 0.55, 0.20, 0.05, 0.0],
+    daily_crews: [500, 900, 1100, 700, 100],
+  },
 ];
