@@ -396,7 +396,22 @@
 // Real Connecticut town population + centroid (169 towns), from the 2020
 // Census P.L. 94-171 Redistricting Data (11_fetch_census_tracts.py). Used as
 // the demand-point fallback when census-tract data is toggled off.
-const TOWNS = window.CONNECTICUT_TOWNS_POPULATION || [];
+//
+// Population != customer accounts: CT's 2020 census population is 3,605,944,
+// but Eversource (~1.3M) + United Illuminating (~333,000) together report
+// only ~1,633,000 electric customer accounts statewide -- a ratio of ~2.21
+// people per account (residential household size folded together with
+// commercial/industrial accounts, which is why it's not just "persons per
+// household"). Every "customers without power" figure this tool shows is
+// compared directly against utility-reported customer counts (DOE OE-417
+// panel, PURA filings, news coverage), so demand weight is converted to
+// customer-account-equivalent units right here, once, rather than left in
+// raw population units -- otherwise every such comparison is off by ~2.2x.
+const POP_TO_CUSTOMER_RATIO = 1633000 / 3605944; // ≈ 0.4529
+const TOWNS = (window.CONNECTICUT_TOWNS_POPULATION || []).map(t => ({...t, pop: t.pop * POP_TO_CUSTOMER_RATIO}));
+if (window.CONNECTICUT_CENSUS_TRACTS){
+  window.CONNECTICUT_CENSUS_TRACTS = window.CONNECTICUT_CENSUS_TRACTS.map(t => ({...t, pop: t.pop * POP_TO_CUSTOMER_RATIO}));
+}
 const TOTAL_POP = TOWNS.reduce((s,t)=>s+t.pop,0);
 const PALETTE = ["#ff7f0e","#8B4513","#fdbb84","#fc8d8d","#bcbcbc","#1fb8d1","#2ca02c","#9ed0e6","#c266a7","#a68272","#7e5fc4","#f4c842","#e377c2","#f7b6d2","#888888","#d62728","#1f77b4","#9c8fbf","#a7e09b","#7f7f7f","#d6c95a","#bcbd22","#17becf","#ffbb78","#98df8a"];
 

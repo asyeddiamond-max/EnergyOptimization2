@@ -33,6 +33,10 @@ nohup.out
 overpass_*.json
 hartford_towns_raw.json
 
+# NCEI Storm Events bulk downloads (15_fetch_storm_events.py) -- multi-MB
+# nationwide gzips, re-downloadable, not meant to be committed.
+data/_ncei_cache/
+
 # User's scratch / experimental simulation copies
 hartford_county_simulation*.html
 !03_grid_simulation.html

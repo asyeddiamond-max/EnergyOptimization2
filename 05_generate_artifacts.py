@@ -43,7 +43,11 @@ OUT  = ROOT / "output"
 OUT.mkdir(exist_ok=True)
 
 TOWNS = json.loads((DATA / "connecticut_towns_population.json").read_text())
-TOTAL_POP = sum(t["pop"] for t in TOWNS)
+# Population != customer accounts -- see the matching comment in
+# 03_grid_simulation.html. CT population 3,605,944 vs ~1,633,000 real
+# Eversource + United Illuminating customer accounts statewide.
+POP_TO_CUSTOMER_RATIO = 1633000 / 3605944  # ~0.4529
+TOTAL_POP = sum(t["pop"] for t in TOWNS) * POP_TO_CUSTOMER_RATIO
 PALETTE = ["#ff7f0e","#1f77b4","#2ca02c","#d62728","#9467bd","#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf","#1fb8d1","#c266a7","#7e5fc4","#f4c842","#a68272"]
 
 # --- Load polygons ---
