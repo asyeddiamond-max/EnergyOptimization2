@@ -2040,6 +2040,68 @@ function staticGridAnyWithin(grid, cellDeg, cLat, cLon, points, radiusMi){
 //      road indirectness, no straight-line driving in storm conditions).
 // Plus the existing 14h workday clamp, tier-1 critical priority, and 12h
 // pre-dispatch damage assessment delay.
+
+// Derive crew-ramp timing (t_mid, k) from the real historical storm(s)
+// closest in scale, instead of hardcoding Isaias 2020's curve for every
+// storm regardless of size. Real OE-417 daily_crews data shows mobilization
+// speed scales with storm scale: small storms (Dec 2023, 89K customers;
+// May 2018, 125K) lean on local/regional crews and reach half their peak
+// crew count within about half a day, while only the 600K+ customer
+// mega-storms (Isaias, Sandy, Irene, Snowtober) need enough out-of-state
+// mutual aid to take 2.5-3.5 days to reach half peak. Using Isaias's slow
+// curve unconditionally made every storm -- even a ~100K-customer one --
+// ramp as if it needed the same days-long mutual-aid mobilization.
+function deriveRampParams(totalCust, assessmentDelay){
+  const FALLBACK = {t_mid: assessmentDelay + 72, k: 0.06}; // old Isaias-only default
+  const events = (window.HARTFORD_DOE_OE417 || []).filter(e => e.daily_crews && e.daily_crews.length >= 2);
+  if (!events.length) return FALLBACK;
+
+  // daily_crews is sampled once per 24h starting at t=0 (storm start). Find
+  // the hour at which the piecewise-linear curve through those samples
+  // first crosses fracOfPeak of that event's own peak crew count.
+  function crossingHour(dailyCrews, fracOfPeak){
+    const peak = Math.max(...dailyCrews);
+    const target = peak * fracOfPeak;
+    // Already at/above target on day 0 (small, fast-ramping storms like
+    // Henri): the crossing is at t=0, not on the declining tail-off after
+    // the peak -- checking this first avoids the for-loop below finding a
+    // spurious downward crossing later in the series.
+    if (dailyCrews[0] >= target) return 0;
+    for (let i = 0; i < dailyCrews.length - 1; i++){
+      const a = dailyCrews[i], b = dailyCrews[i+1];
+      if ((a <= target && target <= b) || (b <= target && target <= a)){
+        const frac = (b === a) ? 0 : (target - a) / (b - a);
+        return (i + frac) * 24;
+      }
+    }
+    return dailyCrews[0] >= target ? 0 : (dailyCrews.length - 1) * 24;
+  }
+
+  // Per-event (t50, k): t50 = hours to half peak; k backed out from the
+  // logistic identity 0.9 = 1/(1+e^(-k*(t90-t50))) => k = ln(9)/(t90-t50).
+  const withParams = events.map(e => {
+    const t50 = crossingHour(e.daily_crews, 0.5);
+    const t90 = crossingHour(e.daily_crews, 0.9);
+    const dt = Math.max(1, t90 - t50); // guard divide-by-zero for near-instant ramps
+    return {customers: e.customers_affected, t50, k: Math.log(9) / dt};
+  });
+
+  // Blend the 2 nearest real events by customer count (inverse-distance
+  // weighted) rather than snapping to a single nearest match -- with only
+  // ~8 real storms to calibrate against, a hard snap would jump
+  // discontinuously right at the boundary between "closest to A" and
+  // "closest to B".
+  const nearest = [...withParams]
+    .sort((a, b) => Math.abs(a.customers - totalCust) - Math.abs(b.customers - totalCust))
+    .slice(0, 2);
+  let wSum = 0, t50Sum = 0, kSum = 0;
+  for (const n of nearest){
+    const w = 1 / (Math.abs(n.customers - totalCust) + 1000); // +1000 avoids divide-by-zero on an exact match
+    wSum += w; t50Sum += w * n.t50; kSum += w * n.k;
+  }
+  return wSum > 0 ? {t_mid: t50Sum / wSum, k: kSum / wSum} : FALLBACK;
+}
+
 async function planRestoration(){
   if (!storm){status.textContent="Simulate a storm first.";return;}
   setPlanProgress(0);
@@ -2124,21 +2186,19 @@ async function planRestoration(){
     for (let i=0;i<M;i++){const src=storm.outages[i%N]; depots.push({lat:src.lat,lon:src.lon});}
   }
 
-  // Item 4: crew time-series ramp. Calibrated to real Isaias 2020 PURA data:
-  //   Day 1 (t+12h): 504 line + 235 tree = 739 → ~16% of peak
-  //   Day 3 (t+60h): ~1,800 → ~40% of peak
-  //   Day 5 (t+108h): 2,500 line + 780 tree = 3,280 → ~73% of peak
-  //   Day 7 (t+156h): peak 4,500+ → 100%
-  // Source: CT Mirror, NBC CT, PURA Docket 20-08-03
+  // Item 4: crew time-series ramp. t_mid/k are now derived per-storm from
+  // the real historical event(s) closest in scale (see deriveRampParams) --
+  // for a mega-hurricane like Isaias 2020 that works out to t_mid~75h,
+  // k~0.06 (matching the old hardcoded default almost exactly); for a
+  // ~100K-customer storm like this one, real Dec 2023/May 2018 data implies
+  // crews reach half their peak in under a day, not 3+ days.
   // Modeled as a logistic ramp: crews(t) = M / (1 + e^(-k*(t - t_mid)))
-  // with t_mid = 72h (day 3), k = 0.06, giving ~16% at day 1, ~73% at day 5.
   let crewArrivals;
   const useCrewRamp = realistic && M >= 6 &&
     document.getElementById('crewTimeSeriesRamp') &&
     document.getElementById('crewTimeSeriesRamp').checked;
   if (useCrewRamp){
-    const t_mid = ASSESSMENT_DELAY + 72;
-    const k = 0.06;
+    const {t_mid, k} = deriveRampParams(storm.totalCust, ASSESSMENT_DELAY);
     crewArrivals = [];
     for (let i = 0; i < M; i++){
       // Midpoint sampling (i+0.5)/M, not (i+1)/M: the endpoint frac=1 for the
@@ -2148,8 +2208,17 @@ async function planRestoration(){
       // "Infinity d NaN h" result. Keeping frac strictly inside (0,1) avoids
       // the singularity at both ends.
       const frac = (i + 0.5) / M;
-      const t = t_mid - Math.log(1/frac - 1) / k;
-      crewArrivals.push(Math.max(ASSESSMENT_DELAY, t));
+      const raw = t_mid - Math.log(1/frac - 1) / k;
+      // For a fast-ramping storm (small t_mid, e.g. derived from a small
+      // real event), more than half of M can compute raw < ASSESSMENT_DELAY
+      // and all clamp to the exact same floor value. Hundreds of crews
+      // then share one identical arrival time, and the dispatch loop
+      // thrashes: each one competes for the tiny pool of outages visible
+      // that early, most fail, all re-advance to the same next discovery
+      // time together, repeat -- for large M this took 45+ seconds instead
+      // of completing. The +i*1e-4h nudge (~0.36s) breaks the tie without
+      // changing which crews are "early" vs "late" in any meaningful way.
+      crewArrivals.push(Math.max(ASSESSMENT_DELAY, raw) + i * 1e-4);
     }
     crewArrivals.sort((a,b)=>a-b);
   } else if (realistic && M >= 6){
@@ -2312,6 +2381,19 @@ async function planRestoration(){
     }
     return Infinity;
   }
+  // Cheap O(1)-amortized check for "is there any undone outage discovered
+  // by time t, anywhere in the state" -- used to skip nnGridFindVisible's
+  // expensive expanding-ring spatial search (up to 100 rings) when the
+  // honest answer is "nothing has been discovered yet, at any location."
+  // Without this, a burst of crews arriving before much has been discovered
+  // (a fast-ramping small storm, e.g.) each pay the full 100-ring scan --
+  // observed taking 45+ seconds for a 700-crew/3,450-outage run before this
+  // fix, since >99% of dispatch attempts hit exactly this case.
+  function anyDiscoveredUndone(t){
+    if (!realistic) return true;
+    while (firstUndoneDisc < N && done[discOrder[firstUndoneDisc]]) firstUndoneDisc++;
+    return firstUndoneDisc < N && discSortedTimes[firstUndoneDisc] <= t;
+  }
 
   // --- Dynamic crew rebalancing (improvement #1) ---
   // Every 12h of sim time, crews that have been idle for >2h get relocated
@@ -2387,9 +2469,13 @@ async function planRestoration(){
     }
 
     if (bestI === -1){
-      bestI = realistic
-        ? nnGridFindVisible(nnGrid, cLat, cLon, done, oLat, oLon, discTime, cTime)
-        : nnGridFind(nnGrid, cLat, cLon, done, oLat, oLon);
+      if (realistic){
+        bestI = anyDiscoveredUndone(cTime)
+          ? nnGridFindVisible(nnGrid, cLat, cLon, done, oLat, oLon, discTime, cTime)
+          : -1;
+      } else {
+        bestI = nnGridFind(nnGrid, cLat, cLon, done, oLat, oLon);
+      }
     }
 
     if (bestI===-1){
