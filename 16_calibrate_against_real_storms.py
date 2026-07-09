@@ -215,6 +215,24 @@ STORMS = [
     ("jan2024", 1650, 500, 72, "Jan 2024"),
     ("dec2023", 2850, 700, 96, "Dec 2023"),
     ("henri_2021", 950, 300, 48, "Henri 2021"),
+    # KNOWN MISS, kept in the table rather than hidden: real duration (96h,
+    # WFSB 2026-07-08 follow-up) was documented as an unusually SLOW crew
+    # mobilization (36-48h before "substantial crews", ~2 days with zero
+    # visible crews in Harwinton) that still somehow finished in 4 days.
+    # deriveRampParams() has no way to know this specific storm ramped
+    # slower than its nearest-by-size peers, so it predicts a ramp more
+    # typical for a 180k-customer event -- and workloadSlowdownMult (tuned
+    # on the 8 storms above, all real/sim >= 0.98) then compounds that into
+    # a real/sim ratio of ~0.57, the only storm in this table where the
+    # model runs SLOWER than reality rather than faster. Plausible causes:
+    # (a) the ramp-derivation gap above, (b) "4 days to restore" in the
+    # article may itself be a headline/bulk figure undercounting the true
+    # last-customer tail, same caveat noted for several entries in
+    # data/hartford_doe_oe417.js. Not force-fit -- changing global params to
+    # chase this one storm previously cost 2-3 other storms their fit (see
+    # the reverted crew-ramp-tail attempts in git history) and shouldn't be
+    # repeated without a second real storm confirming the same pattern.
+    ("ct_july2026_severe_tstorm", 6000, 702, 96, "July 2026 T-storm"),
 ]
 
 
