@@ -348,4 +348,46 @@ window.HARTFORD_DOE_OE417 = [
     daily_pct_out: [1.0, 0.55, 0.20, 0.05, 0.0],
     daily_crews: [400, 700, 500, 200, 50],
   },
+  {
+    // Real, small-scale, TORNADO-ONLY event -- unlike every entry above,
+    // this one carries no derecho/severe-thunderstorm-complex label. NWS
+    // confirmed a standalone EF1 tornado (85-90mph, 3.2-mile discontinuous
+    // path, 9 minutes on the ground) touched down in Coventry and tracked
+    // into Mansfield on 2019-09-04 at 5:40pm. Real NCEI report (see
+    // hartford_storm_tracks.js's "ct_sep2019_tornado" entry) confirms
+    // 78kt (~90mph) at Merrow (in Coventry), matching NWS's public
+    // survey almost exactly, cleanly separated from 3 concurrent ordinary
+    // Thunderstorm Wind reports (50-52kt, ~58-60mph) elsewhere in the
+    // state that account for the non-tornado-path outages below.
+    //
+    // LOWER CONFIDENCE on duration_h/crews: peak customers (2,900: 550
+    // Enfield + 454 Mansfield + 1,240 Vernon + others) is real and
+    // specific (NBC CT/Patch/WWLP), but no restoration-complete date or
+    // crew count was found -- damage was almost entirely downed trees
+    // ("over 100 trees down" at one golf course) with no report of a
+    // multi-day mutual-aid response, so duration_h (24) and crews (60)
+    // are a low estimate consistent with a same-day/next-day tree-clearing
+    // response, not sourced. By far the smallest-scale entry in this
+    // dataset (next smallest is Blizzard Calvin at 15,000) -- useful for
+    // checking the model isn't only tuned for large multi-day events.
+    date: "2019-09-04",
+    event: "September 2019 Coventry-Mansfield Tornado",
+    type: "Severe Weather — Tornado (no derecho/complex classification)",
+    utility: "Eversource Energy",
+    state: "CT",
+    customers_affected: 2900,
+    demand_loss_mw: null,
+    duration_h: 24,
+    restoration_complete: "2019-09-05",
+    notes: "Standalone NWS-confirmed EF1 tornado, Coventry to Mansfield " +
+      "(Tolland County), 85-90mph, 3.2mi discontinuous path, 9 minutes on " +
+      "the ground. Peak ~2,900 customers statewide (550 Enfield, 454 " +
+      "Mansfield, 1,240 Vernon, remainder scattered) -- most of this total " +
+      "is from separate ordinary thunderstorm wind reports the same " +
+      "afternoon, not the tornado's own narrow path. Damage was " +
+      "overwhelmingly downed trees, no report of multi-state mutual aid or " +
+      "a multi-day restoration effort found.",
+    daily_pct_out: [1.0, 0.0],
+    daily_crews: [60, 10],
+  },
 ];

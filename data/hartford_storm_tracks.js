@@ -140,4 +140,35 @@ window.HARTFORD_STORM_TRACKS = {
       {lat:41.2799489,lon:-72.7859502,wind_kt:60,pres_mb:null,time:"2020-08-27T20:15Z"},
     ],
   },
+  // A real, small-scale, TORNADO-ONLY event -- unlike every other storm
+  // above, this one has no derecho or "severe thunderstorm complex"
+  // classification attached; NWS confirmed a standalone EF1 tornado, full
+  // stop. Added specifically to test the tornado-severity theory (see May
+  // 2018 / Oct 2020 derecho entries in hartford_doe_oe417.js) at a much
+  // smaller scale, and with the tornado report cleanly separated from
+  // nearby ordinary thunderstorm-wind reports the same afternoon.
+  // Real NCEI Storm Events report (15_fetch_storm_events.py, date
+  // "2019-09-04"): a confirmed Tornado report at 78kt (~90mph) in Merrow
+  // (a village in Coventry), 16:40 EDT -- matches NWS's public EF1/90mph
+  // survey findings for the Coventry->Mansfield path almost exactly. Three
+  // separate Thunderstorm Wind reports the same afternoon (50-52kt,
+  // ~58-60mph -- well below the 70mph severity threshold) at Enfield,
+  // Rockville (a village in Vernon), and Tracy (New Haven) explain the
+  // scattered outages reported in towns the tornado's own path never
+  // reached. Coordinates are real town centroids
+  // (data/connecticut_towns_population.json).
+  "ct_sep2019_tornado": {
+    name: "September 4, 2019 Coventry-Mansfield Tornado",
+    date: "2019-09-04",
+    category_at_landfall: "EF1 Tornado (no derecho/complex classification)",
+    ct_peak_wind_mph: 90,
+    ct_customers_lost: 2900,
+    is_localized_reports: true,
+    track: [
+      {lat:41.7802124,lon:-72.343758,wind_kt:78,pres_mb:null,time:"2019-09-04T20:40Z"},
+      {lat:41.7892725,lon:-72.2284642,wind_kt:78,pres_mb:null,time:"2019-09-04T20:45Z"},
+      {lat:41.983993,lon:-72.5555531,wind_kt:50,pres_mb:null,time:"2019-09-04T20:10Z"},
+      {lat:41.8375605,lon:-72.4590404,wind_kt:52,pres_mb:null,time:"2019-09-04T20:35Z"},
+    ],
+  },
 };

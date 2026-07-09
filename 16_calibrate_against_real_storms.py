@@ -264,6 +264,20 @@ STORMS = [
     # loosely; the wind-severity comparison above doesn't depend on that
     # estimate.)
     ("oct2020_derecho", 2800, 700, 96, "Oct 2020 Derecho"),
+    # A real, small-scale, TORNADO-ONLY event -- unlike every storm above,
+    # this one carries no derecho/complex classification at all. Real NCEI
+    # report confirms a 78kt (~90mph) tornado at Merrow/Coventry, cleanly
+    # separated from 3 concurrent ordinary (50-52kt) thunderstorm-wind
+    # reports elsewhere -- see hartford_storm_tracks.js's
+    # "ct_sep2019_tornado" entry. Peak customers (2,900) real/sourced; by
+    # far the smallest storm in this dataset (next is Calvin at 15,000).
+    # 22/80 outages (27.5%) cross the severity threshold, max wind ~89mph
+    # -- essentially matches the real ~90mph survey figure. duration_h (24)
+    # and crews (60) are NOT sourced (no restoration timeline or crew count
+    # found for an event this small/brief) -- so the ratio below is not a
+    # meaningful validation signal either way; the wind-severity match
+    # above is the useful, sourced part of this addition.
+    ("ct_sep2019_tornado", 80, 60, 24, "Sep 2019 Tornado"),
 ]
 
 
