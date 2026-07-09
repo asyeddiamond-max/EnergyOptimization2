@@ -21,14 +21,23 @@ Island Sound, Block Island Sound) has no single named OSM polygon covering
 it, only unusable point markers. Chasing every named bay/sound by hand
 doesn't scale and can't be verified complete.
 
-This version is more robust: it reuses the same 170 real town relations
-02_fetch_town_boundaries.py already cached in data/connecticut_towns.geojson
-(each a MultiLineString of raw "outer" way segments), but instead of just
-drawing the outline, uses shapely's polygonize() to stitch each town's
-outer ways into closed polygons, then unions all of them together. Since
-CT's towns tile the entire state with no gaps, this union IS the state's
-land area -- comprehensive by construction, with no dependency on finding
-the "right" named water body.
+Second attempt (this file's previous version) dropped the Sound subtraction
+entirely in favor of unioning all 170 real town boundary relations
+(02_fetch_town_boundaries.py's data/connecticut_towns.geojson) into one
+land shape -- comprehensive by construction, no dependency on finding the
+"right" named water body. But CT's coastal towns' OSM administrative
+boundaries ALSO extend into Long Island Sound (real maritime jurisdiction,
+same underlying fact that makes the STATE boundary extend into the Sound),
+so the town-union alone still let feeders/laterals grow miles out into open
+water off Stamford/Greenwich -- confirmed by comparing town polygon extents
+(e.g. Greenwich's polygon reaches lat 40.951, well south of its real
+Tod's Point shoreline at ~41.00) and visually, in the running simulator.
+
+This version combines both fixes: town-union as the base (comprehensive,
+fixes the eastern-bay gaps the first attempt had), then ADDITIONALLY
+subtracts the real Long Island Sound OSM polygon (fixes the central/western
+coast overshoot the town-union alone left in, exactly where the first
+attempt already proved this subtraction works well).
 
 Requires: shapely (pip install shapely)
 
@@ -42,6 +51,8 @@ Usage:
 """
 from __future__ import annotations
 import json
+import urllib.request
+import urllib.parse
 from pathlib import Path
 
 from shapely.geometry import shape, mapping, LineString, Polygon
@@ -51,6 +62,18 @@ HERE = Path(__file__).parent
 BOUNDARY_FILE = HERE / "data" / "connecticut_boundary.json"
 TOWNS_FILE = HERE / "data" / "connecticut_towns.geojson"
 OUT_JSON = HERE / "data" / "connecticut_land_boundary.json"
+UA = {"User-Agent": "connecticut-grid-resilience/1.0"}
+
+
+def fetch_water_body(query: str) -> dict:
+    params = {"q": query, "format": "json", "polygon_geojson": "1", "limit": "1"}
+    url = "https://nominatim.openstreetmap.org/search.php?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers=UA)
+    with urllib.request.urlopen(req, timeout=30) as r:
+        results = json.loads(r.read())
+    if not results or not results[0].get("geojson") or results[0]["geojson"]["type"] not in ("Polygon", "MultiPolygon"):
+        raise RuntimeError(f"No real polygon found for {query!r} -- got {results[0].get('geojson', {}).get('type') if results else 'no results'}")
+    return results[0]["geojson"]
 
 
 def _town_shape(lines: list):
@@ -112,9 +135,30 @@ def main() -> None:
     land = land.intersection(state_poly)
     if land.is_empty:
         raise RuntimeError("Land union came back empty -- check inputs")
+    town_union_area = land.area
 
-    print(f"State boundary area: {state_poly.area:.4f} deg^2")
-    print(f"Land-only area:      {land.area:.4f} deg^2  ({100*land.area/state_poly.area:.1f}% of the full legal boundary)")
+    # Coastal towns' own OSM administrative boundaries extend into Long
+    # Island Sound too (same real maritime-jurisdiction fact that makes the
+    # state boundary do it), so the town union alone still lets feeders grow
+    # miles into open water off the central/western coast (Stamford/
+    # Greenwich). Subtract the real Sound polygon to trim that off -- this
+    # was already validated to work well for exactly that stretch of coast
+    # (see this file's git history); it just doesn't cover the eastern bays,
+    # which the town union already handles.
+    try:
+        print("Fetching Long Island Sound (real OSM polygon) for an additional trim...")
+        lis_geo = fetch_water_body("Long Island Sound")
+        lis_poly = shape(lis_geo)
+        land = land.difference(lis_poly)
+        if land.is_empty:
+            raise RuntimeError("Sound subtraction emptied the land polygon -- aborting trim")
+    except Exception as e:
+        print(f"  WARNING: Long Island Sound trim skipped ({e}); "
+              f"using town-union land as-is.")
+
+    print(f"State boundary area:      {state_poly.area:.4f} deg^2")
+    print(f"Town-union land area:     {town_union_area:.4f} deg^2  ({100*town_union_area/state_poly.area:.1f}% of the full legal boundary)")
+    print(f"After Sound trim:         {land.area:.4f} deg^2  ({100*land.area/state_poly.area:.1f}% of the full legal boundary)")
 
     out = [{"geojson": mapping(land)}]
     OUT_JSON.write_text(json.dumps(out))
