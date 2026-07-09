@@ -233,6 +233,17 @@ STORMS = [
     # tornado/derecho repair-severity complexity, a different mechanism.)
     ("ct_july2026_severe_tstorm", 6000, 702, 96, "July 2026 T-storm"),
     ("ct_aug2020_tornado", 1800, 380, 96, "Aug 2020 Tornado"),
+    # LOWER CONFIDENCE than the entries above: real, sourced peak customer
+    # count (~26,800, Eversource press release + live news) and a same-day
+    # partial-restoration snapshot, but duration_h (72) and crew count (300,
+    # used here) are interpolated from Henri 2021 (closest real neighbor by
+    # customer count), not directly sourced -- see the notes on this entry
+    # in data/hartford_doe_oe417.js. Broad nor'easter (not is_localized_
+    # reports), so uses uniform placement like Snowtober. Crew count barely
+    # moves sim_h here (48-49.5h across 250-350 crews tested) -- this storm
+    # isn't crew-constrained at this scale, so the ratio below reflects
+    # uncertainty in the real duration estimate more than a model gap.
+    ("", 900, 300, 72, "March 2023 Nor'easter"),
 ]
 
 

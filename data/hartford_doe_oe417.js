@@ -265,4 +265,39 @@ window.HARTFORD_DOE_OE417 = [
     daily_pct_out: [1.0, 0.15, 0.05, 0.02, 0.0],
     daily_crews: [200, 380, 150, 50, 10],
   },
+  {
+    // LOWER CONFIDENCE, similar caveat to Winter Storm Quinn above: sourced
+    // from a real Eversource press release (confirmed real event -- CT
+    // DEMHS partially activated its Emergency Operations Center the same
+    // day, with NWS winter storm warnings specifically for Litchfield/
+    // Tolland/Windham counties) and live news, but no precise peak crew
+    // count or restoration-complete timestamp was found -- only "hundreds"
+    // of crews plus named out-of-state mutual aid (IN, MO, OH, TN, TX, MA,
+    // NH, Canada) and a same-day partial-restoration snapshot. duration_h
+    // and daily_crews below are interpolated from Henri 2021 (closest real
+    // neighbor by customer count: 23,000 cust / 48h / peak 300 crews) and
+    // Jan 2024 (52,000 cust / 72h / peak 500 crews), not directly sourced.
+    date: "2023-03-14",
+    event: "March 2023 Nor'easter (elevation-dependent wet snow)",
+    type: "Severe Weather — Winter Storm (heavy wet snow, elevation-dependent)",
+    utility: "Eversource Energy",
+    state: "CT",
+    customers_affected: 26800,
+    demand_loss_mw: null,
+    duration_h: 72,
+    restoration_complete: "2023-03-17",
+    notes: "Rapidly-intensifying nor'easter, heaviest impact in higher-" +
+      "elevation Litchfield County (consistent with 'heavy, wet snow' being " +
+      "elevation-dependent per Eversource's own statement) -- a normal " +
+      "within-storm geographic skew for a broad statewide system, not " +
+      "spatially-confined the way the tornado/thunderstorm-complex entries " +
+      "above are, so NOT flagged is_localized_reports. Peak ~26,800 " +
+      "Eversource CT customers (12,800 restored + ~14,000 still out, both " +
+      "as of 4pm on the storm day itself). Crews: 'hundreds' of Eversource " +
+      "line/tree crews plus mutual aid from Indiana, Missouri, Ohio, " +
+      "Tennessee, Texas, Massachusetts, New Hampshire, and Canada -- no " +
+      "precise total given.",
+    daily_pct_out: [1.0, 0.35, 0.08, 0.0],
+    daily_crews: [250, 350, 200, 50],
+  },
 ];
