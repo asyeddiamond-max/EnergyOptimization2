@@ -126,35 +126,47 @@ window.HARTFORD_DOE_OE417 = [
     daily_crews: [300, 600, 700, 400, 100],
   },
   {
-    // Sourced from live news coverage only (NBC CT, WFSB incl. its I-Team
-    // preparedness investigation, WTNH, CT Mirror) -- there is no PURA
-    // docket or after-action report yet, since this event is only days old
-    // as of this writing. Treat this entry as lower-confidence than the
-    // others above until an official filing supersedes it.
+    // UPDATED 2026-07-08 from WFSB's follow-up accountability piece (governor +
+    // gubernatorial candidates pushing Eversource for answers), which supersedes
+    // this dataset's original day-of-storm estimate below. Still sourced from
+    // news coverage only (no PURA docket/after-action report yet) -- treat as
+    // lower-confidence than the pre-2026 events above until an official filing
+    // lands, but higher-confidence than the original entry since it's a
+    // deliberate post-storm accounting rather than live/evolving snapshots.
     date: "2026-07-04",
     event: "July 2026 Severe Thunderstorm Complex",
     type: "Severe Weather — Thunderstorms/Wind (non-tropical, no HURDAT2 track)",
     utility: "Eversource Energy",
     state: "CT",
-    customers_affected: 103500,
+    customers_affected: 180000,
     demand_loss_mw: null,
-    duration_h: 72,
-    restoration_complete: "2026-07-07",
-    notes: "Peak ~94,000 (Eversource) + ~8,500 (UI). Hardest-hit towns per news " +
-      "reports: Harwinton, Montville, New Britain, New Fairfield, Winchester. " +
-      "CREW COUNT NOT DISCLOSED -- WFSB's I-Team asked Eversource directly how " +
-      "many crews were pre-positioned and got no response; daily_crews is left " +
-      "null rather than guessed. For scale context, use the comparably-sized " +
-      "real events above instead: May 2018 (125,000 cust, peaked at 1,000 " +
-      "crews) and Dec 2023 (89,000 cust, peaked at 700 crews) both suggest " +
-      "peak crews in the 700-1,000 range is the realistic ballpark for an " +
-      "event this size, not 200.",
-    // Approximate -- pieced together from several point-in-time news snapshots
-    // (WFSB "~40,000 without power" and "50,000+ remain" both dated July 5;
-    // "98% restored" dated Monday July 6; "nearly all by Tuesday night" July 7),
-    // not a single authoritative hourly outage feed.
-    daily_pct_out: [1.0, 0.45, 0.02, 0.0],
-    daily_crews: null,
+    duration_h: 96,
+    restoration_complete: "2026-07-08",
+    notes: "Peak >180,000 Eversource CT customers (WFSB 7/8 follow-up; " +
+      "supersedes this entry's original ~94,000 estimate, which came from " +
+      "day-of news snapshots that understated the true peak). Hardest-hit: " +
+      "Torrington and Harwinton specifically named in the follow-up coverage " +
+      "(Montville, New Britain, New Fairfield, Winchester were named in the " +
+      "original day-of reports). CREW COUNT NOW DISCLOSED: 702 crews total " +
+      "at peak, 230 (~33%) Eversource direct staff, remainder contractor/" +
+      "mutual-aid -- in line with this dataset's May 2018 (1,000 crews) and " +
+      "Dec 2023 (700 crews) as the realistic ballpark for an event this size. " +
+      "Response was criticized as unusually slow to mobilize: Harwinton's " +
+      "first selectman reported ~2 days with no Eversource crews visibly on " +
+      "the ground, and the broader assessment was '36-48 hours before " +
+      "substantial crews got on the ground' -- notably slower than this " +
+      "dataset's other storms' initial ramp (most show meaningful crew " +
+      "presence within 12-24h). Per the article, Eversource's pre-storm " +
+      "forecast was 30 hours stale and focused on the wrong region (Southwest " +
+      "CT) while missing the actual impact area (Torrington/Harwinton, NW " +
+      "Litchfield County).",
+    // Approximate -- pieced together from news snapshots plus the 7/8 "4 days
+    // to restore" and "36-48h to substantial crews" framing, not a single
+    // authoritative hourly outage feed. Shaped to reflect the documented slow
+    // start (crews.day1 << crews.day2, unlike this dataset's faster-ramping
+    // storms) rather than a smooth ramp.
+    daily_pct_out: [1.0, 0.55, 0.15, 0.0],
+    daily_crews: [80, 500, 702, 250],
   },
   {
     // NOTE: real sources conflict on the peak figure for this storm. Several
