@@ -278,6 +278,13 @@ STORMS = [
     # meaningful validation signal either way; the wind-severity match
     # above is the useful, sourced part of this addition.
     ("ct_sep2019_tornado", 80, 60, 24, "Sep 2019 Tornado"),
+    # Real, well-documented broad windstorm (not tornado/derecho). Higher
+    # confidence than the last few additions: both crew count (1,100+) and
+    # a restoration-complete date are directly sourced from an Eversource
+    # press release, not interpolated. Real duration is "99% restored" by
+    # 72h, not literally 100%, so a slightly-sub-1.0 ratio here is expected
+    # rather than a miss.
+    ("", 3900, 1100, 72, "Dec 2022 Windstorm"),
 ]
 
 

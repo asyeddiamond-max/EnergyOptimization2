@@ -390,4 +390,38 @@ window.HARTFORD_DOE_OE417 = [
     daily_pct_out: [1.0, 0.0],
     daily_crews: [60, 10],
   },
+  {
+    // Real, well-documented broad windstorm (not tornado/derecho) -- higher
+    // confidence than the last few additions since both crew count AND a
+    // restoration-complete date are directly sourced from an Eversource
+    // press release, not interpolated. Storm hit the evening of 2022-12-22
+    // (Thursday); Eversource's own real-time pre-storm estimate had ranged
+    // 125,000-380,000 (a wide worst-case spread, similar to other entries'
+    // documented pre-storm-forecast overestimates), but actual peak came
+    // in lower at ~120,000. Crews worked "around the clock" through
+    // Christmas Day (12/25) reaching 99% restoration -- "substantially
+    // complete," same convention as other entries using that phrase, not
+    // literally 100%, so true full restoration may run a bit past the 72h
+    // used here.
+    date: "2022-12-22",
+    event: "December 2022 Pre-Christmas Windstorm",
+    type: "Severe Weather — Rain and Windstorm",
+    utility: "Eversource Energy",
+    state: "CT",
+    customers_affected: 120000,
+    demand_loss_mw: null,
+    duration_h: 72,
+    restoration_complete: "2022-12-25",
+    notes: "Peak ~120,000 Eversource CT customers (pre-storm worst-case " +
+      "estimate had been 125,000-380,000, similar to other entries' " +
+      "documented pattern of forecasts overshooting actual impact). 1,100+ " +
+      "Eversource crews at peak, plus hundreds of out-of-state mutual-aid " +
+      "workers. 149 communities affected; 560+ blocked roads cleared, 100+ " +
+      "broken utility poles replaced, 28+ miles of downed line repaired or " +
+      "replaced. 99% restoration reached by Christmas Day (12/25, ~72h " +
+      "after the storm), described as 'substantially complete' -- crews " +
+      "worked around the clock through the holiday to reach it.",
+    daily_pct_out: [1.0, 0.35, 0.10, 0.01],
+    daily_crews: [600, 1100, 900, 400],
+  },
 ];
