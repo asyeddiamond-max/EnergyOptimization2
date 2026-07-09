@@ -285,6 +285,12 @@ STORMS = [
     # 72h, not literally 100%, so a slightly-sub-1.0 ratio here is expected
     # rather than a miss.
     ("", 3900, 1100, 72, "Dec 2022 Windstorm"),
+    # Real "bomb cyclone" nor'easter, 2019-10-16 overnight into 10-17 (set
+    # October low-pressure records in Boston/Providence/Portland). Peak
+    # ~45,200 (41,000 Eversource + 4,200 UI) sourced from live news at the
+    # time; crew count (400) is interpolated between Henri 2021 and Jan
+    # 2024, not sourced. Broad statewide system, uniform placement.
+    ("", 1500, 400, 60, "Oct 2019 Bomb Cyclone"),
 ]
 
 

@@ -424,4 +424,39 @@ window.HARTFORD_DOE_OE417 = [
     daily_pct_out: [1.0, 0.35, 0.10, 0.01],
     daily_crews: [600, 1100, 900, 400],
   },
+  {
+    // Real "bomb cyclone" nor'easter (30+ mb pressure drop in <24h, setting
+    // October low-pressure records in Boston/Providence/Portland), 2019-10-
+    // 16 overnight into 2019-10-17. Broad statewide system (not tornado/
+    // derecho), similar treatment to Oct 2020/Dec 2022 above. Peak sourced
+    // from live news at the time (WTNH/NBC CT/Patch): ~40,000-41,000
+    // Eversource + ~4,200 United Illuminating. Hardest-hit: Enfield,
+    // Somers, Ellington, Killingly, South Windsor, Stonington, Vernon, Old
+    // Lyme. Out-of-state crews confirmed from Michigan, New York, Ohio, and
+    // Virginia, but no precise total crew count found -- interpolated
+    // (400) between Henri 2021 (23,000 cust/300 crews) and Jan 2024
+    // (52,000 cust/500 crews), the closest real neighbors by size.
+    date: "2019-10-17",
+    event: "October 2019 Bomb Cyclone",
+    type: "Severe Weather — Wind and Rain (bomb cyclone nor'easter)",
+    utility: "Eversource Energy",
+    state: "CT",
+    customers_affected: 45200,
+    demand_loss_mw: null,
+    duration_h: 60,
+    restoration_complete: "2019-10-19",
+    notes: "Eversource targeted 6am Saturday (10/19) for full restoration, " +
+      "~60h after the Wednesday-night storm onset -- 'power will likely be " +
+      "restored to many customers before then, but there could be " +
+      "scattered outages after 6am' per the utility's own statement, so " +
+      "true full completion may extend a bit past 60h for a small tail. " +
+      "By mid-day Friday (10/18), a cumulative ~90,000 customers had had " +
+      "power restored since storm onset -- higher than the ~45,200 peak-" +
+      "simultaneous figure used here, consistent with sequential/rolling " +
+      "outages during a multi-day event rather than one single peak moment " +
+      "(same convention as the other entries in this dataset, which use " +
+      "peak-simultaneous, not cumulative, customer counts).",
+    daily_pct_out: [1.0, 0.30, 0.05, 0.0],
+    daily_crews: [250, 400, 250, 50],
+  },
 ];
