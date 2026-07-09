@@ -291,6 +291,12 @@ STORMS = [
     # time; crew count (400) is interpolated between Henri 2021 and Jan
     # 2024, not sourced. Broad statewide system, uniform placement.
     ("", 1500, 400, 60, "Oct 2019 Bomb Cyclone"),
+    # Remnants of Hurricane Ida, 2021-09-02 -- a genuinely different damage
+    # mechanism (historic flash flooding, not wind/tree) from every other
+    # storm in this dataset. Peak (~20,000) is real/sourced; duration (48h)
+    # and crews (300) are interpolated directly from Henri 2021 (23,000
+    # cust, nearly identical peak), not independently sourced.
+    ("", 650, 300, 48, "Sep 2021 Ida Flooding"),
 ]
 
 

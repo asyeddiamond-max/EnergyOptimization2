@@ -459,4 +459,45 @@ window.HARTFORD_DOE_OE417 = [
     daily_pct_out: [1.0, 0.30, 0.05, 0.0],
     daily_crews: [250, 400, 250, 50],
   },
+  {
+    // Remnants of Hurricane Ida, 2021-09-01 into 09-02 -- a genuinely
+    // DIFFERENT damage mechanism from every other entry: this was primarily
+    // a historic FLOODING event (CT's first-ever flash flood emergency,
+    // issued for Fairfield/New Haven counties; up to 8.72in of rain in
+    // Seymour; 18 people boat-rescued in Plainville), not a wind/tree event,
+    // with power outages a modest secondary effect. Useful for checking the
+    // model isn't only calibrated against wind-driven damage.
+    //
+    // LOWER CONFIDENCE on duration/crews: peak is real and specific
+    // (~20,000 CT customers: Eversource 14,591-20,000 range across
+    // different snapshots + UI ~600), but no CT-specific restoration
+    // timeline or crew count was found. Notably, CT sent 40 of its OWN
+    // crews to Louisiana within days of this event to help with Ida's much
+    // larger direct-hurricane damage there -- circumstantial evidence CT's
+    // own restoration wasn't crew-constrained. duration_h (48) and crews
+    // (300) are interpolated from Henri 2021 (23,000 cust -- nearly
+    // identical peak), the closest real neighbor by customer count, same
+    // convention as this dataset's other interpolated entries -- not
+    // independently sourced.
+    date: "2021-09-02",
+    event: "Remnants of Hurricane Ida (flooding)",
+    type: "Severe Weather — Flooding (not primarily wind-driven)",
+    utility: "Eversource Energy",
+    state: "CT",
+    customers_affected: 20000,
+    demand_loss_mw: null,
+    duration_h: 48,
+    restoration_complete: "2021-09-04",
+    notes: "Primarily a historic flash-flooding event, not a wind/tree " +
+      "storm -- CT's first-ever flash flood emergency (Fairfield/New Haven " +
+      "counties), up to 8.72in rain in Seymour, 18 people rescued by boat " +
+      "in Plainville. Peak ~20,000 CT customers (Eversource 14,591-20,000 " +
+      "across different reported snapshots + UI ~600) -- modest relative " +
+      "to the flooding's severity, since flood damage doesn't necessarily " +
+      "correlate with power-line damage the way wind does. No CT-specific " +
+      "restoration timeline or crew count found -- daily_pct_out/" +
+      "daily_crews shape mirrors Henri 2021's directly.",
+    daily_pct_out: [1.0, 0.30, 0.0],
+    daily_crews: [200, 300, 100],
+  },
 ];
