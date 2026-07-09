@@ -215,24 +215,24 @@ STORMS = [
     ("jan2024", 1650, 500, 72, "Jan 2024"),
     ("dec2023", 2850, 700, 96, "Dec 2023"),
     ("henri_2021", 950, 300, 48, "Henri 2021"),
-    # KNOWN MISS, kept in the table rather than hidden: real duration (96h,
-    # WFSB 2026-07-08 follow-up) was documented as an unusually SLOW crew
-    # mobilization (36-48h before "substantial crews", ~2 days with zero
-    # visible crews in Harwinton) that still somehow finished in 4 days.
-    # deriveRampParams() has no way to know this specific storm ramped
-    # slower than its nearest-by-size peers, so it predicts a ramp more
-    # typical for a 180k-customer event -- and workloadSlowdownMult (tuned
-    # on the 8 storms above, all real/sim >= 0.98) then compounds that into
-    # a real/sim ratio of ~0.57, the only storm in this table where the
-    # model runs SLOWER than reality rather than faster. Plausible causes:
-    # (a) the ramp-derivation gap above, (b) "4 days to restore" in the
-    # article may itself be a headline/bulk figure undercounting the true
-    # last-customer tail, same caveat noted for several entries in
-    # data/hartford_doe_oe417.js. Not force-fit -- changing global params to
-    # chase this one storm previously cost 2-3 other storms their fit (see
-    # the reverted crew-ramp-tail attempts in git history) and shouldn't be
-    # repeated without a second real storm confirming the same pattern.
+    # These last 2 are geographically-CONCENTRATED storms (a storm confined
+    # to one corner of the state, is_localized_reports:true in
+    # hartford_storm_tracks.js), unlike the 8 broad/statewide-track storms
+    # above. Originally both badly missed (July 2026 ratio 0.57, Aug 2020
+    # ratio 0.79) once workloadSlowdownMult existed, because that multiplier
+    # was tuned only on the 8 broad storms and applied uniformly by customer
+    # count alone. Diagnosed by forcing the multiplier to 1x in isolation:
+    # both storms' BASE dispatch/ramp/workday mechanics alone already land
+    # at real/sim 1.18-1.25 -- as good a fit as the broad storms get WITH
+    # the multiplier. Fixed by gating workloadSlowdownMult on
+    # storm.isLocalized (see planRestoration() in 03_grid_simulation.html):
+    # concentrated storms skip it entirely now. (May 2018 above is ALSO
+    # concentrated damage but doesn't use is_localized_reports -- it's
+    # placed via the real HRRR grid, not synthetic town-centroid decay --
+    # and correctly keeps getting the multiplier, since its gap looks like
+    # tornado/derecho repair-severity complexity, a different mechanism.)
     ("ct_july2026_severe_tstorm", 6000, 702, 96, "July 2026 T-storm"),
+    ("ct_aug2020_tornado", 1800, 380, 96, "Aug 2020 Tornado"),
 ]
 
 

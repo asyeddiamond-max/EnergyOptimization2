@@ -228,4 +228,41 @@ window.HARTFORD_DOE_OE417 = [
     daily_pct_out: [1.0, 0.55, 0.20, 0.05, 0.0],
     daily_crews: [500, 900, 1100, 700, 100],
   },
+  {
+    // Added as a real, well-documented THIRD spatially-concentrated/localized
+    // storm (alongside May 2018 and July 2026 above), specifically to check
+    // whether the model's workloadSlowdownMult miss on those two (opposite
+    // directions -- May 2018 needs more slowdown, July 2026 needs less) is a
+    // consistent pattern or was just 2 contradictory data points. Sourced
+    // from live news only (NBC CT, WTNH, Fox61) -- no PURA docket dug up for
+    // this specific event, though it likely appears in the same Docket
+    // 25-12-13 storm-cost-recovery filing as Quinn above (43 storms,
+    // 2018-2023 -- this one is just outside that window, in 2020).
+    date: "2020-08-27",
+    event: "Bethany-Hamden-North Haven Tornado + Severe T-storm",
+    type: "Severe Weather — Thunderstorms/Tornado (non-tropical, no HURDAT2 track)",
+    utility: "Eversource Energy",
+    state: "CT",
+    customers_affected: 54000,
+    demand_loss_mw: null,
+    duration_h: 96,
+    restoration_complete: "2020-08-31",
+    notes: "NWS confirmed an EF1 tornado (110 mph) touched down in Bethany " +
+      "~3:55pm and tracked ~11 miles southeast through Hamden to North Haven " +
+      "by 4:00pm. Branford was separately hit hardest by straight-line " +
+      "severe-thunderstorm wind in the same system (99%+ of its Eversource " +
+      "customers out), not the tornado path itself. Combined statewide peak: " +
+      "~25,000 Eversource (11pm night-of) + ~29,000 United Illuminating. " +
+      "Eversource crews: 380 total, 80 specifically assigned to Branford. " +
+      "Response was notably FAST relative to July 2026 above -- Eversource " +
+      "substantially complete for all towns except Branford by midnight " +
+      "Friday (~32h after the storm), Branford by Saturday night (~56h); UI's " +
+      "hardest system-rebuild areas cleared by Monday (~96h). daily_crews " +
+      "shaped as a fast ramp (already near half of peak crews same-day) to " +
+      "reflect this -- unlike July 2026's documented slow start, there's no " +
+      "reporting here of a mobilization delay or public criticism of the " +
+      "initial response.",
+    daily_pct_out: [1.0, 0.15, 0.05, 0.02, 0.0],
+    daily_crews: [200, 380, 150, 50, 10],
+  },
 ];

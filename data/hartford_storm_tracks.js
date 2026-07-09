@@ -113,4 +113,31 @@ window.HARTFORD_STORM_TRACKS = {
       {lat:41.8341999,lon:-73.1314705,wind_kt:60,pres_mb:null,time:"2026-07-04T21:30Z"},
     ],
   },
+  // Also not a HURDAT2 track -- same "localized reports" treatment as the
+  // July 2026 entry above, but this one is a real NWS-CONFIRMED tornado
+  // (unlike July 2026, which NWS explicitly did NOT classify as a tornado).
+  // NWS confirmed a tornado touched down in Bethany and tracked ~11 miles
+  // southeast through Hamden to North Haven between 3:55-4:00pm on
+  // 2020-08-27 (110 mph winds per post-event surveys, EF1). Branford was
+  // separately hit hardest by straight-line severe-thunderstorm wind in the
+  // same system (99%+ of its Eversource customers out), not the tornado
+  // path itself, so it's included as its own hot spot alongside the tornado
+  // towns. Coordinates are real town centroids
+  // (data/connecticut_towns_population.json); wind_kt for the tornado towns
+  // reflects the ~110mph EF1 survey estimate, Branford's reflects typical
+  // severe-thunderstorm damaging wind (lower than the tornado itself).
+  "ct_aug2020_tornado": {
+    name: "August 27, 2020 Bethany-Hamden-North Haven Tornado",
+    date: "2020-08-27",
+    category_at_landfall: "EF1 Tornado + Severe Thunderstorm Wind",
+    ct_peak_wind_mph: 110,
+    ct_customers_lost: 54000,
+    is_localized_reports: true,
+    track: [
+      {lat:41.422964,lon:-72.9941871,wind_kt:96,pres_mb:null,time:"2020-08-27T19:55Z"},
+      {lat:41.3973285,lon:-72.9222256,wind_kt:96,pres_mb:null,time:"2020-08-27T19:58Z"},
+      {lat:41.3814653,lon:-72.8563709,wind_kt:96,pres_mb:null,time:"2020-08-27T20:00Z"},
+      {lat:41.2799489,lon:-72.7859502,wind_kt:60,pres_mb:null,time:"2020-08-27T20:15Z"},
+    ],
+  },
 };

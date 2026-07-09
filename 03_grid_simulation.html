@@ -363,6 +363,7 @@
             <option value="jan2024">January 2024 Wind Storm</option>
             <option value="dec2023">December 2023 Nor'easter</option>
             <option value="ct_july2026_severe_tstorm">CT Severe T-storm Jul 2026 (provisional)</option>
+            <option value="ct_aug2020_tornado">Bethany-Hamden-N.Haven Tornado Aug 2020</option>
           </select>
         </div>
         <div class="rf-item">
@@ -1863,7 +1864,7 @@ async function simulateStorm(){
   let totalCust=outages.reduce((s,o)=>s+o.popLoss,0);
   totalCust=Math.min(totalCust,TOTAL_POP);
 
-  storm={outages,totalCust,switchRestoredCount};
+  storm={outages,totalCust,switchRestoredCount,isLocalized:!!trackData?.is_localized_reports};
   plan=null;
 
   // Render — single canvas pass for all outages instead of N circleMarker
@@ -2221,22 +2222,47 @@ async function planRestoration(){
   // Large-scale logistics friction: derived by comparing this scheduler's
   // own busy-crew-only completion time (once idle "never dispatched" crews
   // are correctly excluded -- see totalTime below) against real restoration
-  // durations across 8 real storms (23K-830K customers). The ratio
+  // durations across 8 real BROAD storms (23K-830K customers, all with a
+  // real moving HURDAT2/HRRR track spanning the whole state). The ratio
   // real/simulated followed a clear ~sqrt(customers) relationship: an
   // initial fit (0.00722 * customers^0.473) applied to travel+repair time
   // still landed 0-50% short across all 8 storms (Henri exact, Isaias/Sandy
-  // ~38% short, May 2018 ~50% short); the 0.00928 coefficient below folds in
-  // that average residual, verified back down to a tight 0-15% spread on
-  // re-test (see batch_calibrate.py in the scratchpad for the harness this
-  // was tuned against). This isn't modeling one specific mechanism -- it's
-  // standing in for several real, genuine frictions that all scale with
-  // storm size and none of which existed in the model before: crews
-  // competing for limited staging areas, fuel, and lodging; coordination
-  // overhead across a much larger simultaneous crew force; debris/tree
-  // crews as a real bottleneck ahead of line crews at scale. Clamped to
-  // never go below 1x (this should only ever slow things down, not speed up
-  // a storm that's already running slow for other reasons).
-  const workloadSlowdownMult = Math.max(1, 0.00928 * Math.pow(storm.totalCust, 0.473));
+  // ~38% short); the 0.00928 coefficient below folds in that average
+  // residual, verified back down to a tight 0-15% spread on re-test (see
+  // 16_calibrate_against_real_storms.py, the harness this was tuned
+  // against). This isn't modeling one specific mechanism -- it's standing
+  // in for several real, genuine frictions that scale with a BROAD storm's
+  // total simultaneous footprint: crews competing for limited staging
+  // areas, fuel, and lodging across a wide, dispersed area; coordination
+  // overhead across a much larger simultaneous crew force spread thin
+  // statewide; debris/tree crews as a real bottleneck ahead of line crews
+  // at scale.
+  //
+  // Gated on storm.isLocalized: geographically-concentrated storms (a
+  // severe-thunderstorm complex or tornado/derecho confined to one corner
+  // of the state, is_localized_reports:true in hartford_storm_tracks.js)
+  // don't have that sprawling multi-region logistics problem regardless of
+  // total customer count -- confirmed by testing this multiplier's effect
+  // in isolation (forcing it to 1x) against 2 real concentrated storms:
+  // July 2026 (real 96h) based mechanics alone give 81.4h (ratio 1.18,
+  // already a good fit -- applying the full customer-count-scaled mult
+  // instead overshoots to 168h, ratio 0.57) and the Aug 2020 Bethany-
+  // Hamden-North Haven tornado (real 96h) gives 76.7h unmultiplied (ratio
+  // 1.25, also a good fit -- full mult overshoots to 122h, ratio 0.79).
+  // Both land right in the same 0.97-1.25 range the broad storms hit WITH
+  // the multiplier applied, i.e. concentrated storms' base mechanics
+  // already model them correctly without any large-scale friction added.
+  // (May 2018 is the exception -- also concentrated damage, but doesn't use
+  // is_localized_reports since it's placed via the real HRRR grid rather
+  // than synthetic town-centroid decay, and separately needs MORE slowdown
+  // than even the full multiplier gives. That's consistent with this gate:
+  // its gap is very plausibly tornado/derecho repair-complexity severity,
+  // which is a different, already-separately-modeled mechanism
+  // (sampleRepairHours' wind-severity scaling), not generic sprawling-
+  // logistics friction -- so it correctly keeps getting the customer-count
+  // mult here rather than being exempted.)
+  const workloadSlowdownMult = storm.isLocalized ? 1 :
+    Math.max(1, 0.00928 * Math.pow(storm.totalCust, 0.473));
 
   // Item 3: damage-assessment ramp — discovery time per outage.
   //  - 30% of outages are visible within the first hour after dispatch.
@@ -3188,6 +3214,7 @@ function buildServerPayload(){
     storm_drag: dragOn,
     soil_saturation: soilOn,
     pre_storm_staging: stagingOn,
+    is_localized: !!storm.isLocalized,
   };
 }
 // Fake-progress timer used while waiting on a server response. The server
@@ -4363,6 +4390,7 @@ async function recommendCrewCountServer(){
       storm_drag:         base.storm_drag,
       soil_saturation:    base.soil_saturation,
       pre_storm_staging:  base.pre_storm_staging,
+      is_localized:       base.is_localized,
     };
     const r = await fetch(getServerUrl() + '/api/recommend', {
       method: 'POST',
