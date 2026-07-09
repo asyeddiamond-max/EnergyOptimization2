@@ -244,6 +244,26 @@ STORMS = [
     # isn't crew-constrained at this scale, so the ratio below reflects
     # uncertainty in the real duration estimate more than a model gap.
     ("", 900, 300, 72, "March 2023 Nor'easter"),
+    # Second real tornado/derecho-type event (NWS-confirmed serial derecho,
+    # 2020-10-07), placed via the real HRRR grid + real NCEI storm reports
+    # like May 2018, NOT synthetic town-centroid decay -- added specifically
+    # to check whether May 2018's gap (needs MORE workloadSlowdownMult even
+    # with the full multiplier applied) is a general pattern for HRRR-placed
+    # severe convective storms, or specific to May 2018 itself. Real wind
+    # data resolves this cleanly: this derecho's confirmed reports top out
+    # at 69mph (0 outages cross the model's 70mph severity-repair threshold
+    # -- straight-line wind damage, no confirmed tornadoes), vs May 2018's
+    # real reports up to 100mph. It calibrates well with the standard
+    # multiplier (ratio ~1.20, base-mechanics-alone ratio ~1.93 -- i.e. it
+    # NEEDS the multiplier and gets a good fit from it, unlike May 2018
+    # which still falls short even with it). Supports the theory that May
+    # 2018's residual gap is tornado-severity-specific, not a broader
+    # "severe convective storms need more slowdown" pattern. (Duration_h/
+    # crews for this entry are themselves interpolated, not directly
+    # sourced -- see data/hartford_doe_oe417.js -- so treat the exact ratio
+    # loosely; the wind-severity comparison above doesn't depend on that
+    # estimate.)
+    ("oct2020_derecho", 2800, 700, 96, "Oct 2020 Derecho"),
 ]
 
 

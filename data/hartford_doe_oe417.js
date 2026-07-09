@@ -300,4 +300,52 @@ window.HARTFORD_DOE_OE417 = [
     daily_pct_out: [1.0, 0.35, 0.08, 0.0],
     daily_crews: [250, 350, 200, 50],
   },
+  {
+    // Second real tornado/derecho-type event, added specifically to check
+    // whether May 2018's gap (needs MORE workloadSlowdownMult than the
+    // formula gives) is a real pattern for HRRR-grid-placed convective
+    // severe weather, or was a one-off. NWS confirmed this as a genuine
+    // "serial derecho" (Wikipedia's List of derecho events) on 2020-10-07,
+    // a 320-mile-wide damage path across NY/MA/CT/RI. Real NCEI Storm
+    // Events reports (15_fetch_storm_events.py, see
+    // data/connecticut_storm_events.js key "2020-10-07") confirm 14
+    // real CT thunderstorm-wind reports, 52-60kt, spanning Fairfield, New
+    // Haven, Hartford, Tolland, and Windham counties -- a genuinely
+    // statewide damage swath, unlike the Aug 2020 tornado's narrow single-
+    // corner path, which is why this one is placed via the real HRRR grid
+    // (12_fetch_hrrr_storm_wind.py, key "oct2020_derecho") like May 2018,
+    // NOT synthetic town-centroid decay -- not flagged is_localized_reports.
+    //
+    // LOWER CONFIDENCE than most entries above: CT's peak (~90,000
+    // Eversource customers) comes from a specific regional outage
+    // comparison (NY ~230k, PA ~176k, ME ~117k, CT ~90k) cross-referencing
+    // multiple news sources discussing the same NWS-confirmed event, but no
+    // CT-specific crew count or restoration-complete date was found despite
+    // extensive searching (this event got relatively little standalone CT
+    // news coverage, possibly overshadowed by being just 2 months after
+    // Isaias). duration_h (96) and crews (700) are interpolated from Dec
+    // 2023 (89,000 cust -- nearly identical peak -- 96h, peak 700 crews),
+    // the closest real neighbor by customer count, not directly sourced.
+    date: "2020-10-07",
+    event: "October 2020 Northeast Serial Derecho",
+    type: "Severe Weather — Thunderstorms/Derecho",
+    utility: "Eversource Energy",
+    state: "CT",
+    customers_affected: 90000,
+    demand_loss_mw: null,
+    duration_h: 96,
+    restoration_complete: "2020-10-11",
+    notes: "NWS-confirmed serial derecho, wind gusts 50-70mph, part of a " +
+      "320-mile-wide damage path across NY, MA, CT, and RI (per Wikipedia's " +
+      "List of derecho events). Regional peak outages: NY ~230,000, PA " +
+      "~176,000, ME ~117,000, CT ~90,000. CT-specific crew count and " +
+      "restoration-complete date not found independently -- duration_h and " +
+      "daily_crews interpolated from Dec 2023 (near-identical customer " +
+      "count). Treat the calibration ratio for this entry as informative " +
+      "about wind-severity/repair-time modeling (which uses directly-" +
+      "sourced real HRRR + NCEI wind data) more than about crew-ramp " +
+      "timing (which is guessed).",
+    daily_pct_out: [1.0, 0.55, 0.20, 0.05, 0.0],
+    daily_crews: [400, 700, 500, 200, 50],
+  },
 ];

@@ -52,6 +52,12 @@ STORMS = {
     "may2018":     {"date": "2018-05-15 21:00", "precip_type": "rain"},
     "jan2024":     {"date": "2024-01-10 19:00", "precip_type": "mix"},
     "dec2023":     {"date": "2023-12-18 18:00", "precip_type": "snow"},
+    # NWS-confirmed serial derecho, real NCEI storm reports show 52-60kt
+    # thunderstorm wind across Fairfield/New Haven/Hartford/Tolland/Windham
+    # counties between 16:30-17:05 EDT (20:30-21:05 UTC) -- using 21:00 UTC
+    # (~5pm EDT) as the representative HRRR fetch time, same convention as
+    # the other storms above (peak-passage hour, not storm start).
+    "oct2020_derecho": {"date": "2020-10-07 21:00", "precip_type": "rain"},
 }
 STORM_NAMES = {
     "isaias_2020": "Tropical Storm Isaias",
@@ -59,6 +65,7 @@ STORM_NAMES = {
     "may2018":     "May 2018 Tornadoes / Derecho",
     "jan2024":     "January 2024 Wind Storm",
     "dec2023":     "December 2023 Nor'easter",
+    "oct2020_derecho": "October 2020 Northeast Serial Derecho",
 }
 
 
