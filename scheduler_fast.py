@@ -46,15 +46,23 @@ def _haversine_miles_vec(lat1, lon1, lat2_arr, lon2_arr):
     return 2 * R * np.arcsin(np.sqrt(a))
 
 
-def plan_restoration_fast(outages, m_crews, realistic=True, seed=42):
+def plan_restoration_fast(outages, m_crews, realistic=True, seed=42, total_customers=None):
     """Vectorized scheduler. `outages` is a list of (lat, lon) tuples.
 
     Returns (crews, total_time, timeline) in the same shape as the reference
     implementation in 05_generate_artifacts.py.
+
+    total_customers: real total customer count for this storm. Drives
+    workload_mult below (ported from the JS scheduler's workloadSlowdownMult
+    — see 03_grid_simulation.html:planRestoration()). None/0 -> no slowdown
+    (this fallback path has no per-outage customer data to sum itself).
     """
     N = len(outages)
     if N == 0 or m_crews == 0:
         return [], 0.0, []
+
+    tc = float(total_customers) if total_customers is not None else 0.0
+    workload_mult = max(1.0, 0.00928 * (tc ** 0.473)) if tc > 0 else 1.0
 
     TRAVEL_MPH = 25 if realistic else 30
     ASSESSMENT_DELAY = 12 if realistic else 0
@@ -195,7 +203,7 @@ def plan_restoration_fast(outages, m_crews, realistic=True, seed=42):
                                      np.array([lat[best]]),
                                      np.array([lon[best]]))[0] * ROAD_MULTIPLIER
         repair_h = sample_repair()
-        eta = clamp(crew["time"] + miles / TRAVEL_MPH + repair_h)
+        eta = clamp(crew["time"] + (miles / TRAVEL_MPH + repair_h) * workload_mult)
         crew["time"] = eta
         crew["lat"] = float(lat[best])
         crew["lon"] = float(lon[best])
@@ -209,5 +217,9 @@ def plan_restoration_fast(outages, m_crews, realistic=True, seed=42):
         if remaining % max(1, N // 80) == 0:
             timeline.append((eta, remaining))
 
-    total = max(c["time"] for c in crews)
+    # Only crews that actually did work define "restoration complete" (see
+    # scheduler_numba.py's plan_restoration_numba for the fuller explanation
+    # of why an idle crew's raw arrival time isn't real work finishing).
+    busy_times = [c["time"] for c in crews if c["jobs"]]
+    total = max(busy_times) if busy_times else 0.0
     return crews, total, sorted(timeline)

@@ -464,7 +464,7 @@ def _run_scheduler_sticky(req_outages, crews, seed, realistic, customer_weight,
                           crew_specialization, tree_blocked_rate, tree_crew_share,
                           hierarchical, tiered_priority, storm_duration,
                           road_multiplier=1.5, assessment_delay=12.0,
-                          tree_blocked_rate_multiplier=1.0):
+                          tree_blocked_rate_multiplier=1.0, total_customers=None):
     """Crew stickiness: partition outages by substation territory (sub_id),
     split crews proportionally to each territory's customer count, run one
     independent sub-scheduler per territory in parallel. Total restoration =
@@ -513,6 +513,13 @@ def _run_scheduler_sticky(req_outages, crews, seed, realistic, customer_weight,
         for _, s in fracs[:rem]:
             alloc[s] += 1
 
+    # Total customers for workload_mult MUST be the whole storm's, not each
+    # territory's own subset — the staging/fuel/lodging/coordination friction
+    # this multiplier stands in for is a function of the storm's overall
+    # scale, not how much of it one territory's sub-scheduler happens to see.
+    if total_customers is None:
+        total_customers = sum(o.customers for o in req_outages)
+
     # Run each territory's sub-scheduler in parallel.
     def run_one(sid: int, outs: list, m: int, sub_seed: int):
         return _run_scheduler(
@@ -524,6 +531,7 @@ def _run_scheduler_sticky(req_outages, crews, seed, realistic, customer_weight,
             road_multiplier=road_multiplier,
             assessment_delay=assessment_delay,
             tree_blocked_rate_multiplier=tree_blocked_rate_multiplier,
+            total_customers=total_customers,
         )
 
     futures = []
@@ -549,7 +557,8 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
                                hierarchical=False, tiered_priority=False,
                                storm_duration=0.0, road_multiplier=1.5,
                                assessment_delay=12.0,
-                               tree_blocked_rate_multiplier=1.0):
+                               tree_blocked_rate_multiplier=1.0,
+                               total_customers=None):
     """Crew specialization model: split outages by type, split crews by type,
     run two independent scheduler calls IN PARALLEL, merge results. Total
     restoration time = max of the two subsystems' finish times.
@@ -558,6 +567,10 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
     wall-clock time. Numba releases the GIL during JIT-compiled code, so a
     plain ThreadPoolExecutor delivers real parallelism here."""
     from concurrent.futures import ThreadPoolExecutor
+    # See _run_scheduler_sticky for why this must be the whole storm's total,
+    # not each subsystem's own outage-count-derived subset.
+    if total_customers is None:
+        total_customers = sum(o.customers for o in req_outages)
     tree_idx, line_idx, n_tree, n_line = _split_for_specialization(
         req_outages, crews, seed, tree_blocked_rate, tree_crew_share,
         tree_blocked_rate_multiplier,
@@ -569,7 +582,8 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
                               tiered_priority=tiered_priority,
                               storm_duration=storm_duration,
                               road_multiplier=road_multiplier,
-                              assessment_delay=assessment_delay)
+                              assessment_delay=assessment_delay,
+                              total_customers=total_customers)
 
     tree_outages = [req_outages[i] for i in tree_idx]
     line_outages = [req_outages[i] for i in line_idx]
@@ -580,13 +594,15 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
                              False, tree_blocked_rate, tree_crew_share,
                              hierarchical, tiered_priority, storm_duration,
                              False, road_multiplier, assessment_delay,
-                             tree_blocked_rate_multiplier)
+                             tree_blocked_rate_multiplier,
+                             total_customers=total_customers)
         fut_line = ex.submit(_run_scheduler, line_outages, n_line,
                              seed + 2, realistic, customer_weight,
                              False, tree_blocked_rate, tree_crew_share,
                              hierarchical, tiered_priority, storm_duration,
                              False, road_multiplier, assessment_delay,
-                             tree_blocked_rate_multiplier)
+                             tree_blocked_rate_multiplier,
+                             total_customers=total_customers)
         t_tree, crews_tree = fut_tree.result()
         t_line, crews_line = fut_line.result()
 
@@ -625,8 +641,17 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
                    road_multiplier: float = 1.5,
                    assessment_delay: float = 12.0,
                    tree_blocked_rate_multiplier: float = 1.0,
+                   total_customers: float | None = None,
                    ) -> tuple[float, list[CrewResult]]:
-    """Call the shared scheduler and convert the result into our response shape."""
+    """Call the shared scheduler and convert the result into our response shape.
+
+    total_customers: real (non-priority-bonused) total customer count for the
+    whole storm, used to derive workload_mult in the core scheduler. Computed
+    once here (or passed down from a caller that already knows it, e.g. a
+    territory/specialization sub-call) so it never gets recomputed from a
+    partial subset of outages — see _run_scheduler_sticky."""
+    if total_customers is None:
+        total_customers = sum(o.customers for o in req_outages)
     if crew_stickiness and len(req_outages) >= 10 and \
             any(o.sub_id >= 0 for o in req_outages):
         return _run_scheduler_sticky(
@@ -634,6 +659,7 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
             crew_specialization, tree_blocked_rate, tree_crew_share,
             hierarchical, tiered_priority, storm_duration, road_multiplier,
             assessment_delay, tree_blocked_rate_multiplier,
+            total_customers=total_customers,
         )
     if crew_specialization and len(req_outages) >= 10:
         return _run_scheduler_specialized(
@@ -641,6 +667,7 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
             tree_blocked_rate, tree_crew_share, hierarchical, tiered_priority,
             storm_duration, road_multiplier,
             assessment_delay, tree_blocked_rate_multiplier,
+            total_customers=total_customers,
         )
     outage_tuples = [(o.lat, o.lon) for o in req_outages]
     customers = [o.customers for o in req_outages]
@@ -664,15 +691,18 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
             storm_duration=storm_duration,
             road_multiplier=road_multiplier,
             assessment_delay=assessment_delay,
+            total_customers=total_customers,
         )
     elif _FAST:
         crews_out, total_time, _timeline = plan_restoration_fast(
-            outage_tuples, crews, realistic=realistic, seed=seed
+            outage_tuples, crews, realistic=realistic, seed=seed,
+            total_customers=total_customers,
         )
     elif art is not None:
         rnd = art.mulberry32((seed * 31 + 99) & 0xFFFFFFFF)
         crews_out, total_time, _timeline = art.plan_restoration(
-            outage_tuples, crews, rnd, realistic=realistic
+            outage_tuples, crews, rnd, realistic=realistic,
+            total_customers=total_customers,
         )
     else:
         raise RuntimeError("No scheduler backend available")
@@ -777,6 +807,12 @@ def _scheduler_time_only(outage_tuples, m_crews, seed, realistic,
     If a full RecommendRequest is supplied, routes through _run_scheduler so
     all realistic-mode flags (crew stickiness, specialization, hierarchy, etc.)
     are applied — matching what the full simulation produces."""
+    # total_customers must be computed the same way regardless of which
+    # branch below runs, or a bare-bones recommend call (no realism flags
+    # set) would silently skip workload_mult while /api/schedule doesn't —
+    # producing a "recommended" crew count that undershoots the time the
+    # actual simulation goes on to report for that count.
+    total_customers = sum(o.customers for o in req.outages) if req is not None else None
     if req is not None and (req.crew_specialization or req.crew_stickiness
                             or req.hierarchical or req.tiered_priority
                             or req.customer_weight or req.storm_duration):
@@ -792,16 +828,19 @@ def _scheduler_time_only(outage_tuples, m_crews, seed, realistic,
             tiered_priority=req.tiered_priority,
             storm_duration=req.storm_duration,
             crew_stickiness=req.crew_stickiness,
+            total_customers=total_customers,
         )
         return float(total)
     if _NUMBA:
         _, total, _ = plan_restoration_numba(
-            outage_tuples, m_crews, realistic=realistic, seed=seed
+            outage_tuples, m_crews, realistic=realistic, seed=seed,
+            total_customers=total_customers,
         )
         return float(total)
     if _FAST:
         _, total, _ = plan_restoration_fast(
-            outage_tuples, m_crews, realistic=realistic, seed=seed
+            outage_tuples, m_crews, realistic=realistic, seed=seed,
+            total_customers=total_customers,
         )
         return float(total)
     raise RuntimeError("No scheduler backend available")
@@ -1068,16 +1107,18 @@ def batch(req: BatchRequest) -> BatchResponse:
 
 def _mc_worker(args):
     """Top-level (picklable) worker invoked in the process pool."""
-    outage_tuples, crews, seed, realistic = args
+    outage_tuples, crews, seed, realistic, total_customers = args
     try:
         from scheduler_numba import plan_restoration_numba
         _, total, _ = plan_restoration_numba(outage_tuples, crews,
-                                             realistic=realistic, seed=seed)
+                                             realistic=realistic, seed=seed,
+                                             total_customers=total_customers)
         return total
     except Exception:
         from scheduler_fast import plan_restoration_fast
         _, total, _ = plan_restoration_fast(outage_tuples, crews,
-                                            realistic=realistic, seed=seed)
+                                            realistic=realistic, seed=seed,
+                                            total_customers=total_customers)
         return total
 
 
@@ -1106,8 +1147,10 @@ def monte_carlo(req: MonteCarloRequest) -> MonteCarloResponse:
         N = len(outage_tuples)
         use_pool = not has_sub_flags and (N * req.crews) > 10_000_000
         if use_pool:
+            total_customers = sum(o.customers for o in req.outages)
             jobs = [(outage_tuples, req.crews,
-                     (req.base_seed + k * 9973) & 0xFFFFFFFF, req.realistic)
+                     (req.base_seed + k * 9973) & 0xFFFFFFFF, req.realistic,
+                     total_customers)
                     for k in range(req.n_runs)]
             pool = _get_pool()
             times = list(pool.map(_mc_worker, jobs))

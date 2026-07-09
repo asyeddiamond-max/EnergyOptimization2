@@ -204,13 +204,20 @@ def haversine_miles(la1, lo1, la2, lo2):
     return 2 * R * math.asin(math.sqrt(s))
 
 
-def plan_restoration(outages, m_crews, rnd_master, realistic=True):
+def plan_restoration(outages, m_crews, rnd_master, realistic=True, total_customers=None):
     """Rolling-horizon greedy scheduler with all 5 items 1-5 modeled when realistic=True.
 
     Returns (crews, total_time, timeline) where timeline = list of (hour, remaining).
+
+    total_customers: real total customer count for this storm, driving
+    workload_mult (ported from the JS scheduler's workloadSlowdownMult — see
+    03_grid_simulation.html:planRestoration()). None -> no slowdown; this
+    illustrative/demo script has no per-outage customer data by default.
     """
     if not outages or m_crews == 0:
         return [], 0.0, []
+    tc = float(total_customers) if total_customers else 0.0
+    workload_mult = max(1.0, 0.00928 * (tc ** 0.473)) if tc > 0 else 1.0
     import heapq
     import math as _math
     TRAVEL_MPH = 25 if realistic else 30
@@ -308,14 +315,17 @@ def plan_restoration(outages, m_crews, rnd_master, realistic=True):
         remaining -= 1
         miles = haversine_miles(crew["lat"], crew["lon"], outages[best][0], outages[best][1]) * ROAD_MULTIPLIER
         repair_h = sample_repair()
-        eta = clamp(crew["time"] + miles / TRAVEL_MPH + repair_h)
+        eta = clamp(crew["time"] + (miles / TRAVEL_MPH + repair_h) * workload_mult)
         crew["time"] = eta
         crew["lat"], crew["lon"] = outages[best]
         crew["jobs"].append((outages[best], eta))
         heapq.heappush(heap, (eta, ci))
         if remaining % max(1, N // 80) == 0:
             timeline.append((eta, remaining))
-    total = max(c["time"] for c in crews)
+    # Only crews that actually did work define "restoration complete" (see
+    # scheduler_numba.py's plan_restoration_numba for the fuller rationale).
+    busy_times = [c["time"] for c in crews if c["jobs"]]
+    total = max(busy_times) if busy_times else 0.0
     return crews, total, sorted(timeline)
 
 

@@ -32,7 +32,7 @@ def _mulberry32_step(state):
 @njit(cache=True, fastmath=True)
 def _run_scheduler(lat, lon, m_crews, realistic, seed, customers, customer_weight,
                    travel_mph, assessment_delay, workday_hours, road_multiplier,
-                   storm_duration):
+                   storm_duration, workload_mult=1.0):
     """Dense-scan scheduler. Realism factors are now scheduler parameters
     rather than hardcoded constants so the calibration endpoint can tune
     them against observed restoration data.
@@ -41,7 +41,12 @@ def _run_scheduler(lat, lon, m_crews, realistic, seed, customers, customer_weigh
     which no work happens (bucket trucks grounded in high wind, lightning,
     etc.). The entire timeline (crew arrivals + outage discovery) is anchored
     after the storm passes, so it shifts by storm_duration. Applied only in
-    realistic mode."""
+    realistic mode.
+
+    workload_mult: large-scale logistics friction multiplier (see
+    plan_restoration_numba), applied to each job's travel+repair time. Ported
+    from the JS scheduler's workloadSlowdownMult fix — see
+    03_grid_simulation.html's planRestoration()."""
     N = lat.shape[0]
     use_weighted = customer_weight > 0.0
     TRAVEL_MPH = travel_mph if realistic else 30.0
@@ -239,7 +244,7 @@ def _run_scheduler(lat, lon, m_crews, realistic, seed, customers, customer_weigh
         a = math.sin(dphi * 0.5) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlam * 0.5) ** 2
         miles = 2.0 * R * math.asin(math.sqrt(a)) * ROAD_MULTIPLIER
 
-        eta = crew_time[ci] + miles / TRAVEL_MPH + repair_h
+        eta = crew_time[ci] + (miles / TRAVEL_MPH + repair_h) * workload_mult
         # Workday clamp.
         if realistic:
             dn = int(eta // 24.0)
@@ -272,9 +277,12 @@ def _run_scheduler(lat, lon, m_crews, realistic, seed, customers, customer_weigh
             else:
                 break
 
+    # Only crews that actually did work define "restoration complete" — a
+    # crew that never got dispatched a job just sits at its raw (possibly
+    # very late) ramp-arrival time, which is not real work finishing.
     total = 0.0
     for c in range(m_crews):
-        if crew_time[c] > total:
+        if crew_jobs[c] > 0 and crew_time[c] > total:
             total = crew_time[c]
     return total, crew_time, crew_jobs, log_crew[:n_log], log_outage[:n_log], log_eta[:n_log]
 
@@ -282,7 +290,7 @@ def _run_scheduler(lat, lon, m_crews, realistic, seed, customers, customer_weigh
 @njit(cache=True, fastmath=True)
 def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G, customers, customer_weight,
                         travel_mph, assessment_delay, workday_hours, road_multiplier,
-                        storm_duration):
+                        storm_duration, workload_mult=1.0):
     """Spatial-grid-hash variant. Same algorithm as _run_scheduler but the
     nearest-outage search uses a GxG bucket grid: walk concentric rings of
     cells until termination. O(K) per dispatch where K is local bucket
@@ -622,7 +630,7 @@ def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G, customers, custom
         a = math.sin(dphi * 0.5) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlam * 0.5) ** 2
         miles = 2.0 * R * math.asin(math.sqrt(a)) * ROAD_MULTIPLIER
 
-        eta = crew_time[ci] + miles / TRAVEL_MPH + repair_h
+        eta = crew_time[ci] + (miles / TRAVEL_MPH + repair_h) * workload_mult
         if realistic:
             dn = int(eta // 24.0); ind = eta - dn * 24.0
             if ind > WORKDAY_HOURS:
@@ -653,7 +661,7 @@ def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G, customers, custom
 
     total = 0.0
     for c in range(m_crews):
-        if crew_time[c] > total:
+        if crew_jobs[c] > 0 and crew_time[c] > total:
             total = crew_time[c]
     return total, crew_time, crew_jobs, log_crew[:n_log], log_outage[:n_log], log_eta[:n_log]
 
@@ -673,7 +681,7 @@ def plan_restoration_numba(outages, m_crews, realistic=True, seed=42,
                            workday_hours=DEFAULT_WORKDAY_HOURS,
                            road_multiplier=DEFAULT_ROAD_MULTIPLIER,
                            feeder_id=None, is_feeder=None, hierarchical=False,
-                           storm_duration=0.0):
+                           storm_duration=0.0, total_customers=None):
     """Public wrapper that returns the same shape as plan_restoration_fast.
 
     customers: optional list of per-outage customer counts. If None, treated
@@ -683,6 +691,11 @@ def plan_restoration_numba(outages, m_crews, realistic=True, seed=42,
     travel_mph / assessment_delay / workday_hours / road_multiplier:
         the four most-tunable realism factors. The calibration endpoint
         passes scipy's candidate values here.
+    total_customers: real (non-priority-inflated) total customer count for
+        this storm, used to derive workload_mult below. Callers that pass a
+        priority-bonused `customers` array for dispatch scoring (tiered
+        priority) MUST pass the real total here separately, or the bonus
+        would swamp the sum. Falls back to sum(customers) if omitted.
     feeder_id / is_feeder / hierarchical: The Realism Fix — hierarchical
         restoration, modelled as a *post-process on restoration times* rather
         than a dispatch constraint. Crews repair geographically (fast), but a
@@ -705,6 +718,13 @@ def plan_restoration_numba(outages, m_crews, realistic=True, seed=42,
     else:
         cust_arr = np.zeros(N, dtype=np.float64)
 
+    # Large-scale logistics friction — ported from the JS scheduler's
+    # workloadSlowdownMult (see 03_grid_simulation.html:planRestoration()).
+    # Derived by comparing simulated vs. real restoration times across 8
+    # real storms; real/simulated followed a ~sqrt(customers) relationship.
+    tc = float(total_customers) if total_customers is not None else float(cust_arr.sum())
+    workload_mult = max(1.0, 0.00928 * (tc ** 0.473)) if tc > 0 else 1.0
+
     # Both dense and grid schedulers now handle customer-weighted scoring.
     # The grid path uses an upper-bound termination condition so ring
     # expansion stays bounded even under weighted scoring. Use grid above
@@ -716,14 +736,14 @@ def plan_restoration_numba(outages, m_crews, realistic=True, seed=42,
                                 cust_arr, float(customer_weight),
                                 float(travel_mph), float(assessment_delay),
                                 float(workday_hours), float(road_multiplier),
-                                float(storm_duration))
+                                float(storm_duration), workload_mult)
     else:
         total, crew_time, crew_jobs, log_crew, log_outage, log_eta = \
             _run_scheduler(lat, lon, m_crews, realistic, seed,
                            cust_arr, float(customer_weight),
                            float(travel_mph), float(assessment_delay),
                            float(workday_hours), float(road_multiplier),
-                           float(storm_duration))
+                           float(storm_duration), workload_mult)
 
     # Rebuild per-crew job sequences from the flat dispatch log. The log is
     # already in dispatch order, so iterating it preserves repair sequence
