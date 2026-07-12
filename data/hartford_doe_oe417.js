@@ -33,11 +33,18 @@ window.HARTFORD_DOE_OE417 = [
     type: "Severe Weather — Hurricane",
     utility: "Connecticut Light & Power (now Eversource)",
     state: "CT",
-    customers_affected: 625000,
+    customers_affected: 496769,
     demand_loss_mw: null,
     duration_h: 264,
     restoration_complete: "2012-11-09",
-    notes: "11-day restoration across CT; some areas 14+ days",
+    notes: "11-day restoration across CT; some areas 14+ days. UPDATED " +
+      "2026-07: customers_affected corrected from an earlier 625,000 news-" +
+      "sourced estimate to the OFFICIAL PURA figure -- 496,769 CL&P " +
+      "customers concurrently at peak, cumulative restoration to 856,184 " +
+      "total customers over the storm -- per PURA Docket No. 13-03-23 " +
+      "(Petition of CL&P for Approval to Recover its 2011-2012 Major Storm " +
+      "Costs, Decision dated March 12, 2014), p. 1. The prior estimate was " +
+      "~26% too high.",
     daily_pct_out: [1.0, 0.90, 0.75, 0.58, 0.40, 0.27, 0.15, 0.08, 0.04, 0.01, 0.0],
     daily_crews: [600, 1100, 2000, 3000, 3600, 4000, 3800, 3000, 1800, 600, 150],
   },
@@ -47,11 +54,16 @@ window.HARTFORD_DOE_OE417 = [
     type: "Severe Weather — Hurricane/Tropical Storm",
     utility: "Connecticut Light & Power",
     state: "CT",
-    customers_affected: 670000,
+    customers_affected: 671789,
     demand_loss_mw: null,
     duration_h: 288,
     restoration_complete: "2011-09-09",
-    notes: "12-day restoration; worst in CL&P history at the time",
+    notes: "12-day restoration; worst in CL&P history at the time. UPDATED " +
+      "2026-07: customers_affected tightened from an earlier 670,000 " +
+      "estimate to the OFFICIAL PURA figure -- 671,789 CL&P customers " +
+      "concurrently at peak, cumulative restoration to 1,024,032 total " +
+      "customers over the storm -- per PURA Docket No. 13-03-23 (Decision " +
+      "dated March 12, 2014), p. 1. Barely changed from the prior estimate.",
     daily_pct_out: [1.0, 0.93, 0.82, 0.68, 0.52, 0.38, 0.25, 0.15, 0.08, 0.04, 0.01, 0.0],
     daily_crews: [500, 900, 1600, 2500, 3200, 3800, 3600, 3000, 2000, 1200, 500, 100],
   },
@@ -61,11 +73,18 @@ window.HARTFORD_DOE_OE417 = [
     type: "Severe Weather — Winter Storm",
     utility: "Connecticut Light & Power",
     state: "CT",
-    customers_affected: 830000,
+    customers_affected: 807228,
     demand_loss_mw: null,
     duration_h: 264,
     restoration_complete: "2011-11-09",
-    notes: "Unprecedented early snowstorm; trees still in leaf; worst CT outage event",
+    notes: "Unprecedented early snowstorm; trees still in leaf; worst CT " +
+      "outage event. UPDATED 2026-07: customers_affected tightened from an " +
+      "earlier 830,000 estimate to the OFFICIAL PURA figure -- 807,228 " +
+      "CL&P customers concurrently at peak, cumulative restoration to " +
+      "1,438,797 total customers over the storm (CL&P's largest cumulative " +
+      "restoration total of the three storms in this docket, despite Irene " +
+      "having a higher single-moment peak) -- per PURA Docket No. 13-03-23 " +
+      "(Decision dated March 12, 2014), p. 1.",
     daily_pct_out: [1.0, 0.94, 0.83, 0.70, 0.55, 0.38, 0.22, 0.12, 0.05, 0.02, 0.0],
     daily_crews: [400, 800, 1800, 3000, 4000, 4800, 4500, 3500, 2000, 800, 200],
   },

@@ -208,7 +208,11 @@ def run_storm(script: str, data_inject: str, land_geo: dict,
 # damage rather than a concentrated track).
 STORMS = [
     ("isaias_2020", 20450, 4500, 264, "Isaias 2020"),
-    ("sandy_2012", 19950, 4000, 264, "Sandy 2012"),
+    # n_out corrected 19950->15500 following an authoritative customer-count
+    # fix: PURA Docket 13-03-23's official decision gives Sandy's real CT
+    # peak as 496,769, not the ~625,000 news-sourced estimate previously
+    # used here (a ~26% overstatement) -- see data/hartford_doe_oe417.js.
+    ("sandy_2012", 15500, 4000, 264, "Sandy 2012"),
     ("irene_2011", 21350, 3800, 288, "Irene 2011"),
     ("", 26050, 4800, 264, "Snowtober 2011"),
     ("may2018", 3980, 1000, 192, "May 2018"),
