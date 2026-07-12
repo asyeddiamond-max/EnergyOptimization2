@@ -371,6 +371,7 @@
             <option value="dec2022_windstorm">December 2022 Windstorm (uniform placement)</option>
             <option value="oct2019_bomb_cyclone">October 2019 Bomb Cyclone (uniform placement)</option>
             <option value="sep2021_ida">Sep 2021 Ida Flooding (uniform placement)</option>
+            <option value="dec2025_windstorm">December 2025 Windstorm (uniform placement)</option>
           </select>
         </div>
         <div class="rf-item">
@@ -3933,6 +3934,7 @@ const REAL_STORM_PRESETS = {
   dec2022_windstorm:         {outages: 3900,  crews: 1100, realH: 72,  label: "Dec 2022 Windstorm"},
   oct2019_bomb_cyclone:      {outages: 1500,  crews: 400,  realH: 60,  label: "Oct 2019 Bomb Cyclone"},
   sep2021_ida:               {outages: 650,   crews: 300,  realH: 48,  label: "Sep 2021 Ida Flooding"},
+  dec2025_windstorm:         {outages: 2950,  crews: 700,  realH: 72,  label: "Dec 2025 Windstorm"},
 };
 document.getElementById('stormTrackSelect').addEventListener('change', function(){
   const preset = REAL_STORM_PRESETS[this.value];
