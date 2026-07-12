@@ -193,7 +193,7 @@
 
     <div class="ctrl">
       <div class="row"><span>Storm outages: <b id="oVal">500</b></span></div>
-      <input type="range" id="oSlider" min="50" max="100000" value="500" step="100" />
+      <input type="range" id="oSlider" min="50" max="100000" value="500" step="10" />
       <div class="small">How many failure points to place across feeders and laterals.</div>
     </div>
 
@@ -366,6 +366,11 @@
             <option value="ct_aug2020_tornado">Bethany-Hamden-N.Haven Tornado Aug 2020</option>
             <option value="oct2020_derecho">October 2020 Northeast Derecho</option>
             <option value="ct_sep2019_tornado">Coventry-Mansfield Tornado Sep 2019</option>
+            <option value="snowtober_2011">Snowtober 2011 (uniform placement)</option>
+            <option value="march2023_noreaster">March 2023 Nor'easter (uniform placement)</option>
+            <option value="dec2022_windstorm">December 2022 Windstorm (uniform placement)</option>
+            <option value="oct2019_bomb_cyclone">October 2019 Bomb Cyclone (uniform placement)</option>
+            <option value="sep2021_ida">Sep 2021 Ida Flooding (uniform placement)</option>
           </select>
         </div>
         <div class="rf-item">
@@ -3897,6 +3902,48 @@ document.getElementById('stormTrackSelect').addEventListener('change', function(
   if (!s || s.soil_wetness == null) return;
   const el = document.getElementById('soilSaturation');
   if (el) el.checked = s.soil_wetness > 0.35;
+});
+
+// Real-storm calibration presets -- (storm_outages, crews) tuned so this
+// scheduler's own simulated total customers lands close to each storm's
+// real customers_affected (see data/hartford_doe_oe417.js). Kept in sync
+// by hand with 16_calibrate_against_real_storms.py's STORMS list, the
+// harness this was tuned against -- if you recalibrate a storm there,
+// update the matching entry here too. realH is the real documented
+// duration in hours, shown alongside the simulated result for comparison.
+// Snowtober/March 2023/Dec 2022/Oct 2019/Sep 2021 have no real track or
+// HRRR data (uniform placement, same as leaving the dropdown blank) --
+// their keys here don't exist in HARTFORD_STORM_TRACKS or
+// CONNECTICUT_STORM_WIND on purpose, so placement falls through to the
+// default population-weighted behavior.
+const REAL_STORM_PRESETS = {
+  isaias_2020:              {outages: 20450, crews: 4500, realH: 264, label: "Isaias 2020"},
+  sandy_2012:                {outages: 15500, crews: 4000, realH: 264, label: "Sandy 2012"},
+  irene_2011:                {outages: 21350, crews: 3800, realH: 288, label: "Irene 2011"},
+  snowtober_2011:            {outages: 26050, crews: 4800, realH: 264, label: "Snowtober 2011"},
+  may2018:                   {outages: 3980,  crews: 1000, realH: 192, label: "May 2018"},
+  jan2024:                   {outages: 1650,  crews: 500,  realH: 72,  label: "Jan 2024"},
+  dec2023:                   {outages: 2850,  crews: 700,  realH: 96,  label: "Dec 2023"},
+  henri_2021:                {outages: 950,   crews: 300,  realH: 48,  label: "Henri 2021"},
+  ct_july2026_severe_tstorm: {outages: 6000,  crews: 702,  realH: 108, label: "July 2026 T-storm"},
+  ct_aug2020_tornado:        {outages: 1800,  crews: 380,  realH: 96,  label: "Aug 2020 Tornado"},
+  march2023_noreaster:       {outages: 900,   crews: 300,  realH: 72,  label: "March 2023 Nor'easter"},
+  oct2020_derecho:           {outages: 2800,  crews: 700,  realH: 96,  label: "Oct 2020 Derecho"},
+  ct_sep2019_tornado:        {outages: 80,    crews: 60,   realH: 24,  label: "Sep 2019 Tornado"},
+  dec2022_windstorm:         {outages: 3900,  crews: 1100, realH: 72,  label: "Dec 2022 Windstorm"},
+  oct2019_bomb_cyclone:      {outages: 1500,  crews: 400,  realH: 60,  label: "Oct 2019 Bomb Cyclone"},
+  sep2021_ida:               {outages: 650,   crews: 300,  realH: 48,  label: "Sep 2021 Ida Flooding"},
+};
+document.getElementById('stormTrackSelect').addEventListener('change', function(){
+  const preset = REAL_STORM_PRESETS[this.value];
+  if (!preset) return;
+  oS.value = String(preset.outages);
+  oS.dispatchEvent(new Event('input'));
+  cS.value = String(preset.crews);
+  cS.dispatchEvent(new Event('input'));
+  status.textContent = `Loaded real-storm preset: ${preset.label} `
+    + `(${preset.outages} outages, ${preset.crews} crews -- real restoration took ${preset.realH}h). `
+    + `Click "Generate distribution grid" then "Simulate storm" to run it.`;
 });
 
 // --- DOE OE-417 Events Panel ---

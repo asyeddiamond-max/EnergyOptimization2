@@ -159,8 +159,8 @@ window.HARTFORD_DOE_OE417 = [
     state: "CT",
     customers_affected: 180000,
     demand_loss_mw: null,
-    duration_h: 96,
-    restoration_complete: "2026-07-08",
+    duration_h: 108,
+    restoration_complete: "2026-07-09",
     notes: "Peak >180,000 Eversource CT customers (WFSB 7/8 follow-up; " +
       "supersedes this entry's original ~94,000 estimate, which came from " +
       "day-of news snapshots that understated the true peak). Hardest-hit: " +
@@ -178,14 +178,29 @@ window.HARTFORD_DOE_OE417 = [
       "presence within 12-24h). Per the article, Eversource's pre-storm " +
       "forecast was 30 hours stale and focused on the wrong region (Southwest " +
       "CT) while missing the actual impact area (Torrington/Harwinton, NW " +
-      "Litchfield County).",
+      "Litchfield County). UPDATED 2026-07-12: duration_h refined 96->108h " +
+      "after a user-flagged discrepancy prompted re-verification against " +
+      "primary sources. Traced two apparent contradictions to their root: " +
+      "(1) an early '~95,000 peak' figure circulating in some coverage is a " +
+      "2026-07-05 (day-1) snapshot, explicitly superseded by the 7/8 " +
+      "follow-up's 180,000+ figure once damage assessment caught up; (2) a " +
+      "widely-repeated '1-2 weeks' restoration estimate for Harwinton " +
+      "actually referred to DEBRIS CLEANUP ('it may take a month to fully " +
+      "clean up debris'), a separate, longer process from power " +
+      "restoration itself, for which the same official's direct quote was " +
+      "'residents should expect power to be out for several more days.' " +
+      "Direct power-restoration data points (16% of the hardest-hit area " +
+      "still without power on 7/7, day 3; Harwinton down from ~1,050 " +
+      "outstanding on day 2 to ~200 on day 3; Eversource targeting 'almost " +
+      "all' restored by 7/7 11:45pm) converge on ~4.5 days for the last " +
+      "customers, hence 108h rather than the original 96h.",
     // Approximate -- pieced together from news snapshots plus the 7/8 "4 days
     // to restore" and "36-48h to substantial crews" framing, not a single
     // authoritative hourly outage feed. Shaped to reflect the documented slow
     // start (crews.day1 << crews.day2, unlike this dataset's faster-ramping
     // storms) rather than a smooth ramp.
-    daily_pct_out: [1.0, 0.55, 0.15, 0.0],
-    daily_crews: [80, 500, 702, 250],
+    daily_pct_out: [1.0, 0.55, 0.15, 0.02, 0.0],
+    daily_crews: [80, 500, 702, 350, 80],
   },
   {
     // NOTE: real sources conflict on the peak figure for this storm. Several

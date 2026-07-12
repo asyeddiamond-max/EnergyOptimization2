@@ -235,7 +235,11 @@ STORMS = [
     # placed via the real HRRR grid, not synthetic town-centroid decay --
     # and correctly keeps getting the multiplier, since its gap looks like
     # tornado/derecho repair-severity complexity, a different mechanism.)
-    ("ct_july2026_severe_tstorm", 6000, 702, 96, "July 2026 T-storm"),
+    # real_h refined 96->108h 2026-07-12: user-flagged discrepancy led to
+    # re-verifying primary sources, which traced an early "~95k peak" claim
+    # to a superseded day-1 snapshot and a "1-2 weeks" claim to a debris-
+    # cleanup quote (not power restoration) -- see data/hartford_doe_oe417.js.
+    ("ct_july2026_severe_tstorm", 6000, 702, 108, "July 2026 T-storm"),
     ("ct_aug2020_tornado", 1800, 380, 96, "Aug 2020 Tornado"),
     # LOWER CONFIDENCE than the entries above: real, sourced peak customer
     # count (~26,800, Eversource press release + live news) and a same-day
