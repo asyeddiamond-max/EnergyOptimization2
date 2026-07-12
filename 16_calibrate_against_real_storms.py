@@ -305,6 +305,12 @@ STORMS = [
     # and crews (300) are interpolated directly from Henri 2021 (23,000
     # cust, nearly identical peak), not independently sourced.
     ("", 650, 300, 48, "Sep 2021 Ida Flooding"),
+    # Real rain/windstorm, 2025-12-19. Peak (~89,200) estimated from a
+    # restored+remaining snapshot ~30h post-storm; crews (700) interpolated
+    # from Dec 2023 (near-identical peak). duration_h (72) extends past the
+    # article's literal "substantially complete ~54h" milestone for the
+    # true last-customer tail, same pattern as the July 2026 entry.
+    ("", 2950, 700, 72, "Dec 2025 Windstorm"),
 ]
 
 

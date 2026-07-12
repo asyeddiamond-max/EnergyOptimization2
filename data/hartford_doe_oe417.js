@@ -534,4 +534,41 @@ window.HARTFORD_DOE_OE417 = [
     daily_pct_out: [1.0, 0.30, 0.0],
     daily_crews: [200, 300, 100],
   },
+  {
+    // Real, well-documented rain/windstorm, Friday 2025-12-19 into the
+    // weekend. Sourced directly from a WFSB article: 85,000+ customers
+    // restored by Saturday 10pm (day 1), ~4,200 still out at that point
+    // (hardest-hit: East Haddam, Killingly, Guilford, Brooklyn), 190
+    // blocked roads cleared, "hundreds of crews," with restoration
+    // targeted for substantially complete by Sunday night (day 2). Peak
+    // is a reasonable estimate from the restored+remaining snapshot
+    // (85,000 + 4,200 ~= 89,200); exact crew count not given, interpolated
+    // from Dec 2023 (89,000 cust -- nearly identical peak), the closest
+    // real neighbor by customer count. duration_h extended from the
+    // article's literal "~54h to substantially complete" to 72h, following
+    // the same pattern found in the July 2026 entry: a utility's
+    // "substantially complete" target is reliably a bit short of true
+    // full (last-customer) restoration, which is what this field and the
+    // model's own totalTime are meant to represent.
+    date: "2025-12-19",
+    event: "December 2025 Windstorm",
+    type: "Severe Weather — Rain and Windstorm",
+    utility: "Eversource Energy",
+    state: "CT",
+    customers_affected: 89200,
+    demand_loss_mw: null,
+    duration_h: 72,
+    restoration_complete: "2025-12-22",
+    notes: "Powerful Friday rain/windstorm. By Saturday 10pm (~30h after " +
+      "onset), Eversource had restored 85,000+ customers with ~4,200 still " +
+      "out, concentrated in East Haddam, Killingly, Guilford, and Brooklyn. " +
+      "190 blocked roads cleared. Crew count given only as 'hundreds,' not " +
+      "precise -- interpolated at 700 from Dec 2023. Utility targeted " +
+      "substantially complete by Sunday night (~54h after the storm); " +
+      "duration_h here reflects a modest extension past that milestone for " +
+      "the true last-customer tail (see note above), not a directly-" +
+      "sourced completion time.",
+    daily_pct_out: [1.0, 0.05, 0.01, 0.0],
+    daily_crews: [500, 700, 400, 100],
+  },
 ];
