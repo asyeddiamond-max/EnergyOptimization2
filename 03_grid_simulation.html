@@ -207,6 +207,22 @@
     <button class="action btn-storm" id="simStorm">Simulate storm</button>
     <div class="progress" id="stormProgress"><span class="label" id="stormProgressLabel">0%</span><div class="bar orange" id="stormProgressBar"></div></div>
 
+    <!-- LIVE MODE: real current Eversource CT outages (17_fetch_live_outages.py) -->
+    <div class="ctrl" style="background:#ecfdf5;border-color:#6ee7b7;margin-top:8px;">
+      <div style="font-size:11px;font-weight:700;color:#065f46;margin-bottom:3px;">&#x1F534; LIVE MODE &mdash; real current CT outages</div>
+      <div style="font-size:10px;color:#047857;line-height:1.4;margin-bottom:5px;">
+        Loads Eversource's actual current CT outages (real locations, customer counts, and the
+        utility's own restoration estimates) instead of a simulated storm. Then vary the crew
+        slider and plan restoration to test the model's prediction against Eversource's own
+        ETRs &mdash; and, after the event, against how long restoration <i>really</i> took
+        (snapshots are archived in data/live_snapshots/ for exactly that comparison).
+        Refresh the data with: <span style="font-family:ui-monospace,monospace;">python 17_fetch_live_outages.py</span>
+      </div>
+      <button class="action" id="loadLiveBtn" style="background:#059669;">Load LIVE CT outages</button>
+      <div id="liveStatus" style="font-size:10px;color:#065f46;margin-top:4px;font-family:ui-monospace,monospace;"></div>
+      <div id="liveCompare" style="display:none;font-size:10px;color:#065f46;margin-top:4px;padding:6px;background:#d1fae5;border-radius:4px;line-height:1.5;"></div>
+    </div>
+
     <div class="stat-box stat-affected">
       <div class="lbl">Customers without power</div>
       <div class="big" id="affected">0</div>
@@ -405,6 +421,10 @@
 <script src="./data/connecticut_storm_wind.js"></script>
 <script src="./data/connecticut_flood_corridors.js"></script>
 <script src="./data/connecticut_storm_events.js"></script>
+<!-- LIVE Eversource CT outages (17_fetch_live_outages.py). Optional: a 404
+     here just means the fetch script hasn't been run yet; live mode shows
+     instructions instead of data. -->
+<script src="./data/connecticut_live_outages.js"></script>
 <script>
 // Real Connecticut town population + centroid (169 towns), from the 2020
 // Census P.L. 94-171 Redistricting Data (11_fetch_census_tracts.py). Used as
@@ -1899,6 +1919,103 @@ async function simulateStorm(){
   setTimeout(()=>setStormProgress(0,false), 600);
 }
 
+// --- LIVE MODE: load real current Eversource CT outages as the storm ---
+// Data comes from data/connecticut_live_outages.js (17_fetch_live_outages.py).
+// Unlike a simulated storm, live outages are ALREADY REPORTED (no discovery
+// tail to model) and crews are ALREADY MOBILIZED (no 12h assessment delay, no
+// mutual-aid arrival ramp) -- planRestoration switches those mechanics off
+// when storm.isLive is set. The question live mode answers is: "starting from
+// right now, with M crews, how long until everything currently out is
+// restored?" -- which can then be cross-referenced against Eversource's own
+// per-outage ETRs (shown after planning) and, later, against how long
+// restoration actually took (snapshots archived in data/live_snapshots/).
+function loadLiveOutages(){
+  const live = window.CONNECTICUT_LIVE_OUTAGES;
+  const liveStatusEl = document.getElementById('liveStatus');
+  const liveCompareEl = document.getElementById('liveCompare');
+  liveCompareEl.style.display = 'none';
+  if (!live || !live.outages){
+    liveStatusEl.textContent = 'No live data file found. Run: python 17_fetch_live_outages.py';
+    return;
+  }
+  const fetchedMs = Date.parse(live.fetched_at);
+  const ageH = (Date.now() - fetchedMs) / 3.6e6;
+  if (!live.outages.length){
+    liveStatusEl.textContent = `Snapshot ${live.fetched_at} (${ageH.toFixed(1)}h old): zero CT outages — nothing to restore.`;
+    return;
+  }
+  // Clear any selected historical storm track: live mode must not inherit a
+  // past storm's HRRR temperature/precip repair multiplier or track overlay.
+  const trackSel = document.getElementById('stormTrackSelect');
+  if (trackSel.value){ trackSel.value = ''; renderStormTrack(); }
+
+  const outages = live.outages.map(o => ({
+    lat: o.lat, lon: o.lon,
+    popLoss: Math.max(1, o.customers|0),
+    critical: false,
+    kind: 'l', li: -1, fi: -1,
+    // Nearest real substation (for crew-stickiness territory grouping) when
+    // the grid has been generated; harmless -1 otherwise.
+    sub_id: -1,
+    // 0/1 only (NOT -1 "let server decide": -1 is truthy in JS, and the
+    // road-closure delay check is `if (o.tree_blocked)` -- a -1 here made
+    // every live outage eat a phantom road-clearing delay. Live mode never
+    // uses the server, so the -1 sentinel has no purpose anyway.)
+    tree_blocked: o.cause === 'TREE' ? 1 : 0,
+    wind_mph: 30,   // no wind field for a live snapshot; ordinary repair times
+    inc_id: o.inc_id, etr: o.etr, cause: o.cause, n_incidents: o.n_incidents,
+  }));
+  if (substations.length){
+    for (const o of outages){
+      let b = -1, bd = Infinity;
+      for (let s = 0; s < substations.length; s++){
+        const dx = substations[s].lat - o.lat, dy = substations[s].lon - o.lon;
+        const sq = dx*dx + dy*dy;
+        if (sq < bd){ bd = sq; b = s; }
+      }
+      o.sub_id = b;
+    }
+  }
+  const totalCust = outages.reduce((s, o) => s + o.popLoss, 0);
+
+  // Eversource's own per-outage restoration estimates, hours relative to the
+  // snapshot time -- the model's totalTime is directly comparable since live
+  // mode's t=0 is "now" (the snapshot moment).
+  const etrHours = outages
+    .map(o => Date.parse(o.etr))
+    .filter(Number.isFinite)
+    .map(ms => (ms - fetchedMs) / 3.6e6)
+    .sort((a, b) => a - b);
+  storm = {
+    outages, totalCust, switchRestoredCount: 0, isLocalized: false, isLive: true,
+    liveMeta: {
+      fetchedAt: live.fetched_at, ageH,
+      etrCount: etrHours.length,
+      etrMedianH: etrHours.length ? etrHours[Math.floor(etrHours.length/2)] : null,
+      etrMaxH: etrHours.length ? etrHours[etrHours.length-1] : null,
+    },
+  };
+  plan = null;
+
+  // Render (same canvas-batched path as simulateStorm).
+  outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
+  if (window._outageCloud){ map.removeLayer(window._outageCloud); window._outageCloud=null; }
+  if (window._criticalCloud){ map.removeLayer(window._criticalCloud); window._criticalCloud=null; }
+  if (window._depotCloud){ map.removeLayer(window._depotCloud); window._depotCloud=null; }
+  if (window._repairCloud){ map.removeLayer(window._repairCloud); window._repairCloud=null; }
+  const pts = outages.map(o => ({lat: o.lat, lon: o.lon}));
+  window._outageCloud = new PointCloudLayer(pts, {uniformColor:true, radius:4, fillColor:"#059669", stroke:"#022c22", lineWidth:1, fillOpacity:0.92}).addTo(map);
+
+  affectedEl.textContent = Math.round(totalCust).toLocaleString();
+  affectedPctEl.textContent = (100*totalCust/TOTAL_POP).toFixed(3)+"% of state population";
+  outageCountEl.textContent = outages.length.toLocaleString();
+  restoreTimeEl.textContent='—'; restoreDetailEl.textContent='— customers restored';
+  const staleWarn = ageH > 2 ? ` — STALE (run 17_fetch_live_outages.py to refresh)` : '';
+  liveStatusEl.textContent = `LIVE: ${outages.length} outage points, ${totalCust.toLocaleString()} customers · snapshot ${ageH.toFixed(1)}h old${staleWarn}`;
+  status.textContent = `LIVE outages loaded: ${outages.length} real Eversource CT outage points, ~${totalCust.toLocaleString()} customers without power. Set crews and click "Plan restoration".`;
+}
+document.getElementById('loadLiveBtn').onclick = loadLiveOutages;
+
 // --- Spatial grid hash for nearest-outage queries ---
 // At 25K outages × 5K crews, the per-crew linear scan dominates. This grid
 // indexes outages into ~500m cells; nearest queries inspect just a handful of
@@ -2173,8 +2290,13 @@ async function planRestoration(){
   // in Eversource storm filings: assessment delay, night-ops downtime, tiered
   // priority, longer per-repair time.
   const realistic = document.getElementById('realisticMode').checked;
+  // LIVE MODE (storm.isLive): outages are real, already-reported incidents
+  // and crews are already mobilized, so the pre-work timeline mechanics
+  // (12h assessment, discovery tail, mutual-aid arrival ramp) don't apply --
+  // t=0 is "now" and the question is purely dispatch/travel/repair.
+  const isLive = !!storm.isLive;
   const TRAVEL_MPH       = realistic ? 25   : 30;
-  const ASSESSMENT_DELAY = realistic ? 12   : 0;
+  const ASSESSMENT_DELAY = (realistic && !isLive) ? 12 : 0;
   const WORKDAY_HOURS    = realistic ? 14   : 24;
   const ROAD_MULTIPLIER  = realistic ? 1.5  : 1.0;   // item 5: real driving > haversine
   function clampToWorkday(t){
@@ -2279,7 +2401,9 @@ async function planRestoration(){
   const oLat=new Float64Array(N), oLon=new Float64Array(N);
   const discTime = new Float64Array(N);
   for (let i=0;i<N;i++){ oLat[i]=storm.outages[i].lat; oLon[i]=storm.outages[i].lon; }
-  if (realistic){
+  // Live mode: every outage is already reported (that's literally where the
+  // data came from), so discTime stays all-zero -- no discovery model.
+  if (realistic && !isLive){
     // With a fixed 36h cap regardless of N, any storm with more than ~100
     // outages was virtually guaranteed to have at least one outage undiscovered
     // until t=ASSESSMENT_DELAY+1+36=49h, no matter how few crews were needed
@@ -2321,7 +2445,9 @@ async function planRestoration(){
   // crews reach half their peak in under a day, not 3+ days.
   // Modeled as a logistic ramp: crews(t) = M / (1 + e^(-k*(t - t_mid)))
   let crewArrivals;
-  const useCrewRamp = realistic && M >= 6 &&
+  // Live mode: the crew count entered IS the currently-mobilized force --
+  // no logistic arrival ramp, no mutual-aid waves; everyone starts at t=0.
+  const useCrewRamp = realistic && !isLive && M >= 6 &&
     document.getElementById('crewTimeSeriesRamp') &&
     document.getElementById('crewTimeSeriesRamp').checked;
   if (useCrewRamp){
@@ -2358,7 +2484,7 @@ async function planRestoration(){
       crewArrivals.push(Math.max(ASSESSMENT_DELAY, raw) + i * 1e-4);
     }
     crewArrivals.sort((a,b)=>a-b);
-  } else if (realistic && M >= 6){
+  } else if (realistic && !isLive && M >= 6){
     const nInit = Math.ceil(M * 0.5);
     const nW1   = Math.ceil(M * 0.3);
     const nW2   = M - nInit - nW1;
@@ -2372,7 +2498,7 @@ async function planRestoration(){
 
   // Mutual-aid travel time: out-of-state crews in later waves get additional
   // drive time before they can begin work. MA/RI = +2h, NY = +4h, PA/OH = +6h.
-  const mutualAidOn = realistic && document.getElementById('mutualAidTravel') &&
+  const mutualAidOn = realistic && !isLive && document.getElementById('mutualAidTravel') &&
     document.getElementById('mutualAidTravel').checked;
   if (mutualAidOn && M >= 6){
     const rndMA = mulberry32(seed * 4217 + 41);
@@ -2442,15 +2568,26 @@ async function planRestoration(){
     if (storm.outages[i].switch_restored){ done[i]=1; switchSkipped++; }
   }
   // Tier-1 critical-facility priority (existing behavior, retained).
+  // LATENT BUG FIX (surfaced by live mode, where no outage is critical):
+  // the old code unconditionally pre-marked every non-critical outage done
+  // in realistic mode and set remaining=criticalCount. With criticalCount
+  // === 0 that's remaining=0 -- the dispatch loop never runs and the plan
+  // "completes" in 0h. Only enter the two-phase critical-first mode when
+  // there is actually at least one critical outage.
   let criticalCount = 0;
   if (realistic){
     for (let i=0;i<N;i++){
       if (done[i]) continue;
       if (storm.outages[i].critical) criticalCount++;
-      else done[i]=1;
+    }
+    if (criticalCount > 0){
+      for (let i=0;i<N;i++){
+        if (done[i]) continue;
+        if (!storm.outages[i].critical) done[i]=1;
+      }
     }
   }
-  let remaining = realistic ? criticalCount : (N - switchSkipped);
+  let remaining = (realistic && criticalCount > 0) ? criticalCount : (N - switchSkipped);
   let inCriticalPhase = realistic && criticalCount > 0;
 
   // Deepened crew stickiness: each crew tracks its current feeder_id.
@@ -2729,6 +2866,27 @@ async function planRestoration(){
   renderPlan(crews, totalTime, N, realistic);
   setPlanProgress(100);
   setTimeout(()=>setPlanProgress(0,false), 800);
+
+  // Live mode: cross-reference the model's prediction against Eversource's
+  // own per-outage ETRs. Both are hours from the same t=0 (the snapshot
+  // moment), so they're directly comparable. The model's number is a
+  // full-restoration (last customer) time; the utility's max ETR is its own
+  // last-outage estimate. Divergence in either direction is the interesting
+  // signal -- that's the accuracy experiment live mode exists for.
+  if (isLive && storm.liveMeta){
+    const lm = storm.liveMeta;
+    const el = document.getElementById('liveCompare');
+    const fmt = h => h == null ? 'n/a' : (h < 0 ? `${(-h).toFixed(1)}h overdue` : `${h.toFixed(1)}h`);
+    el.innerHTML =
+      `<b>Model prediction:</b> all ${N.toLocaleString()} outages restored in ` +
+      `<b>${totalTime.toFixed(1)}h</b> with ${M.toLocaleString()} crews.<br>` +
+      `<b>Eversource's own ETRs</b> (${lm.etrCount}/${N} outages, vs snapshot time): ` +
+      `median ${fmt(lm.etrMedianH)}, latest ${fmt(lm.etrMaxH)}.<br>` +
+      `<span style="color:#047857">Snapshot ${lm.ageH.toFixed(1)}h old. To validate later: note the real ` +
+      `all-clear time and Eversource's stated crew count, then re-run with that crew count ` +
+      `(archived: data/live_snapshots/).</span>`;
+    el.style.display = 'block';
+  }
 }
 
 // Extracted so the server-backed path (runServerPlan) can call it after
@@ -2780,7 +2938,10 @@ function renderPlan(crews, totalTime, N, realistic){
   restoreTimeEl.textContent = fmtDuration(totalTime);
   const modeNote = realistic ? ' · realistic mode' : ' · optimistic baseline';
   restoreDetailEl.textContent=`${N.toLocaleString()} jobs across ${crews.length.toLocaleString()} crews${modeNote}`;
-  status.textContent=`Restoration: ${crews.length.toLocaleString()} crews finish all ${N.toLocaleString()} repairs in ${fmtDuration(totalTime)}${realistic?' (includes 12 h assessment + overnight downtime)':''}.`;
+  status.textContent=`Restoration: ${crews.length.toLocaleString()} crews finish all ${N.toLocaleString()} repairs in ${fmtDuration(totalTime)}${
+    realistic ? (storm && storm.isLive
+      ? ' (LIVE mode: crews start now, outages already reported; includes overnight downtime)'
+      : ' (includes 12 h assessment + overnight downtime)') : ''}.`;
 
   renderRestorationCurve(crews, totalTime, fmtDuration);
 }
@@ -3142,6 +3303,11 @@ document.getElementById('wakeServerBtn').addEventListener('click', () => {
 // recommended crew count would invoke the in-browser scheduler with that
 // crew count + a 25k+ outage storm and crash the page.
 async function runPlanAutoRoute(){
+  // Live mode always uses the in-browser scheduler: the server's Numba path
+  // has no live-mode semantics (it would re-apply the 12h assessment delay,
+  // discovery tail, and mutual-aid arrival waves to outages that are already
+  // reported and crews that are already in the field).
+  if (storm && storm.isLive) return planRestoration();
   const wantServer = document.getElementById('useServerToggle').checked;
   if (wantServer && _serverHealthy) return runServerPlan();
   if (wantServer && !_serverHealthy){
@@ -4400,6 +4566,8 @@ function yieldToBrowser(){ return new Promise(r => setTimeout(r, 0)); }
 // ~17-iteration search lands in ~10-12 s vs minutes of in-browser JS.
 async function recommendCrewCountServer(){
   if (!storm || !storm.outages.length) return false;
+  // Live mode: force the in-browser search (server has no live-mode semantics).
+  if (storm.isLive) return false;
   const useServer = document.getElementById('useServerToggle').checked;
   if (!(useServer && _serverHealthy)) return false;
   const N = storm.outages.length;
@@ -4499,6 +4667,9 @@ async function recommendCrewCount(){
   const N = storm.outages.length;
   const seed = +seedI.value | 0;
   const realistic = document.getElementById('realisticMode').checked;
+  // Same live-mode semantics as planRestoration: already-reported outages,
+  // already-mobilized crews (see the isLive comments there).
+  const isLive = !!storm.isLive;
   status.textContent = `Preparing search over ${N.toLocaleString()} jobs…`;
   await yieldToBrowser();
 
@@ -4507,7 +4678,7 @@ async function recommendCrewCount(){
   // shared O(N log N) setup cost from "~10x repeated" down to "1x" across
   // the whole binary search.
   const TRAVEL_MPH       = realistic ? 25   : 30;
-  const ASSESSMENT_DELAY = realistic ? 12   : 0;
+  const ASSESSMENT_DELAY = (realistic && !isLive) ? 12 : 0;
   const WORKDAY_HOURS    = realistic ? 14   : 24;
   const ROAD_MULTIPLIER  = realistic ? 1.5  : 1.0;
   function clampToWorkday(t){
@@ -4520,7 +4691,7 @@ async function recommendCrewCount(){
   const oLat = new Float64Array(N), oLon = new Float64Array(N);
   const discTime = new Float64Array(N);
   for (let i=0;i<N;i++){ oLat[i]=outages[i].lat; oLon[i]=outages[i].lon; }
-  if (realistic){
+  if (realistic && !isLive){
     const discMaxTail = Math.max(3, 36 * Math.sqrt(N / 20000));
     const rndDisc = mulberry32(seed*991 + 7);
     for (let i=0;i<N;i++){
@@ -4575,7 +4746,7 @@ async function recommendCrewCount(){
       for (let i=0;i<M;i++){const s=outages[i%N]; depots.push({lat:s.lat,lon:s.lon});}
     }
     let crewArrivals;
-    if (realistic && M >= 6){
+    if (realistic && !isLive && M >= 6){
       const nInit = Math.ceil(M*0.5);
       const nW1   = Math.ceil(M*0.3);
       const nW2   = M - nInit - nW1;
@@ -4588,10 +4759,12 @@ async function recommendCrewCount(){
     }
     const crews = depots.map((d,i)=>({time:crewArrivals[i], curLat:d.lat, curLon:d.lon}));
     const done = new Uint8Array(N);
-    if (realistic){
+    // Same zero-critical guard as planRestoration: only run the critical-
+    // first phase when there IS a critical outage (live mode has none).
+    if (realistic && criticalCount > 0){
       for (let i=0;i<N;i++) if (!outages[i].critical) done[i]=1;
     }
-    let remaining = realistic ? criticalCount : N;
+    let remaining = (realistic && criticalCount > 0) ? criticalCount : N;
     let inCriticalPhase = realistic && criticalCount > 0;
     let firstUndoneDisc = 0;
     function nextDiscoveryAfter(t){
