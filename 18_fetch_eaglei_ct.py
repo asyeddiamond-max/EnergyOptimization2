@@ -50,50 +50,98 @@ UA = {"User-Agent": "Mozilla/5.0 connecticut-grid-resilience/1.0"}
 
 
 def stream_filter_year(year: int) -> Path:
+    """Streams the year file with Range-based resume. A dropped/stalled HTTP
+    connection mid-download looks exactly like a clean EOF to a naive reader
+    (this silently truncated the first 2021 attempt at July 26 -- caught
+    because the Henri/Ida validation windows came back empty), so this
+    tracks Content-Length, uses a hard per-read socket timeout, and
+    reconnects with a Range header until the full byte count has arrived."""
+    import socket
     fid = FILE_IDS[year]
     out_path = OUT_DIR / f"eaglei_ct_{year}.csv"
     url = DL.format(fid=fid)
     print(f"Streaming {url} (year {year}), filtering to Connecticut rows...")
-    req = urllib.request.Request(url, headers=UA)
     t0 = time.time()
     n_total = 0
     n_ct = 0
     header = None
     buf = b""
-    with urllib.request.urlopen(req, timeout=120) as r, open(out_path, "w", encoding="utf-8", newline="") as out:
-        while True:
-            chunk = r.read(1 << 20)  # 1 MB
-            if not chunk:
-                break
-            buf += chunk
-            lines = buf.split(b"\n")
-            buf = lines.pop()  # trailing partial line
-            for raw in lines:
-                line = raw.decode("utf-8", errors="replace").rstrip("\r")
-                if header is None:
-                    header = line
-                    out.write(header + "\n")
-                    continue
-                n_total += 1
-                # state is the 3rd column; substring check is a fast pre-filter,
-                # exact column check below protects against e.g. a county name
-                # ever containing the string.
-                if "Connecticut" not in line:
-                    continue
-                parts = line.split(",")
-                if len(parts) >= 3 and parts[2] == "Connecticut":
-                    out.write(line + "\n")
-                    n_ct += 1
-            if n_total and n_total % 5_000_000 < 40000:
-                mb = (time.time() - t0)
-                print(f"  ... {n_total/1e6:.0f}M rows scanned, {n_ct} CT rows, {mb:.0f}s elapsed")
-        if buf:
-            line = buf.decode("utf-8", errors="replace").rstrip("\r")
+    received = 0
+    content_length = None
+    attempts = 0
+    MAX_ATTEMPTS = 30
+
+    out = open(out_path, "w", encoding="utf-8", newline="")
+
+    def process_lines():
+        nonlocal buf, header, n_total, n_ct
+        lines = buf.split(b"\n")
+        buf = lines.pop()  # trailing partial line stays buffered across reconnects
+        for raw in lines:
+            line = raw.decode("utf-8", errors="replace").rstrip("\r")
+            if header is None:
+                header = line
+                out.write(header + "\n")
+                continue
+            n_total += 1
+            if "Connecticut" not in line:
+                continue
             parts = line.split(",")
             if len(parts) >= 3 and parts[2] == "Connecticut":
                 out.write(line + "\n")
                 n_ct += 1
-    print(f"  done: {n_total:,} rows scanned -> {n_ct:,} CT rows in {time.time()-t0:.0f}s")
+
+    while True:
+        headers = dict(UA)
+        if received:
+            headers["Range"] = f"bytes={received}-"
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                if content_length is None:
+                    content_length = int(r.headers.get("Content-Length") or 0) or None
+                    print(f"  content length: {content_length/1e6:.0f} MB" if content_length else "  content length unknown")
+                # Hard per-read timeout so a stalled connection raises instead
+                # of hanging for hours.
+                r.fp.raw._sock.settimeout(60) if hasattr(r, "fp") else None
+                while True:
+                    chunk = r.read(1 << 20)
+                    if not chunk:
+                        break
+                    received += len(chunk)
+                    buf += chunk
+                    process_lines()
+                    if n_total and n_total % 5_000_000 < 40000:
+                        print(f"  ... {n_total/1e6:.0f}M rows, {n_ct} CT rows, "
+                              f"{received/1e6:.0f} MB, {time.time()-t0:.0f}s")
+        except (urllib.error.URLError, socket.timeout, ConnectionError, OSError) as e:
+            attempts += 1
+            if attempts >= MAX_ATTEMPTS:
+                out.close()
+                raise SystemExit(f"  FAILED after {MAX_ATTEMPTS} reconnect attempts at byte {received}: {e}")
+            print(f"  connection error at byte {received} ({e}); resuming (attempt {attempts})...")
+            time.sleep(min(30, 2 * attempts))
+            continue
+        # Clean EOF -- but is it the real end?
+        if content_length is not None and received < content_length:
+            attempts += 1
+            if attempts >= MAX_ATTEMPTS:
+                out.close()
+                raise SystemExit(f"  FAILED: repeated truncation at byte {received}/{content_length}")
+            print(f"  TRUNCATED at byte {received:,}/{content_length:,}; resuming (attempt {attempts})...")
+            time.sleep(min(30, 2 * attempts))
+            continue
+        break
+
+    if buf:
+        line = buf.decode("utf-8", errors="replace").rstrip("\r")
+        parts = line.split(",")
+        if len(parts) >= 3 and parts[2] == "Connecticut":
+            out.write(line + "\n")
+            n_ct += 1
+    out.close()
+    print(f"  done: {n_total:,} rows scanned -> {n_ct:,} CT rows in {time.time()-t0:.0f}s "
+          f"({received:,} bytes{f' of {content_length:,}' if content_length else ''})")
     print(f"  wrote {out_path}")
     return out_path
 

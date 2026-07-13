@@ -46,7 +46,8 @@ def _haversine_miles_vec(lat1, lon1, lat2_arr, lon2_arr):
     return 2 * R * np.arcsin(np.sqrt(a))
 
 
-def plan_restoration_fast(outages, m_crews, realistic=True, seed=42, total_customers=None):
+def plan_restoration_fast(outages, m_crews, realistic=True, seed=42, total_customers=None,
+                          overnight_ops=None):
     """Vectorized scheduler. `outages` is a list of (lat, lon) tuples.
 
     Returns (crews, total_time, timeline) in the same shape as the reference
@@ -56,6 +57,9 @@ def plan_restoration_fast(outages, m_crews, realistic=True, seed=42, total_custo
     workload_mult below (ported from the JS scheduler's workloadSlowdownMult
     — see 03_grid_simulation.html:planRestoration()). None/0 -> no slowdown
     (this fallback path has no per-outage customer data to sum itself).
+    overnight_ops: small-storm overnight operations (see scheduler_numba.py's
+    plan_restoration_numba for the EAGLE-I-derived rationale); None derives
+    it from total_customers.
     """
     N = len(outages)
     if N == 0 or m_crews == 0:
@@ -63,10 +67,12 @@ def plan_restoration_fast(outages, m_crews, realistic=True, seed=42, total_custo
 
     tc = float(total_customers) if total_customers is not None else 0.0
     workload_mult = max(1.0, 0.00928 * (tc ** 0.473)) if tc > 0 else 1.0
+    if overnight_ops is None:
+        overnight_ops = 0 < tc <= 70000
 
     TRAVEL_MPH = 25 if realistic else 30
     ASSESSMENT_DELAY = 12 if realistic else 0
-    WORKDAY_HOURS = 14 if realistic else 24
+    WORKDAY_HOURS = 24 if overnight_ops else (14 if realistic else 24)
     ROAD_MULTIPLIER = 1.5 if realistic else 1.0
 
     lat = np.array([o[0] for o in outages], dtype=np.float64)

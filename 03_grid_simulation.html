@@ -2313,8 +2313,21 @@ async function planRestoration(){
   const ASSESSMENT_DELAY = (realistic && !isLive) ? 12 : 0;
   const WORKDAY_HOURS    = realistic ? 14   : 24;
   const ROAD_MULTIPLIER  = realistic ? 1.5  : 1.0;   // item 5: real driving > haversine
+  // Small-storm overnight operations. EAGLE-I's measured 15-minute data
+  // (19_validate_against_eaglei.py) shows utilities work SMALL events
+  // through the night: Oct 2020 derecho (27,943 cust) fully restored in
+  // 28h, Aug 2020 tornado (63,912 cust) in 66h -- while this model's hard
+  // 14h-workday stop quantized both to 48h/96h (a consistent 0.58-0.69
+  // ratio pattern across three small storms). Nightly shutdowns are a
+  // mega-storm behavior: multi-day events force crew rest rotations, and
+  // the 4 mega-storm fits (Isaias/Sandy/Irene/Snowtober, 0.97-1.36) were
+  // calibrated WITH the clamp, so it stays for them. The threshold sits
+  // between the largest EAGLE-I-measured overnight-cleared storm (63,912)
+  // and the smallest clamp-consistent reference (Dec 2023, 89,000).
+  const OVERNIGHT_CUST_MAX = 70000;
+  const overnightOps = realistic && storm.totalCust <= OVERNIGHT_CUST_MAX;
   function clampToWorkday(t){
-    if (!realistic) return t;
+    if (!realistic || overnightOps) return t;
     const dayN = Math.floor(t/24);
     const inDay = t - dayN*24;
     return inDay > WORKDAY_HOURS ? (dayN+1)*24 : t;
@@ -4695,8 +4708,13 @@ async function recommendCrewCount(){
   const ASSESSMENT_DELAY = (realistic && !isLive) ? 12 : 0;
   const WORKDAY_HOURS    = realistic ? 14   : 24;
   const ROAD_MULTIPLIER  = realistic ? 1.5  : 1.0;
+  // Same small-storm overnight-ops gate as planRestoration (see the
+  // EAGLE-I-derived rationale there); keeps the crew-count recommendation
+  // consistent with what the plan itself will report.
+  const OVERNIGHT_CUST_MAX = 70000;
+  const overnightOps = realistic && storm.totalCust <= OVERNIGHT_CUST_MAX;
   function clampToWorkday(t){
-    if (!realistic) return t;
+    if (!realistic || overnightOps) return t;
     const dayN = Math.floor(t/24);
     const inDay = t - dayN*24;
     return inDay > WORKDAY_HOURS ? (dayN+1)*24 : t;

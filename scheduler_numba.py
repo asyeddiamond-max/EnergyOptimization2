@@ -681,7 +681,8 @@ def plan_restoration_numba(outages, m_crews, realistic=True, seed=42,
                            workday_hours=DEFAULT_WORKDAY_HOURS,
                            road_multiplier=DEFAULT_ROAD_MULTIPLIER,
                            feeder_id=None, is_feeder=None, hierarchical=False,
-                           storm_duration=0.0, total_customers=None):
+                           storm_duration=0.0, total_customers=None,
+                           overnight_ops=None):
     """Public wrapper that returns the same shape as plan_restoration_fast.
 
     customers: optional list of per-outage customer counts. If None, treated
@@ -725,6 +726,18 @@ def plan_restoration_numba(outages, m_crews, realistic=True, seed=42,
     tc = float(total_customers) if total_customers is not None else float(cust_arr.sum())
     workload_mult = max(1.0, 0.00928 * (tc ** 0.473)) if tc > 0 else 1.0
 
+    # Small-storm overnight operations — ported from the JS scheduler (see
+    # OVERNIGHT_CUST_MAX in 03_grid_simulation.html:planRestoration() for
+    # the EAGLE-I-derived rationale): utilities work small events through
+    # the night instead of stopping at the 14h workday line. overnight_ops
+    # can be forced by the caller (07_server.py passes it explicitly, since
+    # its is_localized path zeroes total_customers and would otherwise make
+    # small localized storms look "unknown-size" here); when None it is
+    # derived from total_customers.
+    if overnight_ops is None:
+        overnight_ops = 0 < tc <= 70000
+    eff_workday = 24.0 if overnight_ops else float(workday_hours)
+
     # Both dense and grid schedulers now handle customer-weighted scoring.
     # The grid path uses an upper-bound termination condition so ring
     # expansion stays bounded even under weighted scoring. Use grid above
@@ -735,14 +748,14 @@ def plan_restoration_numba(outages, m_crews, realistic=True, seed=42,
             _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G,
                                 cust_arr, float(customer_weight),
                                 float(travel_mph), float(assessment_delay),
-                                float(workday_hours), float(road_multiplier),
+                                eff_workday, float(road_multiplier),
                                 float(storm_duration), workload_mult)
     else:
         total, crew_time, crew_jobs, log_crew, log_outage, log_eta = \
             _run_scheduler(lat, lon, m_crews, realistic, seed,
                            cust_arr, float(customer_weight),
                            float(travel_mph), float(assessment_delay),
-                           float(workday_hours), float(road_multiplier),
+                           eff_workday, float(road_multiplier),
                            float(storm_duration), workload_mult)
 
     # Rebuild per-crew job sequences from the flat dispatch log. The log is

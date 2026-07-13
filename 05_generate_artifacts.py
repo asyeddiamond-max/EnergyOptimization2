@@ -218,11 +218,13 @@ def plan_restoration(outages, m_crews, rnd_master, realistic=True, total_custome
         return [], 0.0, []
     tc = float(total_customers) if total_customers else 0.0
     workload_mult = max(1.0, 0.00928 * (tc ** 0.473)) if tc > 0 else 1.0
+    # Small-storm overnight ops (see scheduler_numba.plan_restoration_numba).
+    overnight_ops = 0 < tc <= 70000
     import heapq
     import math as _math
     TRAVEL_MPH = 25 if realistic else 30
     ASSESSMENT_DELAY = 12 if realistic else 0
-    WORKDAY_HOURS = 14 if realistic else 24
+    WORKDAY_HOURS = 24 if overnight_ops else (14 if realistic else 24)
     ROAD_MULTIPLIER = 1.5 if realistic else 1.0
     N = len(outages)
 

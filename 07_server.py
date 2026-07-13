@@ -476,7 +476,7 @@ def _run_scheduler_sticky(req_outages, crews, seed, realistic, customer_weight,
                           hierarchical, tiered_priority, storm_duration,
                           road_multiplier=1.5, assessment_delay=12.0,
                           tree_blocked_rate_multiplier=1.0, total_customers=None,
-                          is_localized=False):
+                          is_localized=False, overnight_ops=None):
     """Crew stickiness: partition outages by substation territory (sub_id),
     split crews proportionally to each territory's customer count, run one
     independent sub-scheduler per territory in parallel. Total restoration =
@@ -548,6 +548,7 @@ def _run_scheduler_sticky(req_outages, crews, seed, realistic, customer_weight,
             tree_blocked_rate_multiplier=tree_blocked_rate_multiplier,
             total_customers=total_customers,
             is_localized=is_localized,
+            overnight_ops=overnight_ops,
         )
 
     futures = []
@@ -574,7 +575,8 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
                                storm_duration=0.0, road_multiplier=1.5,
                                assessment_delay=12.0,
                                tree_blocked_rate_multiplier=1.0,
-                               total_customers=None, is_localized=False):
+                               total_customers=None, is_localized=False,
+                               overnight_ops=None):
     """Crew specialization model: split outages by type, split crews by type,
     run two independent scheduler calls IN PARALLEL, merge results. Total
     restoration time = max of the two subsystems' finish times.
@@ -601,7 +603,8 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
                               road_multiplier=road_multiplier,
                               assessment_delay=assessment_delay,
                               total_customers=total_customers,
-                              is_localized=is_localized)
+                              is_localized=is_localized,
+                              overnight_ops=overnight_ops)
 
     tree_outages = [req_outages[i] for i in tree_idx]
     line_outages = [req_outages[i] for i in line_idx]
@@ -613,14 +616,16 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
                              hierarchical, tiered_priority, storm_duration,
                              False, road_multiplier, assessment_delay,
                              tree_blocked_rate_multiplier,
-                             total_customers=total_customers, is_localized=is_localized)
+                             total_customers=total_customers, is_localized=is_localized,
+                             overnight_ops=overnight_ops)
         fut_line = ex.submit(_run_scheduler, line_outages, n_line,
                              seed + 2, realistic, customer_weight,
                              False, tree_blocked_rate, tree_crew_share,
                              hierarchical, tiered_priority, storm_duration,
                              False, road_multiplier, assessment_delay,
                              tree_blocked_rate_multiplier,
-                             total_customers=total_customers, is_localized=is_localized)
+                             total_customers=total_customers, is_localized=is_localized,
+                             overnight_ops=overnight_ops)
         t_tree, crews_tree = fut_tree.result()
         t_line, crews_line = fut_line.result()
 
@@ -661,6 +666,7 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
                    tree_blocked_rate_multiplier: float = 1.0,
                    total_customers: float | None = None,
                    is_localized: bool = False,
+                   overnight_ops: bool | None = None,
                    ) -> tuple[float, list[CrewResult]]:
     """Call the shared scheduler and convert the result into our response shape.
 
@@ -671,7 +677,17 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
     partial subset of outages — see _run_scheduler_sticky.
     is_localized: True for a storm confined to one corner of the state (see
     ScheduleRequest.is_localized) -- forces total_customers to 0 when the
-    caller didn't already supply one, which yields workload_mult=1x."""
+    caller didn't already supply one, which yields workload_mult=1x.
+    overnight_ops: small-storm overnight operations (see scheduler_numba.py
+    for the EAGLE-I-derived rationale). Decided HERE from the whole storm's
+    REAL customer sum -- deliberately not derived downstream from
+    total_customers, because the is_localized path zeroes total_customers
+    (to kill workload_mult) and a small localized storm must still get
+    overnight ops. Threaded through territory/specialization sub-calls like
+    total_customers so subsets never re-decide it."""
+    if overnight_ops is None:
+        real_total = sum(o.customers for o in req_outages)
+        overnight_ops = bool(realistic and 0 < real_total <= 70000)
     if total_customers is None:
         total_customers = 0 if is_localized else sum(o.customers for o in req_outages)
     if crew_stickiness and len(req_outages) >= 10 and \
@@ -682,6 +698,7 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
             hierarchical, tiered_priority, storm_duration, road_multiplier,
             assessment_delay, tree_blocked_rate_multiplier,
             total_customers=total_customers, is_localized=is_localized,
+            overnight_ops=overnight_ops,
         )
     if crew_specialization and len(req_outages) >= 10:
         return _run_scheduler_specialized(
@@ -690,6 +707,7 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
             storm_duration, road_multiplier,
             assessment_delay, tree_blocked_rate_multiplier,
             total_customers=total_customers, is_localized=is_localized,
+            overnight_ops=overnight_ops,
         )
     outage_tuples = [(o.lat, o.lon) for o in req_outages]
     customers = [o.customers for o in req_outages]
@@ -714,11 +732,13 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
             road_multiplier=road_multiplier,
             assessment_delay=assessment_delay,
             total_customers=total_customers,
+            overnight_ops=overnight_ops,
         )
     elif _FAST:
         crews_out, total_time, _timeline = plan_restoration_fast(
             outage_tuples, crews, realistic=realistic, seed=seed,
             total_customers=total_customers,
+            overnight_ops=overnight_ops,
         )
     elif art is not None:
         rnd = art.mulberry32((seed * 31 + 99) & 0xFFFFFFFF)
@@ -836,9 +856,14 @@ def _scheduler_time_only(outage_tuples, m_crews, seed, realistic,
     # producing a "recommended" crew count that undershoots the time the
     # actual simulation goes on to report for that count.
     if req is not None:
-        total_customers = 0 if req.is_localized else sum(o.customers for o in req.outages)
+        real_total = sum(o.customers for o in req.outages)
+        total_customers = 0 if req.is_localized else real_total
+        # Overnight ops from the REAL sum (see _run_scheduler) so small
+        # localized storms keep overnight behavior in the recommend search.
+        overnight_ops = bool(realistic and 0 < real_total <= 70000)
     else:
         total_customers = None
+        overnight_ops = None
     if req is not None and (req.crew_specialization or req.crew_stickiness
                             or req.hierarchical or req.tiered_priority
                             or req.customer_weight or req.storm_duration):
@@ -856,18 +881,21 @@ def _scheduler_time_only(outage_tuples, m_crews, seed, realistic,
             crew_stickiness=req.crew_stickiness,
             total_customers=total_customers,
             is_localized=req.is_localized,
+            overnight_ops=overnight_ops,
         )
         return float(total)
     if _NUMBA:
         _, total, _ = plan_restoration_numba(
             outage_tuples, m_crews, realistic=realistic, seed=seed,
             total_customers=total_customers,
+            overnight_ops=overnight_ops,
         )
         return float(total)
     if _FAST:
         _, total, _ = plan_restoration_fast(
             outage_tuples, m_crews, realistic=realistic, seed=seed,
             total_customers=total_customers,
+            overnight_ops=overnight_ops,
         )
         return float(total)
     raise RuntimeError("No scheduler backend available")
@@ -1134,18 +1162,20 @@ def batch(req: BatchRequest) -> BatchResponse:
 
 def _mc_worker(args):
     """Top-level (picklable) worker invoked in the process pool."""
-    outage_tuples, crews, seed, realistic, total_customers = args
+    outage_tuples, crews, seed, realistic, total_customers, overnight_ops = args
     try:
         from scheduler_numba import plan_restoration_numba
         _, total, _ = plan_restoration_numba(outage_tuples, crews,
                                              realistic=realistic, seed=seed,
-                                             total_customers=total_customers)
+                                             total_customers=total_customers,
+                                             overnight_ops=overnight_ops)
         return total
     except Exception:
         from scheduler_fast import plan_restoration_fast
         _, total, _ = plan_restoration_fast(outage_tuples, crews,
                                             realistic=realistic, seed=seed,
-                                            total_customers=total_customers)
+                                            total_customers=total_customers,
+                                            overnight_ops=overnight_ops)
         return total
 
 
@@ -1174,10 +1204,12 @@ def monte_carlo(req: MonteCarloRequest) -> MonteCarloResponse:
         N = len(outage_tuples)
         use_pool = not has_sub_flags and (N * req.crews) > 10_000_000
         if use_pool:
-            total_customers = 0 if req.is_localized else sum(o.customers for o in req.outages)
+            real_total = sum(o.customers for o in req.outages)
+            total_customers = 0 if req.is_localized else real_total
+            overnight_ops = bool(req.realistic and 0 < real_total <= 70000)
             jobs = [(outage_tuples, req.crews,
                      (req.base_seed + k * 9973) & 0xFFFFFFFF, req.realistic,
-                     total_customers)
+                     total_customers, overnight_ops)
                     for k in range(req.n_runs)]
             pool = _get_pool()
             times = list(pool.map(_mc_worker, jobs))
