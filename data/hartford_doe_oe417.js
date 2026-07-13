@@ -23,7 +23,19 @@ window.HARTFORD_DOE_OE417 = [
     demand_loss_mw: null,
     duration_h: 264,
     restoration_complete: "2020-08-14",
-    notes: "11-day restoration; 504 line crews + 235 tree crews day 1, peaked at 4500+",
+    notes: "11-day restoration; 504 line crews + 235 tree crews day 1, peaked " +
+      "at 4500+. VALIDATED 2026-07-13 against ORNL's EAGLE-I dataset " +
+      "(doi:10.6084/m9.figshare.24237376): EAGLE-I's measured CT peak was " +
+      "725,700 customers (ALL CT utilities) at 2020-08-05 14:30 UTC -- " +
+      "consistent with this entry's 632,632 Eversource-only figure plus " +
+      "UI's ~93,000 share. One nuance: EAGLE-I shows statewide return to " +
+      "<=2x blue-sky baseline at 199h (~8.3 days), while this entry's 264h " +
+      "(~11 days) reflects the PURA-docket/news last-customer tail -- the " +
+      "difference is individual service repairs and re-reported stragglers " +
+      "that the outage-map feed (EAGLE-I's source) counts differently than " +
+      "the regulatory record. Both are kept: 264h remains the value here " +
+      "since this dataset's duration convention is the full regulatory " +
+      "restoration timeline.",
     daily_pct_out: [1.0, 0.92, 0.78, 0.60, 0.42, 0.28, 0.16, 0.08, 0.03, 0.01, 0.0],
     daily_crews: [739, 1200, 2100, 3280, 3800, 4500, 4200, 3500, 2000, 800, 200],
   },
@@ -272,32 +284,43 @@ window.HARTFORD_DOE_OE417 = [
     // this specific event, though it likely appears in the same Docket
     // 25-12-13 storm-cost-recovery filing as Quinn above (43 storms,
     // 2018-2023 -- this one is just outside that window, in 2020).
+    // CORRECTED 2026-07-13 against ORNL's EAGLE-I recorded outage dataset
+    // (doi:10.6084/m9.figshare.24237376, 95% CT coverage in 2020): measured
+    // CT peak was 63,912 customers (all utilities) at 2020-08-27 22:00 UTC
+    // -- the original 54,000 (25k ES + 29k UI from separate point-in-time
+    // news snapshots) understated the true simultaneous peak by ~16%.
+    // Duration also corrected 96h -> 66h: the old figure used UI's
+    // "hardest rebuild areas by Monday" outer bound, while EAGLE-I measures
+    // statewide return to <=2x blue-sky baseline in 66h (bulk restoration
+    // <=5% of peak in 50h -- consistent with the reported ~32h/~56h
+    // "substantially complete" milestones).
     date: "2020-08-27",
     event: "Bethany-Hamden-North Haven Tornado + Severe T-storm",
     type: "Severe Weather — Thunderstorms/Tornado (non-tropical, no HURDAT2 track)",
     utility: "Eversource Energy",
     state: "CT",
-    customers_affected: 54000,
+    customers_affected: 63912,
     demand_loss_mw: null,
-    duration_h: 96,
-    restoration_complete: "2020-08-31",
+    duration_h: 66,
+    restoration_complete: "2020-08-30",
     notes: "NWS confirmed an EF1 tornado (110 mph) touched down in Bethany " +
       "~3:55pm and tracked ~11 miles southeast through Hamden to North Haven " +
       "by 4:00pm. Branford was separately hit hardest by straight-line " +
       "severe-thunderstorm wind in the same system (99%+ of its Eversource " +
-      "customers out), not the tornado path itself. Combined statewide peak: " +
-      "~25,000 Eversource (11pm night-of) + ~29,000 United Illuminating. " +
+      "customers out), not the tornado path itself. Peak 63,912 CT customers " +
+      "(EAGLE-I measured, all utilities; news snapshots had suggested ~25,000 " +
+      "Eversource + ~29,000 United Illuminating at separate moments). " +
       "Eversource crews: 380 total, 80 specifically assigned to Branford. " +
       "Response was notably FAST relative to July 2026 above -- Eversource " +
       "substantially complete for all towns except Branford by midnight " +
-      "Friday (~32h after the storm), Branford by Saturday night (~56h); UI's " +
-      "hardest system-rebuild areas cleared by Monday (~96h). daily_crews " +
-      "shaped as a fast ramp (already near half of peak crews same-day) to " +
-      "reflect this -- unlike July 2026's documented slow start, there's no " +
-      "reporting here of a mobilization delay or public criticism of the " +
-      "initial response.",
-    daily_pct_out: [1.0, 0.15, 0.05, 0.02, 0.0],
-    daily_crews: [200, 380, 150, 50, 10],
+      "Friday (~32h after the storm), Branford by Saturday night (~56h); " +
+      "EAGLE-I-measured full restoration at 66h. daily_crews shaped as a " +
+      "fast ramp (already near half of peak crews same-day) to reflect this " +
+      "-- unlike July 2026's documented slow start, there's no reporting " +
+      "here of a mobilization delay or public criticism of the initial " +
+      "response.",
+    daily_pct_out: [1.0, 0.10, 0.02, 0.0],
+    daily_crews: [200, 380, 150, 20],
   },
   {
     // LOWER CONFIDENCE, similar caveat to Winter Storm Quinn above: sourced
@@ -350,37 +373,38 @@ window.HARTFORD_DOE_OE417 = [
     // (12_fetch_hrrr_storm_wind.py, key "oct2020_derecho") like May 2018,
     // NOT synthetic town-centroid decay -- not flagged is_localized_reports.
     //
-    // LOWER CONFIDENCE than most entries above: CT's peak (~90,000
-    // Eversource customers) comes from a specific regional outage
-    // comparison (NY ~230k, PA ~176k, ME ~117k, CT ~90k) cross-referencing
-    // multiple news sources discussing the same NWS-confirmed event, but no
-    // CT-specific crew count or restoration-complete date was found despite
-    // extensive searching (this event got relatively little standalone CT
-    // news coverage, possibly overshadowed by being just 2 months after
-    // Isaias). duration_h (96) and crews (700) are interpolated from Dec
-    // 2023 (89,000 cust -- nearly identical peak -- 96h, peak 700 crews),
-    // the closest real neighbor by customer count, not directly sourced.
+    // CORRECTED 2026-07-13 against ORNL's EAGLE-I recorded outage dataset
+    // (doi:10.6084/m9.figshare.24237376, 95% CT customer coverage in 2020 --
+    // see 18_fetch_eaglei_ct.py / 19_validate_against_eaglei.py): the
+    // original entry's ~90,000 figure came from a news "regional comparison"
+    // (NY ~230k, PA ~176k, ME ~117k, CT ~90k) and was a ~3.2x OVERSTATEMENT
+    // for CT. EAGLE-I's measured 15-minute county data shows a CT peak of
+    // 27,943 customers (all tracked CT utilities combined) at 2020-10-08
+    // 00:00 UTC, with bulk restoration (<=5% of peak) in 22h and full
+    // restoration (back to <=2x blue-sky baseline) in 28h. duration_h and
+    // customers_affected now use those measured values. Crews (300) remain
+    // interpolated -- now from Henri 2021 (23,000 cust / 300 crews) and
+    // March 2023 (~26,800 / ~300), the corrected size peers.
     date: "2020-10-07",
     event: "October 2020 Northeast Serial Derecho",
     type: "Severe Weather — Thunderstorms/Derecho",
     utility: "Eversource Energy",
     state: "CT",
-    customers_affected: 90000,
+    customers_affected: 27943,
     demand_loss_mw: null,
-    duration_h: 96,
-    restoration_complete: "2020-10-11",
+    duration_h: 28,
+    restoration_complete: "2020-10-09",
     notes: "NWS-confirmed serial derecho, wind gusts 50-70mph, part of a " +
       "320-mile-wide damage path across NY, MA, CT, and RI (per Wikipedia's " +
-      "List of derecho events). Regional peak outages: NY ~230,000, PA " +
-      "~176,000, ME ~117,000, CT ~90,000. CT-specific crew count and " +
-      "restoration-complete date not found independently -- duration_h and " +
-      "daily_crews interpolated from Dec 2023 (near-identical customer " +
-      "count). Treat the calibration ratio for this entry as informative " +
-      "about wind-severity/repair-time modeling (which uses directly-" +
-      "sourced real HRRR + NCEI wind data) more than about crew-ramp " +
-      "timing (which is guessed).",
-    daily_pct_out: [1.0, 0.55, 0.20, 0.05, 0.0],
-    daily_crews: [400, 700, 500, 200, 50],
+      "List of derecho events) -- but CT caught the light edge: EAGLE-I's " +
+      "measured peak was 27,943 CT customers (all utilities), NOT the " +
+      "~90,000 an earlier news regional-comparison claimed (that figure is " +
+      "now known to be wrong for CT; the heavy damage was NY/PA/ME). Full " +
+      "restoration measured at 28h (EAGLE-I 15-min data, back to <=2x " +
+      "blue-sky baseline). Crew count still interpolated (~300 from " +
+      "same-size peers), not directly sourced.",
+    daily_pct_out: [1.0, 0.02, 0.0],
+    daily_crews: [300, 150, 20],
   },
   {
     // Real, small-scale, TORNADO-ONLY event -- unlike every entry above,

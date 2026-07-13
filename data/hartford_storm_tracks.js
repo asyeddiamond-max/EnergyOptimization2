@@ -131,7 +131,7 @@ window.HARTFORD_STORM_TRACKS = {
     date: "2020-08-27",
     category_at_landfall: "EF1 Tornado + Severe Thunderstorm Wind",
     ct_peak_wind_mph: 110,
-    ct_customers_lost: 54000,
+    ct_customers_lost: 63912, // EAGLE-I-measured CT peak (was 54,000 from news snapshots)
     is_localized_reports: true,
     track: [
       {lat:41.422964,lon:-72.9941871,wind_kt:96,pres_mb:null,time:"2020-08-27T19:55Z"},

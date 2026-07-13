@@ -240,7 +240,11 @@ STORMS = [
     # to a superseded day-1 snapshot and a "1-2 weeks" claim to a debris-
     # cleanup quote (not power restoration) -- see data/hartford_doe_oe417.js.
     ("ct_july2026_severe_tstorm", 6000, 702, 108, "July 2026 T-storm"),
-    ("ct_aug2020_tornado", 1800, 380, 96, "Aug 2020 Tornado"),
+    # CORRECTED 2026-07-13 vs EAGLE-I (see 19_validate_against_eaglei.py):
+    # measured CT peak 63,912 (was 54,000 from news snapshots; n_out
+    # recalibrated 1800->2050) and measured full restoration 66h (was 96h,
+    # an outer news bound).
+    ("ct_aug2020_tornado", 2050, 380, 66, "Aug 2020 Tornado"),
     # LOWER CONFIDENCE than the entries above: real, sourced peak customer
     # count (~26,800, Eversource press release + live news) and a same-day
     # partial-restoration snapshot, but duration_h (72) and crew count (300,
@@ -254,24 +258,24 @@ STORMS = [
     ("", 900, 300, 72, "March 2023 Nor'easter"),
     # Second real tornado/derecho-type event (NWS-confirmed serial derecho,
     # 2020-10-07), placed via the real HRRR grid + real NCEI storm reports
-    # like May 2018, NOT synthetic town-centroid decay -- added specifically
-    # to check whether May 2018's gap (needs MORE workloadSlowdownMult even
-    # with the full multiplier applied) is a general pattern for HRRR-placed
-    # severe convective storms, or specific to May 2018 itself. Real wind
-    # data resolves this cleanly: this derecho's confirmed reports top out
-    # at 69mph (0 outages cross the model's 70mph severity-repair threshold
-    # -- straight-line wind damage, no confirmed tornadoes), vs May 2018's
-    # real reports up to 100mph. It calibrates well with the standard
-    # multiplier (ratio ~1.20, base-mechanics-alone ratio ~1.93 -- i.e. it
-    # NEEDS the multiplier and gets a good fit from it, unlike May 2018
-    # which still falls short even with it). Supports the theory that May
-    # 2018's residual gap is tornado-severity-specific, not a broader
-    # "severe convective storms need more slowdown" pattern. (Duration_h/
-    # crews for this entry are themselves interpolated, not directly
-    # sourced -- see data/hartford_doe_oe417.js -- so treat the exact ratio
-    # loosely; the wind-severity comparison above doesn't depend on that
-    # estimate.)
-    ("oct2020_derecho", 2800, 700, 96, "Oct 2020 Derecho"),
+    # like May 2018, NOT synthetic town-centroid decay. The wind-severity
+    # finding from this storm still stands: its confirmed reports top out at
+    # 69mph (0 outages cross the model's 70mph severity-repair threshold --
+    # straight-line wind, no tornadoes), vs May 2018's real 100mph reports,
+    # supporting the theory that May 2018's residual gap is tornado-severity-
+    # specific.
+    #
+    # CORRECTED 2026-07-13 vs EAGLE-I (19_validate_against_eaglei.py): the
+    # original entry used ~90,000 customers / 96h / 700 crews, all derived
+    # from a news "regional comparison" + Dec-2023-peer interpolation --
+    # EAGLE-I's measured data shows CT actually peaked at 27,943 customers
+    # (~3.2x less; the heavy damage was NY/PA/ME) with full restoration in
+    # 28h. n_out recalibrated 2800->950, crews reinterpolated 700->300 (from
+    # the corrected size peers Henri/March 2023). NOTE: the earlier claim
+    # that this storm "calibrates well with the standard multiplier (ratio
+    # ~1.20)" was an artifact of the wrong 90k/96h inputs -- the corrected
+    # ratio below is what actually counts.
+    ("oct2020_derecho", 950, 300, 28, "Oct 2020 Derecho"),
     # A real, small-scale, TORNADO-ONLY event -- unlike every storm above,
     # this one carries no derecho/complex classification at all. Real NCEI
     # report confirms a 78kt (~90mph) tornado at Merrow/Coventry, cleanly
