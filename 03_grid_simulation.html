@@ -1949,7 +1949,20 @@ function loadLiveOutages(){
   const trackSel = document.getElementById('stormTrackSelect');
   if (trackSel.value){ trackSel.value = ''; renderStormTrack(); }
 
-  const outages = live.outages.map(o => ({
+  // Exclude planned maintenance (cause 'PLAN'): those are scheduled jobs
+  // with utility-chosen dates, not restoration work -- including them would
+  // pollute both the model's queue and the model-vs-ETR comparison. Found
+  // in the feed during fact-checking (Eversource lists them alongside real
+  // unplanned outages).
+  const planned = live.outages.filter(o => o.cause === 'PLAN');
+  const unplanned = live.outages.filter(o => o.cause !== 'PLAN');
+  if (!unplanned.length){
+    liveStatusEl.textContent = `Snapshot ${live.fetched_at} (${ageH.toFixed(1)}h old): ` +
+      `${planned.length} planned-maintenance jobs only, zero unplanned outages — nothing to restore.`;
+    return;
+  }
+
+  const outages = unplanned.map(o => ({
     lat: o.lat, lon: o.lon,
     popLoss: Math.max(1, o.customers|0),
     critical: false,
@@ -2011,7 +2024,8 @@ function loadLiveOutages(){
   outageCountEl.textContent = outages.length.toLocaleString();
   restoreTimeEl.textContent='—'; restoreDetailEl.textContent='— customers restored';
   const staleWarn = ageH > 2 ? ` — STALE (run 17_fetch_live_outages.py to refresh)` : '';
-  liveStatusEl.textContent = `LIVE: ${outages.length} outage points, ${totalCust.toLocaleString()} customers · snapshot ${ageH.toFixed(1)}h old${staleWarn}`;
+  const plannedNote = planned.length ? ` (+${planned.length} planned-maintenance jobs excluded)` : '';
+  liveStatusEl.textContent = `LIVE: ${outages.length} unplanned outage points, ${totalCust.toLocaleString()} customers${plannedNote} · snapshot ${ageH.toFixed(1)}h old${staleWarn}`;
   status.textContent = `LIVE outages loaded: ${outages.length} real Eversource CT outage points, ~${totalCust.toLocaleString()} customers without power. Set crews and click "Plan restoration".`;
 }
 document.getElementById('loadLiveBtn').onclick = loadLiveOutages;

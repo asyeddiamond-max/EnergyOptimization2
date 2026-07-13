@@ -212,8 +212,11 @@ def fetch_all_outages(directory: str, max_zoom: int) -> tuple[list[dict], int]:
 def filter_to_ct(outages: list[dict]) -> list[dict]:
     from shapely.geometry import shape, Point
     boundary = json.loads((HERE / "data" / "connecticut_boundary.json").read_text())
-    # Small buffer so points snapped to a road just over the border still count.
-    ct_poly = shape(boundary[0]["geojson"]).buffer(0.01)
+    # ~200m buffer for points snapped to a road hugging the border. (Was
+    # 0.01 deg ~1.1km, which let an Agawam-MA-area outage through -- caught
+    # by reverse-geocoding every fetched point to CT town polygons during
+    # fact-checking.)
+    ct_poly = shape(boundary[0]["geojson"]).buffer(0.002)
     out = []
     for o in outages:
         if not (LAT_MIN <= o["lat"] <= LAT_MAX and LON_MIN <= o["lon"] <= LON_MAX):
@@ -245,8 +248,13 @@ def main() -> None:
     ct.sort(key=lambda o: -o["customers"])
     ct_customers = sum(o["customers"] for o in ct)
     ct_incidents = sum(o["n_incidents"] for o in ct)
-    print(f"  Connecticut only: {len(ct)} outage points ({ct_incidents} incidents), "
-          f"{ct_customers} customers affected")
+    # PLAN = planned maintenance work, present in the feed alongside real
+    # unplanned outages (found during fact-checking). Kept in the data file
+    # (it IS a real outage) but counted separately so the simulator's
+    # restoration planner can exclude scheduled work from the storm queue.
+    ct_planned = sum(1 for o in ct if o.get("cause") == "PLAN")
+    print(f"  Connecticut only: {len(ct)} outage points ({ct_incidents} incidents, "
+          f"{ct_planned} planned-maintenance), {ct_customers} customers affected")
 
     fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     payload = {
@@ -264,6 +272,7 @@ def main() -> None:
         "ct_total_outage_points": len(ct),
         "ct_total_incidents": ct_incidents,
         "ct_total_customers": ct_customers,
+        "ct_planned_maintenance_points": ct_planned,
         "outages": ct,
     }
 

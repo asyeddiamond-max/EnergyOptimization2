@@ -1,19 +1,18 @@
 {
- "fetched_at": "2026-07-13T13:33:10Z",
+ "fetched_at": "2026-07-13T13:26:39Z",
  "source": "outagemap.eversource.com (iFactor StormCenter public data layer)",
- "directory": "2026_07_13_13_29_30",
+ "directory": "2026_07_13_13_19_30",
  "utility": "Eversource CT only (UI excluded; see 17_fetch_live_outages.py)",
  "territory_summary": {
-  "total_outages": 57,
-  "total_cust_a": 783,
+  "total_outages": 55,
+  "total_cust_a": 761,
   "total_cust_served": 3325527,
-  "date_generated": "2026-07-13T09:27:10-0400",
+  "date_generated": "2026-07-13T09:17:11-0400",
   "page_mode": "BLUESKY"
  },
  "ct_total_outage_points": 24,
  "ct_total_incidents": 24,
- "ct_total_customers": 609,
- "ct_planned_maintenance_points": 10,
+ "ct_total_customers": 607,
  "outages": [
   {
    "lat": 41.91544,
@@ -76,18 +75,6 @@
    "cluster_leaf": false
   },
   {
-   "lat": 41.05038,
-   "lon": -73.52939,
-   "customers": 7,
-   "n_incidents": 1,
-   "masked": false,
-   "cause": null,
-   "start": "2026-07-13T09:21:03-0400",
-   "etr": "2026-07-13T14:00:00-0400",
-   "inc_id": "W6012461-0",
-   "cluster_leaf": false
-  },
-  {
    "lat": 41.60749,
    "lon": -72.30705,
    "customers": 7,
@@ -109,6 +96,18 @@
    "start": "2026-07-13T09:04:08-0400",
    "etr": "2026-07-13T12:45:00-0400",
    "inc_id": "W6012440-0",
+   "cluster_leaf": false
+  },
+  {
+   "lat": 42.03742,
+   "lon": -72.67138,
+   "customers": 5,
+   "n_incidents": 1,
+   "masked": false,
+   "cause": "EQUP",
+   "start": "2026-07-13T00:36:31-0400",
+   "etr": "2026-07-13T14:00:00-0400",
+   "inc_id": "W6012214-0",
    "cluster_leaf": false
   },
   {
@@ -160,18 +159,6 @@
    "cluster_leaf": false
   },
   {
-   "lat": 41.34235,
-   "lon": -71.84107,
-   "customers": 4,
-   "n_incidents": 1,
-   "masked": true,
-   "cause": null,
-   "start": "2026-07-13T08:56:51-0400",
-   "etr": "2026-07-13T12:30:00-0400",
-   "inc_id": "W6012425-0",
-   "cluster_leaf": false
-  },
-  {
    "lat": 41.99554,
    "lon": -72.87973,
    "customers": 4,
@@ -181,6 +168,18 @@
    "start": "2026-07-13T08:15:03-0400",
    "etr": "2026-07-13T12:15:00-0400",
    "inc_id": "W6012368-0",
+   "cluster_leaf": false
+  },
+  {
+   "lat": 41.34235,
+   "lon": -71.84107,
+   "customers": 4,
+   "n_incidents": 1,
+   "masked": true,
+   "cause": null,
+   "start": "2026-07-13T08:56:51-0400",
+   "etr": "2026-07-13T12:30:00-0400",
+   "inc_id": "W6012425-0",
    "cluster_leaf": false
   },
   {
@@ -220,15 +219,15 @@
    "cluster_leaf": false
   },
   {
-   "lat": 41.70996,
-   "lon": -72.9408,
+   "lat": 41.71294,
+   "lon": -72.90042,
    "customers": 4,
    "n_incidents": 1,
    "masked": true,
-   "cause": null,
-   "start": "2026-07-13T08:17:57-0400",
+   "cause": "EQUP",
+   "start": "2026-07-13T05:11:55-0400",
    "etr": "2026-07-13T12:00:00-0400",
-   "inc_id": "W6012375-0",
+   "inc_id": "W6012246-0",
    "cluster_leaf": false
   },
   {
@@ -244,15 +243,15 @@
    "cluster_leaf": false
   },
   {
-   "lat": 41.71294,
-   "lon": -72.90042,
+   "lat": 41.70996,
+   "lon": -72.9408,
    "customers": 4,
    "n_incidents": 1,
    "masked": true,
-   "cause": "EQUP",
-   "start": "2026-07-13T05:11:55-0400",
+   "cause": null,
+   "start": "2026-07-13T08:17:57-0400",
    "etr": "2026-07-13T12:00:00-0400",
-   "inc_id": "W6012246-0",
+   "inc_id": "W6012375-0",
    "cluster_leaf": false
   },
   {
