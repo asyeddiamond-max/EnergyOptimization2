@@ -58,6 +58,12 @@ STORMS = {
     # (~5pm EDT) as the representative HRRR fetch time, same convention as
     # the other storms above (peak-passage hour, not storm start).
     "oct2020_derecho": {"date": "2020-10-07 21:00", "precip_type": "rain"},
+    # July 4, 2026 severe thunderstorm complex -- the storm hit western CT
+    # ~8pm EDT (00:00 UTC 7/5) with reported gusts to ~80mph; peak convective
+    # window that evening. HRRR is available in near-real-time from the AWS
+    # archive, so unlike the older synthetic-track July 2026 entry this pulls
+    # the REAL measured wind/rain footprint for the event.
+    "july2026":    {"date": "2026-07-05 00:00", "precip_type": "rain"},
 }
 STORM_NAMES = {
     "isaias_2020": "Tropical Storm Isaias",
@@ -66,6 +72,7 @@ STORM_NAMES = {
     "jan2024":     "January 2024 Wind Storm",
     "dec2023":     "December 2023 Nor'easter",
     "oct2020_derecho": "October 2020 Northeast Serial Derecho",
+    "july2026":    "July 4 2026 Severe Thunderstorm Complex",
 }
 
 
@@ -104,8 +111,13 @@ def get_storm_data(key, cfg):
         "avg_temp_f": None,
         "soil_wetness": None,
         "peak_wind_mph": None,
+        "peak_rain_in": None,   # 1h accumulated precip (inches) at the peak hour
     }
     H = Herbie(date_str, model="hrrr", product="sfc", fxx=0, verbose=False)
+    # 1-hour accumulated precip (APCP) needs a forecast hour > 0 -- the fxx=0
+    # analysis has a zero accumulation window. fxx=1 gives the 1h total ending
+    # at date_str+1h, a good "rain footprint" proxy for the peak hour.
+    H_apcp = Herbie(date_str, model="hrrr", product="sfc", fxx=1, verbose=False)
 
     try:
         # GUST:surface, not WIND:10 m above ground -- the sustained 10m wind
@@ -128,6 +140,14 @@ def get_storm_data(key, cfg):
         print(f"  temp  avg={rec['avg_temp_f']} F")
     except Exception as e:
         print(f"  temp  FAILED: {e}")
+
+    try:
+        ds_p = H_apcp.xarray("APCP:surface")
+        rain_in = extract_to_grid(ds_p) / 25.4  # kg/m^2 (mm) -> inches
+        rec["peak_rain_in"] = np.round(rain_in, 2).tolist()
+        print(f"  rain  avg={np.nanmean(rain_in):.2f}  peak={np.nanmax(rain_in):.2f} in/hr")
+    except Exception as e:
+        print(f"  rain  FAILED: {e}")
 
     for pat in ("SOILW:0-0.1 m below ground level", "SOILW:0-0.1 m", "SOILW"):
         try:

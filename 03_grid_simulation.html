@@ -930,7 +930,24 @@ const PointCloudLayer = L.Layer.extend({
     const o = this._opts;
     const pts = this._points;
     const map = this._map;
-    if (o.uniformColor){
+    if (o.uniformColor && o.marker === 'x'){
+      // Bright X markers for storm outages -- small dark dots blended into
+      // the basemap, so outages render as high-contrast crosses instead.
+      ctx.strokeStyle = o.fillColor;
+      ctx.lineWidth = o.markerWidth || 1.6;
+      ctx.lineCap = 'round';
+      ctx.globalAlpha = o.fillOpacity;
+      const r = o.radius;
+      for (let i=0;i<pts.length;i++){
+        const p = pts[i];
+        const xy = map.latLngToContainerPoint([p.lat, p.lon]);
+        ctx.beginPath();
+        ctx.moveTo(xy.x - r, xy.y - r); ctx.lineTo(xy.x + r, xy.y + r);
+        ctx.moveTo(xy.x + r, xy.y - r); ctx.lineTo(xy.x - r, xy.y + r);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    } else if (o.uniformColor){
       ctx.fillStyle = o.fillColor;
       ctx.strokeStyle = o.stroke;
       ctx.lineWidth = o.lineWidth;
@@ -1904,7 +1921,7 @@ async function simulateStorm(){
   if (window._repairCloud){ map.removeLayer(window._repairCloud); window._repairCloud=null; }
   const normalPts = [], critPts = [];
   for (const o of outages){ (o.critical ? critPts : normalPts).push({lat:o.lat, lon:o.lon}); }
-  window._outageCloud = new PointCloudLayer(normalPts, {uniformColor:true, radius:2.5, fillColor:"#7f1d1d", stroke:"#000", lineWidth:0.5, fillOpacity:0.92}).addTo(map);
+  window._outageCloud = new PointCloudLayer(normalPts, {uniformColor:true, marker:'x', radius:3.5, markerWidth:1.6, fillColor:"#dc2626", fillOpacity:0.95}).addTo(map);
   if (critPts.length){
     window._criticalCloud = new PointCloudLayer(critPts, {uniformColor:true, radius:4, fillColor:"#dc2626", stroke:"#facc15", lineWidth:1.2, fillOpacity:0.92}).addTo(map);
   }
@@ -2017,7 +2034,7 @@ function loadLiveOutages(){
   if (window._depotCloud){ map.removeLayer(window._depotCloud); window._depotCloud=null; }
   if (window._repairCloud){ map.removeLayer(window._repairCloud); window._repairCloud=null; }
   const pts = outages.map(o => ({lat: o.lat, lon: o.lon}));
-  window._outageCloud = new PointCloudLayer(pts, {uniformColor:true, radius:4, fillColor:"#059669", stroke:"#022c22", lineWidth:1, fillOpacity:0.92}).addTo(map);
+  window._outageCloud = new PointCloudLayer(pts, {uniformColor:true, marker:'x', radius:5, markerWidth:2, fillColor:"#059669", fillOpacity:0.95}).addTo(map);
 
   affectedEl.textContent = Math.round(totalCust).toLocaleString();
   affectedPctEl.textContent = (100*totalCust/TOTAL_POP).toFixed(3)+"% of state population";
