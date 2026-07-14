@@ -286,11 +286,17 @@ def make_figure(cfg_label, lats, lons, wind, rain, placements_g, placements_e,
     ax5 = fig.add_subplot(3, 2, 5)
     # Crew model: daily ramp. Gaussian vs Exponential placement overlap
     # almost exactly -> kernel choice barely affects restoration timing.
+    # The uncertainty band is the 5-95th percentile across the ensemble
+    # (placement + stochastic repair-time variation); it is genuinely narrow
+    # because at a fixed crew schedule the whole-state restoration time is
+    # crew-bound and thus quite predictable -- the spread is a real result,
+    # not a missing band.
     for env, color, name in [(env_g, "#2563eb", "Gaussian placement"),
                              (env_e, "#7c3aed", "Exponential placement")]:
-        lo, med, hi = np.percentile(env, [10, 50, 90], axis=0)
-        ax5.fill_between(sample_h, 100 * lo, 100 * hi, color=color, alpha=0.18)
-        ax5.plot(sample_h, 100 * med, color=color, lw=1.8, label=f"model — {name}")
+        lo, med, hi = np.percentile(env, [5, 50, 95], axis=0)
+        ax5.fill_between(sample_h, 100 * lo, 100 * hi, color=color, alpha=0.30,
+                         label=f"model 5–95% band — {name}")
+        ax5.plot(sample_h, 100 * med, color=color, lw=1.6)
     if state_curve is not None:
         ax5.plot(sample_h, 100 * state_curve, color="#111", lw=2.5, ls="--",
                  label=f"ACTUAL — {actual_note}")

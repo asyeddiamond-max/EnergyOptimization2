@@ -59,7 +59,14 @@ def _run_scheduler(lat, lon, m_crews, realistic, seed, customers, customer_weigh
     rep_state = (seed * 1117 + 23) & 0xFFFFFFFF
     disc_state = (seed * 991 + 7) & 0xFFFFFFFF
 
-    # Discovery times.
+    # Discovery times. The tail cap scales with storm size (parity with the
+    # JS scheduler's discMaxTail -- see 03_grid_simulation.html): assessing
+    # every last outage takes ~36h only at mega-storm scale (N~20k); a few
+    # hundred scattered outages are found in hours. The old flat 36h here
+    # (un-ported when the JS was fixed) put a spurious ~46h discovery floor
+    # on small storms, making the server over-predict them regardless of
+    # crews -- caught by 21_crew_backout.py.
+    disc_max_tail = max(3.0, 36.0 * math.sqrt(N / 20000.0))
     disc = np.zeros(N, dtype=np.float64)
     if realistic:
         for i in range(N):
@@ -69,7 +76,7 @@ def _run_scheduler(lat, lon, m_crews, realistic, seed, customers, customer_weigh
             else:
                 v = (u - 0.30) / 0.70
                 t_after = -math.log(max(1e-9, 1.0 - 0.99 * v)) / 0.1
-                disc[i] = ASSESSMENT_DELAY + 1.0 + min(36.0, t_after)
+                disc[i] = ASSESSMENT_DELAY + 1.0 + min(disc_max_tail, t_after)
     disc_sorted = np.sort(disc) if realistic else disc
 
     # Crew arrival times. A caller-supplied schedule (crew_arrivals_in with
@@ -360,9 +367,10 @@ def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G, customers, custom
         bucket_idx[bucket_start[c] + cursor[c]] = i
         cursor[c] += 1
 
-    # Discovery times.
+    # Discovery times (size-scaled tail cap -- see _run_scheduler).
     rep_state = (seed * 1117 + 23) & 0xFFFFFFFF
     disc_state = (seed * 991 + 7) & 0xFFFFFFFF
+    disc_max_tail = max(3.0, 36.0 * math.sqrt(N / 20000.0))
     disc = np.zeros(N, dtype=np.float64)
     if realistic:
         for i in range(N):
@@ -372,7 +380,7 @@ def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G, customers, custom
             else:
                 v = (u - 0.30) / 0.70
                 t_after = -math.log(max(1e-9, 1.0 - 0.99 * v)) / 0.1
-                disc[i] = ASSESSMENT_DELAY + 1.0 + min(36.0, t_after)
+                disc[i] = ASSESSMENT_DELAY + 1.0 + min(disc_max_tail, t_after)
     disc_sorted = np.sort(disc) if realistic else disc
 
     # Crew arrivals (caller override or default waves -- see _run_scheduler).

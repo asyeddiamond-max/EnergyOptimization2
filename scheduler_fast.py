@@ -102,7 +102,9 @@ def plan_restoration_fast(outages, m_crews, realistic=True, seed=42, total_custo
         z = math.sqrt(-2 * math.log(u1)) * math.cos(2 * math.pi * u2)
         return max(0.25, min(12.0, math.exp(math.log(2) + 0.857 * z)))
 
-    # Discovery times — vectorized
+    # Discovery times — vectorized. Size-scaled tail cap (parity with the JS
+    # scheduler's discMaxTail); the old flat 36h over-predicted small storms.
+    disc_max_tail = max(3.0, 36.0 * math.sqrt(N / 20000.0))
     if realistic:
         u = np.array([rnd_disc() for _ in range(N)], dtype=np.float64)
         disc = np.empty(N, dtype=np.float64)
@@ -110,7 +112,7 @@ def plan_restoration_fast(outages, m_crews, realistic=True, seed=42, total_custo
         disc[mask_lo] = ASSESSMENT_DELAY + u[mask_lo] * (1.0 / 0.30)
         v = (u[~mask_lo] - 0.30) / 0.70
         t_after = -np.log(np.maximum(1e-9, 1 - 0.99 * v)) / 0.1
-        disc[~mask_lo] = ASSESSMENT_DELAY + 1 + np.minimum(36.0, t_after)
+        disc[~mask_lo] = ASSESSMENT_DELAY + 1 + np.minimum(disc_max_tail, t_after)
     else:
         disc = np.zeros(N, dtype=np.float64)
 

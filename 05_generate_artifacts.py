@@ -254,6 +254,8 @@ def plan_restoration(outages, m_crews, rnd_master, realistic=True, total_custome
 
     # Item 3: discovery times
     disc_time = [0.0] * N
+    # Size-scaled discovery tail cap (parity with the JS discMaxTail).
+    disc_max_tail = max(3.0, 36.0 * _math.sqrt(N / 20000.0))
     if realistic:
         for i in range(N):
             u = rnd_disc()
@@ -262,7 +264,7 @@ def plan_restoration(outages, m_crews, rnd_master, realistic=True, total_custome
             else:
                 v = (u - 0.30) / 0.70
                 t_after = -_math.log(max(1e-9, 1 - 0.99 * v)) / 0.1
-                disc_time[i] = ASSESSMENT_DELAY + 1 + min(36.0, t_after)
+                disc_time[i] = ASSESSMENT_DELAY + 1 + min(disc_max_tail, t_after)
 
     # Item 4: mutual-aid waves
     if realistic and m_crews >= 6:
