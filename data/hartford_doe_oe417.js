@@ -122,10 +122,18 @@ window.HARTFORD_DOE_OE417 = [
     state: "CT",
     customers_affected: 23000,
     demand_loss_mw: null,
-    duration_h: 48,
+    duration_h: 34,
     restoration_complete: "2021-08-24",
-    notes: "Relatively minor for CT; most damage in coastal areas",
-    daily_pct_out: [1.0, 0.30, 0.0],
+    notes: "Relatively minor for CT; most damage in coastal areas. VALIDATED " +
+      "2026-07-14 against ORNL's EAGLE-I dataset (doi:10.6084/m9.figshare." +
+      "24237376; see 19_validate_against_eaglei.py): EAGLE-I's measured " +
+      "all-CT-utility peak was 32,279 customers at 2021-08-22 19:00 UTC, " +
+      "consistent with this 23,000 Eversource-only figure + UI's ~9,000 " +
+      "share -- so the peak is CONFIRMED, kept as-is. duration_h CORRECTED " +
+      "48h -> 34h: EAGLE-I measures full restoration (return to <=2x " +
+      "blue-sky baseline) at 34h, so the original 48h estimate was ~40% too " +
+      "long.",
+    daily_pct_out: [1.0, 0.15, 0.0],
     daily_crews: [200, 300, 100],
   },
   {
@@ -526,37 +534,40 @@ window.HARTFORD_DOE_OE417 = [
     // with power outages a modest secondary effect. Useful for checking the
     // model isn't only calibrated against wind-driven damage.
     //
-    // LOWER CONFIDENCE on duration/crews: peak is real and specific
-    // (~20,000 CT customers: Eversource 14,591-20,000 range across
-    // different snapshots + UI ~600), but no CT-specific restoration
-    // timeline or crew count was found. Notably, CT sent 40 of its OWN
-    // crews to Louisiana within days of this event to help with Ida's much
-    // larger direct-hurricane damage there -- circumstantial evidence CT's
-    // own restoration wasn't crew-constrained. duration_h (48) and crews
-    // (300) are interpolated from Henri 2021 (23,000 cust -- nearly
-    // identical peak), the closest real neighbor by customer count, same
-    // convention as this dataset's other interpolated entries -- not
-    // independently sourced.
+    // CORRECTED 2026-07-14 against ORNL's EAGLE-I dataset
+    // (doi:10.6084/m9.figshare.24237376; see 19_validate_against_eaglei.py).
+    // The original ~20,000 came from Eversource news snapshots taken at
+    // 10am and 12:30pm -- but EAGLE-I's 15-minute data shows the true
+    // simultaneous CT peak was 36,822 customers at 2021-09-02 06:15 UTC
+    // (2:15am EDT), which the daytime snapshots entirely missed (flooding
+    // peaked overnight). With UI's share tiny for this event (~600 in the
+    // original reporting), that ~36.8k is essentially Eversource's own real
+    // peak -- an ~84% undercount in the old figure. duration_h also
+    // corrected 48h (interpolated from Henri) -> 51h (EAGLE-I measured full
+    // restoration). Crew count (300) remains interpolated from Henri, the
+    // closest real neighbor -- CT sent 40 of its own crews to Louisiana for
+    // Ida's direct-hurricane damage within days, circumstantial evidence
+    // CT's own restoration wasn't crew-constrained.
     date: "2021-09-02",
     event: "Remnants of Hurricane Ida (flooding)",
     type: "Severe Weather — Flooding (not primarily wind-driven)",
     utility: "Eversource Energy",
     state: "CT",
-    customers_affected: 20000,
+    customers_affected: 36822,
     demand_loss_mw: null,
-    duration_h: 48,
+    duration_h: 51,
     restoration_complete: "2021-09-04",
     notes: "Primarily a historic flash-flooding event, not a wind/tree " +
       "storm -- CT's first-ever flash flood emergency (Fairfield/New Haven " +
       "counties), up to 8.72in rain in Seymour, 18 people rescued by boat " +
-      "in Plainville. Peak ~20,000 CT customers (Eversource 14,591-20,000 " +
-      "across different reported snapshots + UI ~600) -- modest relative " +
-      "to the flooding's severity, since flood damage doesn't necessarily " +
-      "correlate with power-line damage the way wind does. No CT-specific " +
-      "restoration timeline or crew count found -- daily_pct_out/" +
-      "daily_crews shape mirrors Henri 2021's directly.",
-    daily_pct_out: [1.0, 0.30, 0.0],
-    daily_crews: [200, 300, 100],
+      "in Plainville. Peak 36,822 CT customers (EAGLE-I-measured, at 2:15am " +
+      "EDT; daytime news snapshots had suggested only ~20,000, missing the " +
+      "overnight peak). Full restoration 51h (EAGLE-I). Flood damage " +
+      "doesn't correlate with power-line damage the way wind does, but the " +
+      "true peak was still ~2x the daytime-snapshot estimate. Crew count " +
+      "(300) interpolated from Henri, not independently sourced.",
+    daily_pct_out: [1.0, 0.30, 0.05, 0.0],
+    daily_crews: [200, 300, 150, 30],
   },
   {
     // Real, well-documented rain/windstorm, Friday 2025-12-19 into the

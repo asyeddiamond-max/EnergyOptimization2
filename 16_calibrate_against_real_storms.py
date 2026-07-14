@@ -218,7 +218,10 @@ STORMS = [
     ("may2018", 3980, 1000, 192, "May 2018"),
     ("jan2024", 1650, 500, 72, "Jan 2024"),
     ("dec2023", 2850, 700, 96, "Dec 2023"),
-    ("henri_2021", 950, 300, 48, "Henri 2021"),
+    # n_out 950->830 to hit the 23k Eversource peak (EAGLE-I confirmed:
+    # 32,279 all-utility = 23k ES + ~9k UI); real_h 48->34 (EAGLE-I measured
+    # full restoration). See 19_validate_against_eaglei.py.
+    ("henri_2021", 830, 300, 34, "Henri 2021"),
     # These last 2 are geographically-CONCENTRATED storms (a storm confined
     # to one corner of the state, is_localized_reports:true in
     # hartford_storm_tracks.js), unlike the 8 broad/statewide-track storms
@@ -303,12 +306,12 @@ STORMS = [
     # time; crew count (400) is interpolated between Henri 2021 and Jan
     # 2024, not sourced. Broad statewide system, uniform placement.
     ("", 1500, 400, 60, "Oct 2019 Bomb Cyclone"),
-    # Remnants of Hurricane Ida, 2021-09-02 -- a genuinely different damage
-    # mechanism (historic flash flooding, not wind/tree) from every other
-    # storm in this dataset. Peak (~20,000) is real/sourced; duration (48h)
-    # and crews (300) are interpolated directly from Henri 2021 (23,000
-    # cust, nearly identical peak), not independently sourced.
-    ("", 650, 300, 48, "Sep 2021 Ida Flooding"),
+    # Remnants of Hurricane Ida, 2021-09-02 -- historic flash flooding (not
+    # wind/tree). CORRECTED vs EAGLE-I (19_validate_against_eaglei.py):
+    # n_out 650->1250 for the measured 36,822 peak (daytime news snapshots
+    # missed the 2:15am overnight peak, undercounting ~2x), real_h 48->51
+    # (EAGLE-I measured). Crews (300) still interpolated from Henri.
+    ("", 1250, 300, 51, "Sep 2021 Ida Flooding"),
     # Real rain/windstorm, 2025-12-19. Peak (~89,200) estimated from a
     # restored+remaining snapshot ~30h post-storm; crews (700) interpolated
     # from Dec 2023 (near-identical peak). duration_h (72) extends past the
