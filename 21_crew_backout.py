@@ -35,21 +35,27 @@ DATA = HERE / "data"
 OUT_DIR = HERE / "output"
 
 # name, calibrated n_out, customer peak, real restoration hours, real-time
-# source, disclosed peak crews, disclosed-crew confidence.
+# source, disclosed peak crews, disclosed-crew confidence, HRRR wind key.
 #   time_src: "eaglei" (measured 15-min) | "pura" (regulatory) | "documented"
 #   crew_conf: "real" (utility/press disclosed) | "interp" (interpolated here)
+#   wind_key: HRRR grid key for wind-weighted placement, or None -> uniform
+#             (pre-HRRR storms 2011-2012, and the synthetic-track Aug 2020 /
+#             flooding Ida, have no gridded wind footprint).
+# is_localized: concentrated storms (severe-thunderstorm complex / tornado
+# confined to one corner) skip the large-scale workload_mult, matching the
+# calibration -- see gate in 03_grid_simulation.html / 07_server.py.
 STORMS = [
-    # label,            n_out, cust,   real_h, time_src,     crews, crew_conf
-    ("Isaias 2020",     20450, 632632, 199,   "eaglei",     4500,  "real"),
-    ("Sandy 2012",      15500, 496769, 264,   "pura",       4000,  "interp"),
-    ("Irene 2011",      21350, 671789, 288,   "pura",       3800,  "interp"),
-    ("Snowtober 2011",  26050, 807228, 264,   "pura",       4800,  "interp"),
-    ("Aug 2020 Tornado", 2050,  63912,  66,   "eaglei",      380,  "real"),
-    ("Oct 2020 Derecho",  950,  27943,  28,   "eaglei",      300,  "interp"),
-    ("Henri 2021",        830,  23000,  34,   "eaglei",      300,  "interp"),
-    ("Ida 2021",         1250,  36822,  51,   "eaglei",      300,  "interp"),
-    ("Dec 2023",         2850,  89000,  96,   "documented",  700,  "real"),
-    ("July 2026",        6000, 180000, 108,   "documented",  702,  "real"),
+    # label,            n_out, cust,   real_h, time_src,     crews, crew_conf, wind_key, is_localized
+    ("Isaias 2020",     20450, 632632, 199,   "eaglei",     4500,  "real",   "isaias_2020",     False),
+    ("Sandy 2012",      15500, 496769, 264,   "pura",       4000,  "interp", None,              False),
+    ("Irene 2011",      21350, 671789, 288,   "pura",       3800,  "interp", None,              False),
+    ("Snowtober 2011",  26050, 807228, 264,   "pura",       4800,  "interp", None,              False),
+    ("Aug 2020 Tornado", 2050,  63912,  66,   "eaglei",      380,  "real",   None,              True),
+    ("Oct 2020 Derecho",  950,  27943,  28,   "eaglei",      300,  "interp", "oct2020_derecho", False),
+    ("Henri 2021",        830,  23000,  34,   "eaglei",      300,  "interp", "henri_2021",      False),
+    ("Ida 2021",         1250,  36822,  51,   "eaglei",      300,  "interp", None,              False),
+    ("Dec 2023",         2850,  89000,  96,   "documented",  700,  "real",   "dec2023",         False),
+    ("July 2026",        6000, 180000, 108,   "documented",  702,  "real",   "july2026",        True),
 ]
 
 CREW_LO, CREW_HI = 8, 12000       # binary-search bounds
@@ -60,6 +66,13 @@ def load_land_polygon():
     from shapely.geometry import shape
     lb = json.loads((DATA / "connecticut_land_boundary.json").read_text())
     return shape(lb[0]["geojson"])
+
+
+def _import_placer():
+    """Reuse 20_ensemble_vs_actual's validated wind-weighted placement +
+    wind loader (module name starts with a digit -> import via importlib)."""
+    import importlib
+    return importlib.import_module("20_ensemble_vs_actual")
 
 
 def uniform_ct_points(n, land_poly, rng):
@@ -78,30 +91,59 @@ def uniform_ct_points(n, land_poly, rng):
     return pts
 
 
-def model_time(outages, m_crews, total_customers):
-    """Median model restoration time (busy-crew completion) over N_SEED seeds."""
+def place_points(wind_key, n, land_poly, rng, placer, wind_cache):
+    """Wind-weighted (Gaussian transfer) placement when the storm has an HRRR
+    grid; uniform otherwise. Returns (points, placement_label)."""
+    if wind_key is None:
+        return [(la, lo) for (la, lo) in uniform_ct_points(n, land_poly, rng)], "uniform"
+    if wind_key not in wind_cache:
+        lats, lons, wind, _rain, _s = placer.load_wind(wind_key)
+        wind_cache[wind_key] = (lats, lons, wind)
+    lats, lons, wind = wind_cache[wind_key]
+    pts = placer.place_outages(lats, lons, wind, land_poly, n, "gaussian", rng)
+    return [(la, lo) for (la, lo, _w) in pts], "wind"
+
+
+def _scaled_assessment(base, cust):
+    """Small-event assessment scaling, identical to 07_server._scaled_assessment
+    and the JS scheduler -- so the back-out uses the SAME model config the
+    calibration did."""
+    if base <= 0 or cust <= 0 or cust >= 60000:
+        return base
+    return max(4.0, min(base, base * (cust / 60000.0) ** 0.4))
+
+
+def model_time(outages, m_crews, real_cust, is_localized):
+    """Median model restoration time (busy-crew completion) over N_SEED seeds,
+    replicating the server/JS config: size-scaled assessment delay, overnight
+    ops below 70k customers, and (for is_localized concentrated storms) the
+    workload_mult skip via total_customers=0."""
     from scheduler_numba import plan_restoration_numba
-    per = max(1.0, total_customers / len(outages))
+    per = max(1.0, real_cust / len(outages))
     customers = [per] * len(outages)
+    assess = _scaled_assessment(12.0, real_cust)
+    overnight = 0 < real_cust <= 70000
+    tc_arg = 0.0 if is_localized else float(real_cust)   # is_localized -> workload_mult=1
     ts = []
     for s in range(N_SEED):
         _crews, total, _tl = plan_restoration_numba(
             outages, m_crews, realistic=True, seed=42 + s * 137,
-            customers=customers, total_customers=total_customers,
+            customers=customers, total_customers=tc_arg,
+            assessment_delay=assess, overnight_ops=overnight,
         )
         ts.append(total)
     return float(np.median(ts))
 
 
-def backout_crews(outages, real_h, total_customers):
+def backout_crews(outages, real_h, real_cust, is_localized):
     """Binary-search the constant crew count whose model restoration time
     matches real_h. Returns (implied_crews, model_time_at_that_M, floor_h).
     floor_h = model time at CREW_HI (the fastest the model can go); if
     real_h < floor_h the storm restored faster than the model can achieve at
     any crew count (the assessment/overnight/travel floor is the bottleneck,
     not crews) -> implied crews is reported as '>CREW_HI'."""
-    t_hi = model_time(outages, CREW_HI, total_customers)   # fastest possible
-    t_lo = model_time(outages, CREW_LO, total_customers)   # slowest
+    t_hi = model_time(outages, CREW_HI, real_cust, is_localized)   # fastest possible
+    t_lo = model_time(outages, CREW_LO, real_cust, is_localized)   # slowest
     if real_h <= t_hi:
         return None, t_hi, t_hi          # unreachable: below the model floor
     if real_h >= t_lo:
@@ -109,28 +151,30 @@ def backout_crews(outages, real_h, total_customers):
     lo, hi = CREW_LO, CREW_HI
     while hi - lo > max(5, int(0.02 * lo)):
         mid = (lo + hi) // 2
-        t = model_time(outages, mid, total_customers)
+        t = model_time(outages, mid, real_cust, is_localized)
         if t > real_h:       # too slow -> need more crews
             lo = mid
         else:                # fast enough -> can use fewer
             hi = mid
     m = (lo + hi) // 2
-    return m, model_time(outages, m, total_customers), t_hi
+    return m, model_time(outages, m, real_cust, is_localized), t_hi
 
 
 def main():
     land = load_land_polygon()
     rng = np.random.default_rng(7)
+    placer = _import_placer()
+    wind_cache = {}
 
     rows = []
-    print(f"{'Storm':<17}{'cust':>8}{'realH':>6}{'src':>5}"
+    print(f"{'Storm':<17}{'cust':>8}{'realH':>6}{'src':>5}{'place':>6}"
           f"{'model@disc':>11}{'implied':>9}{'disc':>6}{'conf':>7}{'impl/disc':>10}")
-    for label, n_out, cust, real_h, tsrc, disc, cconf in STORMS:
-        pts = uniform_ct_points(n_out, land, rng)
+    for label, n_out, cust, real_h, tsrc, disc, cconf, wind_key, is_loc in STORMS:
+        pts, place_lbl = place_points(wind_key, n_out, land, rng, placer, wind_cache)
         # Raw model accuracy: what the model predicts at the DISCLOSED crew
         # count, next to the real time -- makes the inversion interpretable.
-        t_disc = model_time(pts, disc, cust)
-        implied, t_at, floor_h = backout_crews(pts, real_h, cust)
+        t_disc = model_time(pts, disc, cust, is_loc)
+        implied, t_at, floor_h = backout_crews(pts, real_h, cust, is_loc)
         if implied is None:
             ratio_s = "n/a(floor)"
             impl_s = f">{CREW_HI}"
@@ -139,12 +183,12 @@ def main():
             impl_val = implied
             impl_s = f"{implied}"
             ratio_s = f"{implied/disc:.2f}"
-        print(f"{label:<17}{cust:>8}{real_h:>6}{tsrc[:4]:>5}"
+        print(f"{label:<17}{cust:>8}{real_h:>6}{tsrc[:4]:>5}{place_lbl:>6}"
               f"{t_disc:>10.0f}h{impl_s:>9}{disc:>6}{cconf:>7}{ratio_s:>10}"
               + (f"  [floor {floor_h:.0f}h > real {real_h}h]" if implied is None else ""))
         rows.append(dict(label=label, cust=cust, real_h=real_h, tsrc=tsrc,
-                         t_disc=t_disc, implied=impl_val, disc=disc,
-                         cconf=cconf, floor_h=floor_h))
+                         place=place_lbl, t_disc=t_disc, implied=impl_val,
+                         disc=disc, cconf=cconf, floor_h=floor_h))
 
     make_plot(rows)
 
@@ -159,22 +203,32 @@ def make_plot(rows):
                  fontsize=13, weight="bold")
 
     ok = [r for r in rows if not np.isnan(r["implied"])]
-    # Left: implied vs disclosed, 1:1 line. Color by disclosed-crew confidence.
+    # Left: implied vs disclosed, 1:1 line. Color = disclosed-crew confidence,
+    # marker = placement (square=wind-weighted, circle=uniform), triangle=floor.
     for r in rows:
         color = "#16a34a" if r["cconf"] == "real" else "#f59e0b"
-        marker = "o" if not np.isnan(r["implied"]) else "v"
+        if np.isnan(r["implied"]):
+            marker = "v"
+        else:
+            marker = "s" if r["place"] == "wind" else "o"
         y = r["implied"] if not np.isnan(r["implied"]) else r["disc"]
-        axL.scatter(r["disc"], y, s=70, color=color, marker=marker,
+        axL.scatter(r["disc"], y, s=75, color=color, marker=marker,
                     edgecolor="#222", zorder=5)
         axL.annotate(r["label"], (r["disc"], y), fontsize=7,
                      xytext=(5, 4), textcoords="offset points")
     mx = max(max(r["disc"] for r in rows),
              max(r["implied"] for r in ok)) * 1.15
     axL.plot([0, mx], [0, mx], ls="--", color="#888", label="1:1 (model = disclosed)")
+    # 0.71 mean for the real-disclosed storms
+    real_ratios = [r["implied"]/r["disc"] for r in ok if r["cconf"] == "real"]
+    if real_ratios:
+        rbar = np.mean(real_ratios)
+        axL.plot([0, mx], [0, rbar*mx], ls=":", color="#16a34a",
+                 label=f"mean of real-disclosed = {rbar:.2f}x")
     axL.set_xlabel("utility-DISCLOSED peak crews")
     axL.set_ylabel("model-IMPLIED effective crews")
-    axL.set_title("Implied vs disclosed  (green=disclosed real, orange=interpolated;\n"
-                  "▽ = storm restored faster than model floor, plotted at disclosed)",
+    axL.set_title("Implied vs disclosed  (green=disclosed real, orange=interp;\n"
+                  "■ wind-weighted placement, ● uniform, ▽ = faster than model floor)",
                   fontsize=9)
     axL.legend(fontsize=8); axL.grid(alpha=0.3)
     axL.set_xlim(0, mx); axL.set_ylim(0, mx)
