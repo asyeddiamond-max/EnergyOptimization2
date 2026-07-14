@@ -190,8 +190,21 @@ def place_outages(lats, lons, wind, land_poly, n_out, method, rng,
 # --------------------------------------------------------------------------
 # 5) Feed to the statewide model M times -> restoration-curve ensemble
 # --------------------------------------------------------------------------
-def ensemble_curves(placements, crews, seed0, sample_h, total_customers):
-    """placements: list of point-lists (one per MC run). Returns an array
+def daily_ramp_arrivals(crews_per_day, max_crews, start_h):
+    """Crew arrival times for a "N crews/day" ramp: crews come online in
+    daily waves of `crews_per_day`, first wave at `start_h` (Saturday-night
+    mobilization after the storm passes), up to `max_crews` total. E.g.
+    200/day, cap 702, start 6h -> 200 crews at 6h, 400 at 30h, 600 at 54h,
+    702 at 78h."""
+    import numpy as _np
+    return _np.array([start_h + (c // crews_per_day) * 24.0
+                      for c in range(max_crews)], dtype=float)
+
+
+def ensemble_curves(placements, crews, seed0, sample_h, total_customers,
+                    crew_arrivals=None):
+    """placements: list of point-lists (one per MC run). crew_arrivals: optional
+    explicit crew-arrival schedule (len == crews). Returns an array
     [n_runs, len(sample_h)] of fraction-restored curves."""
     from scheduler_numba import plan_restoration_numba
     n = len(placements[0])
@@ -203,6 +216,7 @@ def ensemble_curves(placements, crews, seed0, sample_h, total_customers):
         crews_out, _total, _tl = plan_restoration_numba(
             outages, crews, realistic=True, seed=seed0 + k * 101,
             customers=customers, total_customers=total_customers,
+            crew_arrivals=crew_arrivals,
         )
         etas = []
         for c in crews_out:
@@ -222,8 +236,8 @@ def ensemble_curves(placements, crews, seed0, sample_h, total_customers):
 # Plotting
 # --------------------------------------------------------------------------
 def make_figure(cfg_label, lats, lons, wind, rain, placements_g, placements_e,
-                sample_h, state_curve, county_curves, env_g, env_e, env_real,
-                actual_note, crews, real_crews, out_png, land_poly):
+                sample_h, state_curve, county_curves, env_g, env_e, crew_desc,
+                actual_note, out_png, land_poly):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -270,27 +284,20 @@ def make_figure(cfg_label, lats, lons, wind, rain, placements_g, placements_e,
 
     # Row 3: state restoration ensemble vs actual; per-county actual
     ax5 = fig.add_subplot(3, 2, 5)
-    # User scenario: 200 crews. Gaussian vs Exponential placement overlap
+    # Crew model: daily ramp. Gaussian vs Exponential placement overlap
     # almost exactly -> kernel choice barely affects restoration timing.
-    for env, color, name in [(env_g, "#2563eb", "Gaussian"),
-                             (env_e, "#7c3aed", "Exponential")]:
+    for env, color, name in [(env_g, "#2563eb", "Gaussian placement"),
+                             (env_e, "#7c3aed", "Exponential placement")]:
         lo, med, hi = np.percentile(env, [10, 50, 90], axis=0)
-        ax5.fill_between(sample_h, 100 * lo, 100 * hi, color=color, alpha=0.15)
-        ax5.plot(sample_h, 100 * med, color=color, lw=1.8,
-                 label=f"model, {crews} crews ({name})")
-    # Reference: model at the storm's REAL peak crew count -> the fair
-    # "compare to actual" (same resources reality had).
-    if env_real is not None and real_crews != crews:
-        lo, med, hi = np.percentile(env_real, [10, 50, 90], axis=0)
-        ax5.fill_between(sample_h, 100 * lo, 100 * hi, color="#16a34a", alpha=0.15)
-        ax5.plot(sample_h, 100 * med, color="#16a34a", lw=1.8,
-                 label=f"model, {real_crews} crews (real count)")
+        ax5.fill_between(sample_h, 100 * lo, 100 * hi, color=color, alpha=0.18)
+        ax5.plot(sample_h, 100 * med, color=color, lw=1.8, label=f"model — {name}")
     if state_curve is not None:
         ax5.plot(sample_h, 100 * state_curve, color="#111", lw=2.5, ls="--",
                  label=f"ACTUAL — {actual_note}")
     ax5.set_xlabel("hours after storm onset (Sat night)")
     ax5.set_ylabel("% customers restored")
-    ax5.set_title("Statewide restoration: model ensemble envelope vs actual")
+    ax5.set_title(f"Statewide restoration ensemble vs actual\ncrew model: {crew_desc}",
+                  fontsize=10)
     ax5.legend(fontsize=8, loc="lower right"); ax5.grid(alpha=0.3); ax5.set_ylim(0, 101)
 
     ax6 = fig.add_subplot(3, 2, 6)
@@ -317,8 +324,13 @@ def make_figure(cfg_label, lats, lons, wind, rain, placements_g, placements_e,
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--storm", default="oct2020_derecho", choices=sorted(STORMS))
-    ap.add_argument("--crews", type=int, default=200)
+    ap.add_argument("--storm", default="july2026", choices=sorted(STORMS))
+    ap.add_argument("--crews-per-day", type=int, default=200,
+                    help="crews added per day in the ramp (starting Sat night)")
+    ap.add_argument("--max-crews", type=int, default=None,
+                    help="cap the ramp at this many crews (default: storm's real peak)")
+    ap.add_argument("--ramp-start-h", type=float, default=6.0,
+                    help="hours after onset when the first crew wave starts")
     ap.add_argument("--runs", type=int, default=60)
     ap.add_argument("--n-out", type=int, default=2000)
     ap.add_argument("--window-h", type=int, default=None,
@@ -375,33 +387,31 @@ def main():
             wr.writerow(["exponential", la, lo, w])
     print(f"  wrote {csv_path} ({2*args.n_out} rows for the statewide model)")
 
-    print(f"Running {args.runs}-member ensemble through the statewide model "
-          f"({args.crews} crews)...")
+    # "N crews/day" ramp, capped at the storm's real peak crew count.
+    max_crews = args.max_crews or real_crews
+    arrivals = daily_ramp_arrivals(args.crews_per_day, max_crews, args.ramp_start_h)
+    wave_hours = sorted(set(int(a) for a in arrivals))
+    crew_desc = (f"{args.crews_per_day} crews/day ramp (waves at h="
+                 f"{','.join(map(str, wave_hours))}; -> {max_crews} by h{wave_hours[-1]})")
+    print(f"Running {args.runs}-member ensemble through the statewide model")
+    print(f"  crew model: {crew_desc}")
     tc = state_peak or (args.n_out * 15)
     import time
     t0 = time.time()
-    env_g = ensemble_curves(placements_g, args.crews, 1000, sample_h, tc)
-    env_e = ensemble_curves(placements_e, args.crews, 5000, sample_h, tc)
-    # Reference ensemble at the storm's REAL crew count -- the fair compare-
-    # to-actual (model with the same resources reality actually had).
-    env_real = (ensemble_curves(placements_g, real_crews, 9000, sample_h, tc)
-                if real_crews != args.crews else None)
-    print(f"  {(3 if env_real is not None else 2)*args.runs} model runs in {time.time()-t0:.1f}s")
+    env_g = ensemble_curves(placements_g, max_crews, 1000, sample_h, tc, arrivals)
+    env_e = ensemble_curves(placements_e, max_crews, 5000, sample_h, tc, arrivals)
+    print(f"  {2*args.runs} model runs in {time.time()-t0:.1f}s")
 
     med_g = np.percentile(env_g, 50, axis=0)[-1] * 100
     med_e = np.percentile(env_e, 50, axis=0)[-1] * 100
-    print(f"  model median restored by {window_h}h at {args.crews} crews: "
+    print(f"  model median restored by {window_h}h: "
           f"Gaussian {med_g:.0f}%, Exponential {med_e:.0f}%")
-    if env_real is not None:
-        print(f"  model median restored by {window_h}h at {real_crews} crews (real): "
-              f"{np.percentile(env_real, 50, axis=0)[-1]*100:.0f}%")
     if state_curve is not None:
         print(f"  ACTUAL restored by {window_h}h: {state_curve[-1]*100:.0f}%")
 
     make_figure(label, lats, lons, wind, rain, placements_g, placements_e,
-                sample_h, state_curve, county_curves, env_g, env_e, env_real,
-                actual_note, args.crews, real_crews,
-                OUT_DIR / f"ensemble_vs_actual_{args.storm}.png", land_poly)
+                sample_h, state_curve, county_curves, env_g, env_e, crew_desc,
+                actual_note, OUT_DIR / f"ensemble_vs_actual_{args.storm}.png", land_poly)
 
 
 if __name__ == "__main__":

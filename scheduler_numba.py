@@ -32,7 +32,7 @@ def _mulberry32_step(state):
 @njit(cache=True, fastmath=True)
 def _run_scheduler(lat, lon, m_crews, realistic, seed, customers, customer_weight,
                    travel_mph, assessment_delay, workday_hours, road_multiplier,
-                   storm_duration, workload_mult=1.0):
+                   storm_duration, workload_mult, crew_arrivals_in):
     """Dense-scan scheduler. Realism factors are now scheduler parameters
     rather than hardcoded constants so the calibration endpoint can tune
     them against observed restoration data.
@@ -72,9 +72,14 @@ def _run_scheduler(lat, lon, m_crews, realistic, seed, customers, customer_weigh
                 disc[i] = ASSESSMENT_DELAY + 1.0 + min(36.0, t_after)
     disc_sorted = np.sort(disc) if realistic else disc
 
-    # Mutual-aid waves: arrival times for each crew.
+    # Crew arrival times. A caller-supplied schedule (crew_arrivals_in with
+    # length == m_crews, e.g. a "200 crews/day" daily ramp) overrides the
+    # default 50/30/20 mutual-aid waves; an empty array means "use default".
     arrivals = np.empty(m_crews, dtype=np.float64)
-    if realistic and m_crews >= 6:
+    if crew_arrivals_in.shape[0] == m_crews:
+        for c in range(m_crews):
+            arrivals[c] = crew_arrivals_in[c]
+    elif realistic and m_crews >= 6:
         n_init = int(math.ceil(m_crews * 0.5))
         n_w1 = int(math.ceil(m_crews * 0.3))
         for c in range(m_crews):
@@ -290,7 +295,7 @@ def _run_scheduler(lat, lon, m_crews, realistic, seed, customers, customer_weigh
 @njit(cache=True, fastmath=True)
 def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G, customers, customer_weight,
                         travel_mph, assessment_delay, workday_hours, road_multiplier,
-                        storm_duration, workload_mult=1.0):
+                        storm_duration, workload_mult, crew_arrivals_in):
     """Spatial-grid-hash variant. Same algorithm as _run_scheduler but the
     nearest-outage search uses a GxG bucket grid: walk concentric rings of
     cells until termination. O(K) per dispatch where K is local bucket
@@ -370,9 +375,12 @@ def _run_scheduler_grid(lat, lon, m_crews, realistic, seed, G, customers, custom
                 disc[i] = ASSESSMENT_DELAY + 1.0 + min(36.0, t_after)
     disc_sorted = np.sort(disc) if realistic else disc
 
-    # Mutual-aid arrivals.
+    # Crew arrivals (caller override or default waves -- see _run_scheduler).
     arrivals = np.empty(m_crews, dtype=np.float64)
-    if realistic and m_crews >= 6:
+    if crew_arrivals_in.shape[0] == m_crews:
+        for c in range(m_crews):
+            arrivals[c] = crew_arrivals_in[c]
+    elif realistic and m_crews >= 6:
         n_init = int(math.ceil(m_crews * 0.5))
         n_w1 = int(math.ceil(m_crews * 0.3))
         for c in range(m_crews):
@@ -682,7 +690,7 @@ def plan_restoration_numba(outages, m_crews, realistic=True, seed=42,
                            road_multiplier=DEFAULT_ROAD_MULTIPLIER,
                            feeder_id=None, is_feeder=None, hierarchical=False,
                            storm_duration=0.0, total_customers=None,
-                           overnight_ops=None):
+                           overnight_ops=None, crew_arrivals=None):
     """Public wrapper that returns the same shape as plan_restoration_fast.
 
     customers: optional list of per-outage customer counts. If None, treated
@@ -738,6 +746,13 @@ def plan_restoration_numba(outages, m_crews, realistic=True, seed=42,
         overnight_ops = 0 < tc <= 70000
     eff_workday = 24.0 if overnight_ops else float(workday_hours)
 
+    # Crew arrival override (e.g. a "200 crews/day" daily ramp). Empty array
+    # = use the scheduler's default 50/30/20 mutual-aid waves.
+    if crew_arrivals is not None and len(crew_arrivals) == m_crews:
+        arrivals_in = np.asarray(crew_arrivals, dtype=np.float64)
+    else:
+        arrivals_in = np.empty(0, dtype=np.float64)
+
     # Both dense and grid schedulers now handle customer-weighted scoring.
     # The grid path uses an upper-bound termination condition so ring
     # expansion stays bounded even under weighted scoring. Use grid above
@@ -749,14 +764,14 @@ def plan_restoration_numba(outages, m_crews, realistic=True, seed=42,
                                 cust_arr, float(customer_weight),
                                 float(travel_mph), float(assessment_delay),
                                 eff_workday, float(road_multiplier),
-                                float(storm_duration), workload_mult)
+                                float(storm_duration), workload_mult, arrivals_in)
     else:
         total, crew_time, crew_jobs, log_crew, log_outage, log_eta = \
             _run_scheduler(lat, lon, m_crews, realistic, seed,
                            cust_arr, float(customer_weight),
                            float(travel_mph), float(assessment_delay),
                            eff_workday, float(road_multiplier),
-                           float(storm_duration), workload_mult)
+                           float(storm_duration), workload_mult, arrivals_in)
 
     # Rebuild per-crew job sequences from the flat dispatch log. The log is
     # already in dispatch order, so iterating it preserves repair sequence
