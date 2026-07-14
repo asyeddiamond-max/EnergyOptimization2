@@ -652,6 +652,22 @@ def _run_scheduler_specialized(req_outages, crews, seed, realistic,
 _PRIORITY_BONUS = 1.0e5
 
 
+def _scaled_assessment(base: float, total_customers: float) -> float:
+    """Small-event damage-assessment scaling -- parity with the JS scheduler
+    (see the ASSESSMENT_DELAY comment in 03_grid_simulation.html:
+    planRestoration()). Scales a base assessment delay DOWN for small storms
+    (a few thousand scattered outages dispatch in hours, not the ~12h a
+    statewide mega-storm needs to survey damage + mobilize mutual aid),
+    anchored so events >=60,000 customers keep the full base, tapering to a
+    4h floor. base==0 (pre-storm staging) stays 0. Computed HERE from the
+    REAL customer sum -- deliberately not derived downstream, since the
+    is_localized path zeroes the total_customers passed to the scheduler and
+    a small localized storm must still get the reduced delay."""
+    if base <= 0 or total_customers <= 0 or total_customers >= 60000:
+        return base
+    return max(4.0, min(base, base * (total_customers / 60000.0) ** 0.4))
+
+
 def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
                    realistic: bool, customer_weight: float = 0.0,
                    crew_specialization: bool = False,
@@ -822,8 +838,14 @@ def schedule(req: ScheduleRequest) -> ScheduleResponse:
             tree_blocked_mult = 1.30
         # ---- Pre-storm staging (logistical) ----
         # Pre-positioned crews skip the 12 h post-storm assessment; work starts
-        # as soon as winds drop below the safety threshold.
-        eff_assess = 0.0 if req.pre_storm_staging else 12.0
+        # as soon as winds drop below the safety threshold. For non-staged
+        # storms the 12h base is scaled DOWN for small events (see
+        # _scaled_assessment), computed from the whole storm's real customer
+        # sum before is_localized can zero it.
+        eff_assess = _scaled_assessment(
+            0.0 if req.pre_storm_staging else 12.0,
+            sum(o.customers for o in req.outages),
+        )
         total, crews = _run_scheduler(
             req.outages, req.crews, req.seed, req.realistic, req.customer_weight,
             crew_specialization=req.crew_specialization,
@@ -861,9 +883,14 @@ def _scheduler_time_only(outage_tuples, m_crews, seed, realistic,
         # Overnight ops from the REAL sum (see _run_scheduler) so small
         # localized storms keep overnight behavior in the recommend search.
         overnight_ops = bool(realistic and 0 < real_total <= 70000)
+        # Small-event assessment scaling from the real sum, matching
+        # schedule() so the recommended crew count is consistent with what
+        # the full simulation reports (see _scaled_assessment).
+        eff_assess = _scaled_assessment(12.0, real_total) if realistic else 0.0
     else:
         total_customers = None
         overnight_ops = None
+        eff_assess = None
     if req is not None and (req.crew_specialization or req.crew_stickiness
                             or req.hierarchical or req.tiered_priority
                             or req.customer_weight or req.storm_duration):
@@ -879,6 +906,7 @@ def _scheduler_time_only(outage_tuples, m_crews, seed, realistic,
             tiered_priority=req.tiered_priority,
             storm_duration=req.storm_duration,
             crew_stickiness=req.crew_stickiness,
+            assessment_delay=eff_assess,
             total_customers=total_customers,
             is_localized=req.is_localized,
             overnight_ops=overnight_ops,
@@ -889,6 +917,7 @@ def _scheduler_time_only(outage_tuples, m_crews, seed, realistic,
             outage_tuples, m_crews, realistic=realistic, seed=seed,
             total_customers=total_customers,
             overnight_ops=overnight_ops,
+            assessment_delay=(eff_assess if eff_assess is not None else 12.0),
         )
         return float(total)
     if _FAST:
@@ -1162,13 +1191,14 @@ def batch(req: BatchRequest) -> BatchResponse:
 
 def _mc_worker(args):
     """Top-level (picklable) worker invoked in the process pool."""
-    outage_tuples, crews, seed, realistic, total_customers, overnight_ops = args
+    outage_tuples, crews, seed, realistic, total_customers, overnight_ops, assessment_delay = args
     try:
         from scheduler_numba import plan_restoration_numba
         _, total, _ = plan_restoration_numba(outage_tuples, crews,
                                              realistic=realistic, seed=seed,
                                              total_customers=total_customers,
-                                             overnight_ops=overnight_ops)
+                                             overnight_ops=overnight_ops,
+                                             assessment_delay=assessment_delay)
         return total
     except Exception:
         from scheduler_fast import plan_restoration_fast
@@ -1192,7 +1222,10 @@ def monte_carlo(req: MonteCarloRequest) -> MonteCarloResponse:
         eff_storm = req.storm_duration + (6.0 if req.storm_drag else 0.0)
         eff_road  = 1.5 * (1.25 if req.soil_saturation else 1.0)
         tree_mult = 1.3 if req.soil_saturation else 1.0
-        eff_assess = 0.0 if req.pre_storm_staging else 12.0
+        real_total = sum(o.customers for o in req.outages)
+        # Small-event assessment scaling from the real customer sum (parity
+        # with schedule() and the JS scheduler; see _scaled_assessment).
+        eff_assess = _scaled_assessment(0.0 if req.pre_storm_staging else 12.0, real_total)
         has_sub_flags = (
             req.crew_specialization or req.crew_stickiness or req.hierarchical
             or req.tiered_priority or req.customer_weight > 0 or req.storm_duration > 0
@@ -1204,12 +1237,11 @@ def monte_carlo(req: MonteCarloRequest) -> MonteCarloResponse:
         N = len(outage_tuples)
         use_pool = not has_sub_flags and (N * req.crews) > 10_000_000
         if use_pool:
-            real_total = sum(o.customers for o in req.outages)
             total_customers = 0 if req.is_localized else real_total
             overnight_ops = bool(req.realistic and 0 < real_total <= 70000)
             jobs = [(outage_tuples, req.crews,
                      (req.base_seed + k * 9973) & 0xFFFFFFFF, req.realistic,
-                     total_customers, overnight_ops)
+                     total_customers, overnight_ops, eff_assess)
                     for k in range(req.n_runs)]
             pool = _get_pool()
             times = list(pool.map(_mc_worker, jobs))

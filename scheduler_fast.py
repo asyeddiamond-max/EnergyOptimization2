@@ -47,7 +47,7 @@ def _haversine_miles_vec(lat1, lon1, lat2_arr, lon2_arr):
 
 
 def plan_restoration_fast(outages, m_crews, realistic=True, seed=42, total_customers=None,
-                          overnight_ops=None):
+                          overnight_ops=None, assessment_delay=None):
     """Vectorized scheduler. `outages` is a list of (lat, lon) tuples.
 
     Returns (crews, total_time, timeline) in the same shape as the reference
@@ -60,6 +60,9 @@ def plan_restoration_fast(outages, m_crews, realistic=True, seed=42, total_custo
     overnight_ops: small-storm overnight operations (see scheduler_numba.py's
     plan_restoration_numba for the EAGLE-I-derived rationale); None derives
     it from total_customers.
+    assessment_delay: pre-work damage-assessment hours; None derives the same
+    small-event scaling as the JS scheduler / _scaled_assessment (12h base,
+    tapering to a 4h floor below 60k customers).
     """
     N = len(outages)
     if N == 0 or m_crews == 0:
@@ -71,7 +74,12 @@ def plan_restoration_fast(outages, m_crews, realistic=True, seed=42, total_custo
         overnight_ops = 0 < tc <= 70000
 
     TRAVEL_MPH = 25 if realistic else 30
-    ASSESSMENT_DELAY = 12 if realistic else 0
+    if assessment_delay is not None:
+        ASSESSMENT_DELAY = assessment_delay if realistic else 0
+    elif realistic and 0 < tc < 60000:
+        ASSESSMENT_DELAY = max(4.0, min(12.0, 12.0 * (tc / 60000.0) ** 0.4))
+    else:
+        ASSESSMENT_DELAY = 12 if realistic else 0
     WORKDAY_HOURS = 24 if overnight_ops else (14 if realistic else 24)
     ROAD_MULTIPLIER = 1.5 if realistic else 1.0
 

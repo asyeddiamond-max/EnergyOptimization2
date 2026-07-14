@@ -223,7 +223,11 @@ def plan_restoration(outages, m_crews, rnd_master, realistic=True, total_custome
     import heapq
     import math as _math
     TRAVEL_MPH = 25 if realistic else 30
-    ASSESSMENT_DELAY = 12 if realistic else 0
+    # Small-event assessment scaling (see scheduler_numba / _scaled_assessment).
+    if realistic and 0 < tc < 60000:
+        ASSESSMENT_DELAY = max(4.0, min(12.0, 12.0 * (tc / 60000.0) ** 0.4))
+    else:
+        ASSESSMENT_DELAY = 12 if realistic else 0
     WORKDAY_HOURS = 24 if overnight_ops else (14 if realistic else 24)
     ROAD_MULTIPLIER = 1.5 if realistic else 1.0
     N = len(outages)
