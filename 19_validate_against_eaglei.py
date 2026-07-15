@@ -40,6 +40,17 @@ STORM_WINDOWS = {
     2022: [
         ("Dec 2022 Windstorm", "2022-12-23 00:00", "2022-12-28 00:00", {"customers": 120000, "duration_h": 72,  "note": "99%-restored milestone in dataset"}),
     ],
+    2023: [
+        ("March 2023 Noreaster", "2023-03-13 12:00", "2023-03-20 00:00", {"customers": 26800,  "duration_h": 72,  "note": "documented PURA reference"}),
+        ("Dec 2023 Noreaster",   "2023-12-17 12:00", "2023-12-24 00:00", {"customers": 90000,   "duration_h": 96,  "note": "documented reference"}),
+    ],
+    2024: [
+        # The dataset entry is dated 2024-01-10; EAGLE-I shows Jan 2024 was
+        # actually a CLUSTER of minor CT events (Jan 9-10 ~6.4k, Jan 13-14
+        # ~10.5k, Jan 16-17 ~6k), none near the dataset's 52k claim. Window
+        # isolated to the dated Jan 9-10 event for a clean single-storm read.
+        ("Jan 2024 Windstorm",   "2024-01-09 18:00", "2024-01-12 00:00", {"customers": 52000,  "duration_h": 72,  "note": "documented reference"}),
+    ],
 }
 
 
@@ -47,13 +58,16 @@ def load_statewide_series(year: int) -> dict[datetime, int]:
     path = HERE / "data" / f"eaglei_ct_{year}.csv"
     series: dict[datetime, int] = defaultdict(int)
     with open(path, encoding="utf-8") as f:
-        for row in csv.DictReader(f):
+        reader = csv.DictReader(f)
+        # Schema drifts across the yearly files: 2020-2022 name the outage
+        # column "customers_out", 2023 uses "sum" (the Scientific Data paper's
+        # original schema name), 2024 adds a trailing "total_customers" column.
+        col = "customers_out" if "customers_out" in (reader.fieldnames or []) else "sum"
+        for row in reader:
             t = datetime.strptime(row["run_start_time"], "%Y-%m-%d %H:%M:%S")
             try:
-                # Actual column name in the published files is customers_out
-                # (the Scientific Data paper's schema table calls it "sum").
-                series[t] += int(float(row["customers_out"] or 0))
-            except ValueError:
+                series[t] += int(float(row[col] or 0))
+            except (ValueError, TypeError):
                 continue
     return dict(series)
 

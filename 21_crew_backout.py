@@ -50,13 +50,44 @@ STORMS = [
     ("Sandy 2012",      15500, 496769, 264,   "pura",       4000,  "interp", None,              False),
     ("Irene 2011",      21350, 671789, 288,   "pura",       3800,  "interp", None,              False),
     ("Snowtober 2011",  26050, 807228, 264,   "pura",       4800,  "interp", None,              False),
+    ("Dec 2022",         3450, 106021,  75,   "eaglei",     1100,  "real",   "dec2022",         False),
+    ("March 2023",        450,  13863,  60,   "eaglei",      350,  "interp", None,              False),
+    ("Dec 2023",         2850,  86770,  83,   "eaglei",      700,  "interp", "dec2023",         False),
+    ("Jan 2024",          200,   6409,  26,   "eaglei",      500,  "interp", "jan2024",         False),
     ("Aug 2020 Tornado", 2050,  63912,  66,   "eaglei",      380,  "real",   None,              True),
     ("Oct 2020 Derecho",  950,  27943,  28,   "eaglei",      300,  "interp", "oct2020_derecho", False),
     ("Henri 2021",        830,  23000,  34,   "eaglei",      300,  "interp", "henri_2021",      False),
     ("Ida 2021",         1250,  36822,  51,   "eaglei",      300,  "interp", None,              False),
-    ("Dec 2023",         2850,  89000,  96,   "documented",  700,  "real",   "dec2023",         False),
     ("July 2026",        6000, 180000, 108,   "documented",  702,  "real",   "july2026",        True),
 ]
+# Notes on the four EAGLE-I storms added 2026-07-15 (years 2022/2023/2024
+# streamed via 18_fetch_eaglei_ct.py; measured via 19_validate_against_eaglei.py):
+#   Dec 2022 : EAGLE-I peak 106,021 / full-restore 75h (dataset had 120k/72h --
+#              close). REAL disclosed crews: 1,100+ (Eversource press release) --
+#              second large storm with a genuinely-sourced crew count, after
+#              Isaias. The key new validation point. Model IMPLIES 1,541 (ratio
+#              1.40) -- but the disclosed 1,100 is EVERSOURCE-ONLY; the press
+#              release adds "plus hundreds of out-of-state mutual-aid workers,"
+#              i.e. true total ~1,100 + ~400 ~= 1,500, which the model's 1,541
+#              reconciles almost exactly. So the >1x ratio isn't a model miss --
+#              it's the back-out recovering the uncounted mutual-aid crews.
+#              (Has its OWN HRRR grid now -- 12_/dec2022, peak gust 64mph -- but
+#              that broad flat wind field makes wind placement ~= uniform here.)
+#   Dec 2023 : EAGLE-I peak 86,770 / 83h (dataset 89k/96h -- peak spot-on, time
+#              was ~13h long). Crews (700) RECLASSIFIED real->interp: the dataset
+#              entry cites no crew source (unlike Dec 2022/Isaias/July 2026), so
+#              700 is an estimate, not a disclosure -- honest downgrade.
+#   March 2023: EAGLE-I peak 13,863 / 60h (dataset 26.8k/72h -- peak ~2x
+#              overstated, from a same-day news snapshot). Crews interp.
+#   Jan 2024 : EAGLE-I reveals a CLUSTER of MINOR events (Jan 9-10 6.4k, Jan
+#              13-14 10.5k, Jan 16-17 6k), NOT the dataset's single 52k storm
+#              (~8x overstated). Isolated the dated Jan 9-10 event: 6,409 / 26h.
+#              Its disclosed 500 crews was interpolated FROM the wrong 52k peak,
+#              so its implied/disclosed ratio is not a meaningful signal -- kept
+#              as an interp (orange) context point only.
+# Pattern worth noting: the well-SOURCED storms (Dec 2022, Dec 2023 peak, Isaias)
+# hold up against EAGLE-I; the news-snapshot / interpolated ones (Jan 2024,
+# March 2023, Oct 2020) were systematically OVER-stated in the dataset.
 
 CREW_LO, CREW_HI = 8, 12000       # binary-search bounds
 N_SEED = 4                        # median over this many seeds per evaluation
@@ -203,54 +234,66 @@ def make_plot(rows):
                  fontsize=13, weight="bold")
 
     ok = [r for r in rows if not np.isnan(r["implied"])]
-    # Left: implied vs disclosed, 1:1 line. Color = disclosed-crew confidence,
-    # marker = placement (square=wind-weighted, circle=uniform), triangle=floor.
-    for r in rows:
-        color = "#16a34a" if r["cconf"] == "real" else "#f59e0b"
-        if np.isnan(r["implied"]):
-            marker = "v"
-        else:
-            marker = "s" if r["place"] == "wind" else "o"
-        y = r["implied"] if not np.isnan(r["implied"]) else r["disc"]
-        axL.scatter(r["disc"], y, s=75, color=color, marker=marker,
-                    edgecolor="#222", zorder=5)
-        axL.annotate(r["label"], (r["disc"], y), fontsize=7,
-                     xytext=(5, 4), textcoords="offset points")
-    mx = max(max(r["disc"] for r in rows),
-             max(r["implied"] for r in ok)) * 1.15
-    axL.plot([0, mx], [0, mx], ls="--", color="#888", label="1:1 (model = disclosed)")
-    # 0.71 mean for the real-disclosed storms
-    real_ratios = [r["implied"]/r["disc"] for r in ok if r["cconf"] == "real"]
-    if real_ratios:
-        rbar = np.mean(real_ratios)
-        axL.plot([0, mx], [0, rbar*mx], ls=":", color="#16a34a",
-                 label=f"mean of real-disclosed = {rbar:.2f}x")
-    axL.set_xlabel("utility-DISCLOSED peak crews")
-    axL.set_ylabel("model-IMPLIED effective crews")
-    axL.set_title("Implied vs disclosed  (green=disclosed real, orange=interp;\n"
-                  "■ wind-weighted placement, ● uniform, ▽ = faster than model floor)",
-                  fontsize=9)
-    axL.legend(fontsize=8); axL.grid(alpha=0.3)
-    axL.set_xlim(0, mx); axL.set_ylim(0, mx)
-
-    # Right: implied crews vs storm size (customers) -> surge/reserve curve.
+    floored = [r for r in rows if np.isnan(r["implied"])]
+    # LOG-LOG left panel: crews span 49-3731 and customers 6k-807k (~2 orders
+    # of magnitude), so log axes spread the many small storms out of the
+    # bottom-left corner. On log axes the 1:1 line and any constant-ratio guide
+    # are still straight (parallel) diagonals.
     for r in ok:
         color = "#16a34a" if r["cconf"] == "real" else "#f59e0b"
+        marker = "s" if r["place"] == "wind" else "o"
+        axL.scatter(r["disc"], r["implied"], s=80, color=color, marker=marker,
+                    edgecolor="#222", zorder=5)
+        axL.annotate(r["label"], (r["disc"], r["implied"]), fontsize=7,
+                     xytext=(6, 3), textcoords="offset points")
+    lo = 30
+    hi = max(max(r["disc"] for r in rows), max(r["implied"] for r in ok)) * 1.6
+    diag = np.array([lo, hi])
+    axL.plot(diag, diag, ls="--", color="#888", zorder=2, label="1:1 (model = disclosed)")
+    # Guide bands rather than a single (now-misleading) mean: the sourced-crew
+    # storms fall between ~0.6x and ~1.4x of disclosed, and those deviations
+    # are interpretable (Eversource-only vs total-fielded, mobilization speed).
+    for k, style in ((0.6, ":"), (1.4, ":")):
+        axL.plot(diag, k*diag, ls=style, color="#16a34a", alpha=0.6, zorder=2)
+    axL.annotate("0.6x", (hi, 0.6*hi), color="#16a34a", fontsize=7, va="center")
+    axL.annotate("1.4x", (hi, 1.4*hi), color="#16a34a", fontsize=7, va="center")
+    # Floor storms (real faster than the model can go at any crew count): draw
+    # at the top edge with an up-triangle -> "implied is off the top / undefined".
+    for r in floored:
+        axL.scatter(r["disc"], hi*0.92, s=90, color="#16a34a" if r["cconf"] == "real" else "#f59e0b",
+                    marker="^", edgecolor="#222", zorder=5)
+        axL.annotate(f"{r['label']} (>{CREW_HI}, model floor {r['floor_h']:.0f}h>real {r['real_h']}h)",
+                     (r["disc"], hi*0.92), fontsize=6.5, xytext=(6, -2), textcoords="offset points")
+    axL.set_xscale("log"); axL.set_yscale("log")
+    axL.set_xlim(lo, hi*1.5); axL.set_ylim(lo, hi*1.5)
+    axL.set_xlabel("utility-DISCLOSED peak crews (log)")
+    axL.set_ylabel("model-IMPLIED effective crews (log)")
+    axL.set_title("Implied vs disclosed  (green=sourced crews, orange=interp;\n"
+                  "■ wind-weighted placement, ● uniform, ▲ = faster than model floor)",
+                  fontsize=9)
+    axL.legend(fontsize=8, loc="upper left"); axL.grid(alpha=0.3, which="both")
+
+    # Right: implied crews vs storm size (customers), log-x. implied (filled) +
+    # disclosed (hollow blue) for each storm, connected so the gap is visible.
+    for r in ok:
+        color = "#16a34a" if r["cconf"] == "real" else "#f59e0b"
+        axR.plot([r["cust"], r["cust"]], [r["implied"], r["disc"]],
+                 color="#bbb", lw=0.8, zorder=1)
         axR.scatter(r["cust"], r["implied"], s=70, color=color, edgecolor="#222", zorder=5)
         axR.annotate(r["label"], (r["cust"], r["implied"]), fontsize=7,
                      xytext=(5, 4), textcoords="offset points")
-    # disclosed for comparison (hollow)
     for r in rows:
         axR.scatter(r["cust"], r["disc"], s=45, facecolor="none",
                     edgecolor="#2563eb", zorder=4)
-    axR.plot([], [], "o", color="#16a34a", label="implied (disclosed real)")
-    axR.plot([], [], "o", color="#f59e0b", label="implied (disclosed interp)")
+    axR.plot([], [], "o", color="#16a34a", label="implied (sourced crews)")
+    axR.plot([], [], "o", color="#f59e0b", label="implied (interp crews)")
     axR.plot([], [], "o", markerfacecolor="none", markeredgecolor="#2563eb",
              label="disclosed peak crews")
-    axR.set_xlabel("storm peak customers out")
+    axR.set_xscale("log")
+    axR.set_xlabel("storm peak customers out (log)")
     axR.set_ylabel("crews")
     axR.set_title("Crews vs storm size — surge/reserve relationship", fontsize=10)
-    axR.legend(fontsize=8); axR.grid(alpha=0.3)
+    axR.legend(fontsize=8); axR.grid(alpha=0.3, which="both")
 
     fig.tight_layout(rect=[0, 0, 1, 0.95])
     OUT_DIR.mkdir(exist_ok=True)

@@ -64,6 +64,11 @@ STORMS = {
     # archive, so unlike the older synthetic-track July 2026 entry this pulls
     # the REAL measured wind/rain footprint for the event.
     "july2026":    {"date": "2026-07-05 00:00", "precip_type": "rain"},
+    # Dec 2022 Pre-Christmas Windstorm -- broad rain/windstorm, EAGLE-I CT peak
+    # at 2022-12-23 14:00 UTC (~9am EST). Added for the crew back-out so this
+    # real-disclosed-crew storm (1,100+ crews) uses the same wind-weighted
+    # placement as its size-peer Dec 2023, rather than uniform.
+    "dec2022":     {"date": "2022-12-23 14:00", "precip_type": "rain"},
 }
 STORM_NAMES = {
     "isaias_2020": "Tropical Storm Isaias",
@@ -73,6 +78,7 @@ STORM_NAMES = {
     "dec2023":     "December 2023 Nor'easter",
     "oct2020_derecho": "October 2020 Northeast Serial Derecho",
     "july2026":    "July 4 2026 Severe Thunderstorm Complex",
+    "dec2022":     "December 2022 Pre-Christmas Windstorm",
 }
 
 
