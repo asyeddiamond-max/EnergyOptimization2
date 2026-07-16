@@ -57,8 +57,8 @@
     if (!validRunId(message.runId)) {
       throw new model.InputValidationError("Worker runId must be a non-empty string or finite number");
     }
-    if (message.type !== "generate" && message.type !== "cancel") {
-      throw new model.InputValidationError("Worker message type must be generate or cancel");
+    if (message.type !== "generate" && message.type !== "cancel" && message.type !== "status") {
+      throw new model.InputValidationError("Worker message type must be generate, cancel, or status");
     }
     if (message.type === "generate" && (!message.input || typeof message.input !== "object")) {
       throw new model.InputValidationError("Generate message must include an input object");
@@ -339,6 +339,15 @@
   function handleMessage(message) {
     try {
       validateMessage(message);
+      if (message.type === "status") {
+        send(envelope("ready", message.runId, { capabilities: {
+          progress: true,
+          cancellation: "between-stages",
+          supersession: true,
+          transferableSurfaces: true,
+        } }));
+        return;
+      }
       if (message.type === "cancel") {
         cancelledRuns.add(message.runId);
         if (!activeRuns.has(message.runId)) postCancelledOnce(message.runId, "not-active");

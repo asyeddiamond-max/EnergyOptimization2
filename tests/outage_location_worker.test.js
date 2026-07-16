@@ -94,6 +94,20 @@ test("Worker announces its versioned capabilities", async (t) => {
   assert.equal(ready.capabilities.transferableSurfaces, true);
 });
 
+test("Worker answers an explicit startup status handshake", async (t) => {
+  const worker = createWorker();
+  t.after(() => worker.terminate());
+  await waitFor(worker, (message) => message.type === "ready");
+  const readyPromise = waitFor(
+    worker,
+    (message) => message.type === "ready" && message.runId === "startup-test",
+  );
+  worker.postMessage({ protocol: PROTOCOL, version: 1, type: "status", runId: "startup-test" });
+  const ready = await readyPromise;
+  assert.equal(ready.capabilities.progress, true);
+  assert.equal(ready.capabilities.transferableSurfaces, true);
+});
+
 test("Worker reports real stages and returns typed surfaces plus restoration-compatible outages", async (t) => {
   const worker = createWorker();
   t.after(() => worker.terminate());

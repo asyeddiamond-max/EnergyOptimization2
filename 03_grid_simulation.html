@@ -83,9 +83,9 @@
   button.action:active { transform: translateY(0); }
 
   #status {
-    font-size:11px; color:#475569; margin-top:10px; padding:8px 10px;
+    position:sticky; bottom:0; z-index:5; font-size:11px; color:#475569; margin-top:10px; padding:8px 10px;
     background:#eef3fb; border-radius:6px; border-left:3px solid #5b8def;
-    line-height:1.4;
+    line-height:1.4; box-shadow:0 -4px 12px rgba(15,31,58,.08);
   }
 
   .seed-explainer {
@@ -105,6 +105,12 @@
   .map-legend .ml-note { color:#6b7a93; font-size:10px; }
   .map-legend .ml-line { display:inline-block; width:18px; border-top:2px solid; }
   .map-legend .sq { display:inline-block; width:11px; height:11px; background:#475569; border:1px solid #1e293b; border-radius:2px; }
+  .map-layer-picker { min-width:170px; padding:9px 11px; }
+  .map-layer-picker label { display:flex; align-items:center; gap:7px; cursor:pointer; line-height:1.55; }
+  .map-layer-picker input { margin:0; accent-color:#2563eb; }
+  .map-layer-picker label.layer-unavailable { color:#94a3b8; cursor:not-allowed; }
+  .map-layer-picker .layer-state { margin-left:auto; color:#94a3b8; font-size:9px; font-style:italic; }
+  .map-layer-picker .layer-group-title { margin-top:5px; padding-top:5px; border-top:1px solid #e2e8f0; color:#64748b; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; }
 
   .rf-root { background:#f8fafc !important; border-color:#cbd5e1 !important; }
   .rf-panel { display:none; margin-top:6px; max-height:340px; overflow-y:auto; }
@@ -143,6 +149,47 @@
   .model-stale { color:#92400e; font-weight:700; }
   .surface-ramp { height:9px; border-radius:5px; margin:5px 0 2px;
     background:linear-gradient(90deg,rgba(12,24,55,.1),#1e609b,#26b5b2,#f6d344,#c42d26); }
+  .phase-folder {
+    border:1px solid #d8e0ee; border-radius:12px; background:rgba(255,255,255,.72);
+    margin:0 0 10px; overflow:hidden; box-shadow:0 1px 3px rgba(15,31,58,.06);
+  }
+  .phase-folder > summary {
+    display:flex; align-items:center; gap:9px; cursor:pointer; list-style:none;
+    padding:11px 12px; background:#f8fafc; user-select:none;
+  }
+  .phase-folder > summary::-webkit-details-marker { display:none; }
+  .phase-folder > summary::after {
+    content:'›'; margin-left:auto; color:#64748b; font-size:20px; line-height:1;
+    transform:rotate(0deg); transition:transform .16s ease;
+  }
+  .phase-folder[open] > summary { background:#eef4ff; border-bottom:1px solid #d8e0ee; }
+  .phase-folder[open] > summary::after { transform:rotate(90deg); }
+  .phase-number {
+    display:grid; place-items:center; flex:0 0 25px; height:25px; border-radius:8px;
+    background:#dbeafe; color:#1d4ed8; font-size:11px; font-weight:800;
+  }
+  .phase-title { display:block; color:#1e293b; font-size:12px; font-weight:750; }
+  .phase-subtitle { display:block; color:#64748b; font-size:9.5px; margin-top:1px; line-height:1.25; }
+  .phase-content { padding:10px 10px 2px; }
+  .phase-content > .section-label { display:none; }
+  .tool-folder {
+    border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc;
+    margin:8px 0; overflow:hidden;
+  }
+  .tool-folder > summary {
+    cursor:pointer; list-style:none; padding:8px 10px; color:#475569;
+    font-size:10.5px; font-weight:700; display:flex; align-items:center; gap:6px;
+  }
+  .tool-folder > summary::-webkit-details-marker { display:none; }
+  .tool-folder > summary::before { content:'+'; color:#3b82f6; font-size:14px; }
+  .tool-folder[open] > summary::before { content:'−'; }
+  .tool-folder[open] > summary { border-bottom:1px solid #e2e8f0; background:#fff; }
+  .tool-content { padding:8px 8px 1px; }
+  /* Future/developer workflows stay in the codebase but are intentionally
+     absent from the professor-facing review UI. */
+  .future-tool { display:none; }
+  .engine-retry { display:none; width:100%; margin-top:5px; padding:5px; border:1px solid #fca5a5;
+    background:#fff; color:#991b1b; border-radius:5px; font-size:10px; font-weight:700; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -151,6 +198,12 @@
     <h1>Connecticut — Storm &amp; Restoration</h1>
     <p>Model weather-driven outage locations across Connecticut, then plan crew-based restoration.</p>
 
+    <details class="phase-folder" id="phaseSetup">
+      <summary>
+        <span class="phase-number">0</span>
+        <span><span class="phase-title">Scenario assumptions</span><span class="phase-subtitle">Seed and restoration realism settings</span></span>
+      </summary>
+      <div class="phase-content">
     <div class="seed-explainer">
       <b>Random seed</b> — controls <i>every</i> random choice in the model: where feeders branch, where the storm strikes, where crew depots sit. Same seed + same sliders → identical result every time (reproducible). Change the seed to explore a different scenario.
       <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
@@ -199,6 +252,15 @@
       </div>
     </div>
 
+      </div>
+    </details>
+
+    <details class="phase-folder" id="phaseGrid">
+      <summary>
+        <span class="phase-number">1</span>
+        <span><span class="phase-title">Distribution grid</span><span class="phase-subtitle">Real substations with synthetic feeders and laterals</span></span>
+      </summary>
+      <div class="phase-content">
     <div class="section-label">1 · Distribution grid</div>
 
     <div class="ctrl" style="background:#ecfdf5;border-color:#6ee7b7;">
@@ -215,6 +277,15 @@
     <button class="action btn-grid" id="genGrid">Generate distribution grid</button>
     <div class="progress" id="gridProgress"><span class="label" id="gridProgressLabel">0%</span><div class="bar" id="gridProgressBar"></div></div>
 
+      </div>
+    </details>
+
+    <details class="phase-folder" id="phaseOutages" open>
+      <summary>
+        <span class="phase-number">2</span>
+        <span><span class="phase-title">Outage locations</span><span class="phase-subtitle">Weather, customer exposure, smoothing, and sampling</span></span>
+      </summary>
+      <div class="phase-content">
     <div class="section-label">2 · Storm simulation</div>
 
     <div class="ctrl model-card">
@@ -223,16 +294,18 @@
       <select id="stormTrackSelect">
         <option value="isaias_2020">Isaias 2020</option>
       </select>
-      <label for="outagePlacementModel" style="display:block;font-size:10px;color:#475569;margin-top:6px;">Placement method</label>
-      <select id="outagePlacementModel">
-        <option value="research">Weather + customer exposure</option>
-        <option value="basic">Basic network placement (no weather field)</option>
-      </select>
-      <div id="modelAvailability" class="model-availability warn">Checking weather data and Worker support…</div>
+      <div id="modelAvailability" class="model-availability warn">Preparing outage generator…</div>
+      <button type="button" id="retryOutageEngine" class="engine-retry">Retry outage generator</button>
       <div class="small"><b>50 customers per outage.</b> The default 2,000-point scenario represents exactly 100,000 customers without power.</div>
-      <button type="button" id="applyHistoricalPreset" style="margin-top:7px;width:100%;border:1px solid #93c5fd;background:#fff;color:#1d4ed8;border-radius:5px;padding:5px;font-size:10px;cursor:pointer;">Apply historical restoration preset</button>
+      <button type="button" id="applyHistoricalPreset" class="future-tool" style="margin-top:7px;width:100%;border:1px solid #93c5fd;background:#fff;color:#1d4ed8;border-radius:5px;padding:5px;font-size:10px;cursor:pointer;">Apply historical restoration preset</button>
       <details class="model-advanced" id="outageModelAdvanced">
-        <summary>Outage model parameters</summary>
+        <summary>Expert scientific calibration</summary>
+        <div style="font-size:9.5px;color:#64748b;line-height:1.35;margin-top:6px;">The validated weather-and-customer method is recommended. Change these controls only when testing model assumptions.</div>
+        <label for="outagePlacementModel" style="display:block;font-size:10px;color:#475569;margin-top:6px;">Placement method</label>
+        <select id="outagePlacementModel">
+          <option value="research">Weather + customer exposure</option>
+          <option value="basic">Basic network placement (no weather field)</option>
+        </select>
         <div class="model-param-grid">
           <label for="modelWindThreshold">Wind threshold (mph)</label><input id="modelWindThreshold" type="number" min="0" max="249" step="1" />
           <label for="modelWindScale">Wind exceedance scale (mph)</label><input id="modelWindScale" type="number" min="0.1" step="1" />
@@ -251,9 +324,9 @@
     </div>
 
     <div class="ctrl">
-      <div class="row"><span>Storm outages: <b id="oVal">2000</b></span></div>
+      <div class="row"><span>Customers affected: <b id="customerScaleVal">100,000</b></span></div>
       <input type="range" id="oSlider" min="50" max="100000" value="2000" step="10" />
-      <div class="small">How many failure points to place across feeders and laterals.</div>
+      <div class="small"><b id="oVal">2,000</b> modeled failure units × 50 customers each.</div>
     </div>
 
     <div id="modelSummary" class="model-summary">
@@ -285,6 +358,9 @@
     <button class="action btn-storm" id="simStorm">Generate outage scenario</button>
     <div class="progress" id="stormProgress"><span class="label" id="stormProgressLabel">0%</span><div class="bar orange" id="stormProgressBar"></div></div>
 
+    <details class="tool-folder future-tool">
+      <summary>Alternative input: live Eversource outages</summary>
+      <div class="tool-content">
     <!-- LIVE MODE: real current Eversource CT outages (17_fetch_live_outages.py) -->
     <div class="ctrl" style="background:#ecfdf5;border-color:#6ee7b7;margin-top:8px;">
       <div style="font-size:11px;font-weight:700;color:#065f46;margin-bottom:3px;">&#x1F534; LIVE MODE &mdash; real current CT outages</div>
@@ -300,6 +376,8 @@
       <div id="liveStatus" style="font-size:10px;color:#065f46;margin-top:4px;font-family:ui-monospace,monospace;"></div>
       <div id="liveCompare" style="display:none;font-size:10px;color:#065f46;margin-top:4px;padding:6px;background:#d1fae5;border-radius:4px;line-height:1.5;"></div>
     </div>
+      </div>
+    </details>
 
     <div class="stat-box stat-affected">
       <div class="lbl">Customers without power</div>
@@ -312,6 +390,15 @@
       <div class="big" id="outageCount">0</div>
     </div>
 
+      </div>
+    </details>
+
+    <details class="phase-folder" id="phaseRestoration">
+      <summary>
+        <span class="phase-number">3</span>
+        <span><span class="phase-title">Restoration planning</span><span class="phase-subtitle">Choose crews, schedule repairs, and inspect the curve</span></span>
+      </summary>
+      <div class="phase-content">
     <div class="section-label">3 · Restoration plan</div>
 
     <div class="ctrl">
@@ -321,6 +408,10 @@
 
     <button class="action btn-restore" id="planRestore">Plan restoration</button>
     <div class="progress" id="planProgress"><span class="label" id="planProgressLabel">0%</span><div class="bar" id="planProgressBar"></div></div>
+
+    <details class="tool-folder future-tool">
+      <summary>Advanced compute, batch, and Monte Carlo tools</summary>
+      <div class="tool-content">
     <button id="benchmarkBtn" style="width:100%; margin-top:4px; padding:8px; border:1px solid #94a3b8; background:#f8fafc; color:#475569; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer;">Benchmark JS vs WASM</button>
     <div id="benchmarkResult" style="font-size:10px; color:#475569; margin-top:4px; padding:6px; background:#f1f5f9; border-radius:4px; font-family:ui-monospace,monospace; display:none; white-space:pre-line;"></div>
 
@@ -389,6 +480,8 @@
       <button id="monteCarloBtn" style="width:100%;padding:8px;border:1px solid #6366f1;background:#fff;color:#3730a3;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">Monte Carlo ensemble (30 seeds)</button>
       <div id="serverStatus" style="font-size:10px;color:#3730a3;margin-top:4px;padding:6px;background:#fff;border-radius:4px;font-family:ui-monospace,monospace;display:none;white-space:pre-line;"></div>
     </div>
+      </div>
+    </details>
 
     <div class="stat-box stat-restore">
       <div class="lbl">Total restoration time</div>
@@ -404,6 +497,9 @@
       </div>
     </div>
 
+    <details class="tool-folder future-tool">
+      <summary>Crew-count optimization</summary>
+      <div class="tool-content">
     <div class="ctrl" style="background:#fff7ed;border-color:#fdba74;">
       <div style="font-size:11px;color:#9a3412;line-height:1.45;margin-bottom:6px;">
         Finds the most cost-efficient crew count: the smallest number of crews that gets restoration time within 15% of the best achievable time (the floor, evaluated at the slider maximum). Adding more crews past this point only saves &lt;15% more time but costs significantly more.
@@ -417,9 +513,20 @@
         <button id="applyRecCrews" style="display:none;margin-top:8px;width:100%;border:1px solid #fcd34d;background:white;color:#b45309;padding:6px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Apply to slider</button>
       </div>
     </div>
+      </div>
+    </details>
 
     <button class="action btn-reset" id="resetAll">Reset storm</button>
 
+      </div>
+    </details>
+
+    <details class="phase-folder" id="phaseReview">
+      <summary>
+        <span class="phase-number">4</span>
+        <span><span class="phase-title">Review and export</span><span class="phase-subtitle">Report download and supporting map layers</span></span>
+      </summary>
+      <div class="phase-content">
     <div class="section-label">4 · Export</div>
 
     <div class="ctrl" style="background:#f0f9ff;border-color:#bae6fd;">
@@ -434,10 +541,10 @@
         <div style="font-size:12px;font-weight:600;color:#334155;">5 · Real-data layers</div>
         <button type="button" id="realDataExpandBtn" style="background:#f1f5f9;border:1px solid #cbd5e1;color:#475569;font-size:10px;padding:2px 10px;border-radius:4px;cursor:pointer;">Show &#9662;</button>
       </div>
-      <div style="font-size:10px;color:#64748b;margin-top:3px;line-height:1.35;">HIFLD critical facilities · NLCD tree canopy · Census tracts · NOAA tracks · DOE OE-417 — all active by default.</div>
+      <div style="font-size:10px;color:#64748b;margin-top:3px;line-height:1.35;">Optional HIFLD facilities, Census, NOAA tracks, and DOE references. Enable only the layers needed for the current review.</div>
       <div id="realDataPanel" class="rf-panel">
         <div class="rf-item">
-          <label class="rf-label"><input type="checkbox" id="showCriticalFacilities" checked /><span class="rf-name">Critical facilities</span></label>
+          <label class="rf-label"><input type="checkbox" id="showCriticalFacilities" /><span class="rf-name">Critical facilities</span></label>
           <div class="rf-desc">Real HIFLD hospitals, fire stations, EMS, water plants shown on map. Outages near these are priority-1 for restoration. <span id="critFacilityCount"></span></div>
         </div>
         <div class="rf-item">
@@ -458,6 +565,9 @@
         </div>
       </div>
     </div>
+
+      </div>
+    </details>
 
     <div id="status">Loading boundary…</div>
   </aside>
@@ -675,26 +785,47 @@ map.createPane('countyBoundary');
 map.getPane('countyBoundary').style.zIndex = 650;
 map.getPane('countyBoundary').style.pointerEvents = 'none';
 
-const legend=L.control({position:'bottomleft'});
-legend.onAdd=function(){
-  const div=L.DomUtil.create('div','map-legend');
+const mapLayerVisibility={
+  towns:false,territories:false,gridLines:false,substations:false,
+  impactSurface:true,outages:true,restoration:true,depots:true,
+  criticalFacilities:false,stormTrack:false,
+};
+const layerPicker=L.control({position:'topright'});
+layerPicker.onAdd=function(){
+  const div=L.DomUtil.create('div','map-legend map-layer-picker');
+  div.id='mapLayerPicker';
   div.innerHTML=`
-    <div class="ml-title">Distribution simulation</div>
-    <div class="ml-row"><svg width="14" height="14" viewBox="0 0 24 24"><polygon points="12,1 15,9 23,9 16.5,14 19,22 12,17 5,22 7.5,14 1,9 9,9" fill="#f4c842" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg> Substation</div>
-    <div class="ml-row"><span class="ml-line" style="border-color:#1f77b4"></span> Feeder backbone (colored by substation)</div>
-    <div class="ml-row"><span class="ml-line" style="border-color:#bfc4cb;border-width:1px"></span> Lateral</div>
-    <div class="ml-row"><svg width="14" height="14" viewBox="0 0 14 14"><line x1="2" y1="2" x2="12" y2="12" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round"/><line x1="12" y1="2" x2="2" y2="12" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round"/></svg> Storm outage</div>
-    <div class="ml-row"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#475569;vertical-align:middle;margin-right:4px;"></span> Crew depot</div>
-    <div class="ml-row"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#c0312b;vertical-align:middle;margin-right:4px;"></span> Hospital</div>
-    <div class="ml-row"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#e06c1a;vertical-align:middle;margin-right:4px;"></span> Fire station</div>
-    <div class="ml-row"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#2563eb;vertical-align:middle;margin-right:4px;"></span> EMS</div>
-    <div class="ml-row"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#0d7a6b;vertical-align:middle;margin-right:4px;"></span> Water plant</div>
-    <div class="ml-row"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="#fbbf24" stroke="#92400e" stroke-width="1.5"/></svg> Storm track point (wind speed)</div>
-    <div class="ml-row ml-note">Colored dots on outages = crew assignment + repair order.</div>
+    <div class="ml-title">Map layers</div>
+    <label><input type="checkbox" data-map-layer="outages" checked> Outage locations <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="impactSurface" checked> Impact surface <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="substations"> Substations <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="gridLines"> Grid lines <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="territories"> Service territories <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="towns"> Town boundaries <span class="layer-state"></span></label>
+    <div class="layer-group-title">Restoration and review</div>
+    <label><input type="checkbox" data-map-layer="restoration" checked> Repair assignments <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="depots" checked> Crew depots <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="criticalFacilities"> Critical facilities <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="stormTrack"> Storm track <span class="layer-state"></span></label>
   `;
+  L.DomEvent.disableClickPropagation(div);
+  L.DomEvent.disableScrollPropagation(div);
+  div.addEventListener('change',event=>{
+    const input=event.target;
+    const key=input.dataset.mapLayer;
+    if (!key) return;
+    mapLayerVisibility[key]=input.checked;
+    if (key==='criticalFacilities'){
+      document.getElementById('showCriticalFacilities').checked=input.checked;
+      renderCriticalFacilities();
+    } else if (key==='stormTrack'){
+      document.getElementById('showStormTrack').checked=input.checked;
+      renderStormTrack();
+    } else syncMapLayerVisibility();
+  });
   return div;
 };
-legend.addTo(map);
+layerPicker.addTo(map);
 
 // --- Layers ---
 // Canvas-batched lateral/feeder clouds (see PolylineCloudLayer above) -- created
@@ -1170,6 +1301,9 @@ let storm=null;       // {outages:[{lat,lon,feederIdx,lateralIdx,custAffected}],
 let plan=null;        // {crews:[{depot,jobs:[outageIdx,...],time}], totalTime}
 let outageModelWorker=null;
 let outageModelWorkerReady=false;
+let outageModelWorkerStartupTimer=null;
+let outageModelWorkerStartupError='';
+let outageModelWorkerAttempt=0;
 let outageModelRunCounter=0;
 let activeOutageModelRunId=null;
 let currentOutageModelResult=null;
@@ -1180,6 +1314,7 @@ const outageResearchWeatherCache=new Map();
 // --- UI refs ---
 const fS=document.getElementById('fSlider'), fV=document.getElementById('fVal');
 const oS=document.getElementById('oSlider'), oV=document.getElementById('oVal');
+const customerScaleV=document.getElementById('customerScaleVal');
 const cS=document.getElementById('cSlider'), cV=document.getElementById('cVal');
 const seedI=document.getElementById('seedInput');
 const status=document.getElementById('status');
@@ -1227,7 +1362,13 @@ function setRecProgress(pct, visible){
   _recProgressLabel.textContent = v + "%";
 }
 fS.oninput=()=>{fV.textContent=fS.value; markOutageModelStale('Network density changed. Regenerate the grid and outage scenario.');};
-oS.oninput=()=>{oV.textContent=oS.value; updateEstimate(); markOutageModelStale('Requested outage count changed. Generate a new scenario.');};
+oS.oninput=()=>{
+  const units=Number(oS.value);
+  oV.textContent=units.toLocaleString();
+  customerScaleV.textContent=(units*50).toLocaleString();
+  updateEstimate();
+  markOutageModelStale('Requested scenario size changed. Generate a new scenario.');
+};
 cS.oninput=()=>{cV.textContent=cS.value; updateEstimate();};
 
 // --- Closed-form restoration-time estimate (Alternative #1) ---
@@ -1668,6 +1809,7 @@ async function renderTerritories(){
   territoryLayer = L.imageOverlay(can.toDataURL(), bounds, {opacity: 1, interactive: false});
   territoryLayer.addTo(map);
   territoryLayer.bringToBack();
+  syncMapLayerVisibility();
 }
 
 function renderGrid(){
@@ -1691,6 +1833,7 @@ function renderGrid(){
       .bindTooltip(`${label}${volt} — ${Math.round(s.popServed).toLocaleString()} customers`);
   });
   if (window._mask) window._mask.bringToFront();
+  syncMapLayerVisibility();
 }
 
 
@@ -1720,6 +1863,10 @@ function setModelAvailability(kind, text){
   const el=document.getElementById('modelAvailability');
   el.className='model-availability '+kind;
   el.textContent=text;
+}
+
+function showOutageEngineRetry(show){
+  document.getElementById('retryOutageEngine').style.display=show?'block':'none';
 }
 
 function stormHasResearchWeather(stormId){
@@ -1840,6 +1987,7 @@ function clearOutageResultLayers(){
     if (window[key]){map.removeLayer(window[key]);window[key]=null;}
   }
   removeOutageSurface();
+  syncMapLayerVisibility();
 }
 
 function markOutageModelStale(reason){
@@ -1869,11 +2017,19 @@ function updateOutageModelAvailability(){
   const stormId=document.getElementById('stormTrackSelect').value;
   const mode=document.getElementById('outagePlacementModel').value;
   const button=document.getElementById('simStorm');
-  if (!window.Worker || !outageModelWorkerReady){
-    setModelAvailability('warn','Waiting for the browser Worker…');
+  if (outageModelWorkerStartupError){
+    setModelAvailability('error',outageModelWorkerStartupError);
+    showOutageEngineRetry(true);
     button.disabled=true;
     return;
   }
+  if (!window.Worker || !outageModelWorkerReady){
+    setModelAvailability('warn','Starting outage generator…');
+    showOutageEngineRetry(false);
+    button.disabled=true;
+    return;
+  }
+  showOutageEngineRetry(false);
   if (mode==='research'){
     const threshold=Number(document.getElementById('modelWindThreshold').value);
     const support=researchWeatherSupport(stormId,threshold);
@@ -1963,9 +2119,9 @@ function renderSelectedModelSurface(){
   removeOutageSurface();
   const key=document.getElementById('modelSurfaceSelect').value;
   const surfaces=currentOutageModelResult?.surfaces;
-  if (key==='none'||!surfaces) return;
+  if (key==='none'||!surfaces){syncMapLayerVisibility();return;}
   const values=surfaces[key],scale=SURFACE_SCALES[key];
-  if (!values||!scale) return;
+  if (!values||!scale){syncMapLayerVisibility();return;}
   const canvas=document.createElement('canvas');
   canvas.width=surfaces.columns;canvas.height=surfaces.rows;
   const context=canvas.getContext('2d'),image=context.createImageData(surfaces.columns,surfaces.rows);
@@ -1988,6 +2144,7 @@ function renderSelectedModelSurface(){
   const legend=document.getElementById('modelSurfaceLegend');
   legend.style.display='block';
   document.getElementById('modelSurfaceLegendMax').textContent=scale.label;
+  syncMapLayerVisibility();
 }
 
 function applyOutageModelResult(result){
@@ -2063,13 +2220,17 @@ function applyOutageModelResult(result){
   setStormProgress(100);
   setTimeout(()=>setStormProgress(0,false),700);
   status.textContent=`Generated ${outages.length.toLocaleString()} unique outages representing exactly ${expectedCustomers.toLocaleString()} customers; attached deterministic restoration metadata without moving or removing any point. Ready to plan restoration.`;
+  syncMapLayerVisibility();
 }
 
 function handleOutageWorkerMessage(event){
   const message=event.data;
   if (!message||message.protocol!==OUTAGE_WORKER_PROTOCOL||message.version!==1) return;
   if (message.type==='ready'){
+    if (outageModelWorkerStartupTimer){clearTimeout(outageModelWorkerStartupTimer);outageModelWorkerStartupTimer=null;}
     outageModelWorkerReady=true;
+    outageModelWorkerStartupError='';
+    showOutageEngineRetry(false);
     updateOutageModelAvailability();
     return;
   }
@@ -2100,21 +2261,54 @@ function handleOutageWorkerMessage(event){
 }
 
 function initializeOutageModelWorker(){
+  if (outageModelWorkerStartupTimer){clearTimeout(outageModelWorkerStartupTimer);outageModelWorkerStartupTimer=null;}
+  if (outageModelWorker){outageModelWorker.terminate();outageModelWorker=null;}
+  outageModelWorkerReady=false;
+  outageModelWorkerStartupError='';
+  showOutageEngineRetry(false);
   if (!window.Worker){
-    setModelAvailability('error','This browser does not support Web Workers. Outage generation is unavailable.');
+    outageModelWorkerStartupError='This browser cannot run the outage generator. Use a current Chrome, Edge, Firefox, or Safari browser.';
+    updateOutageModelAvailability();
     document.getElementById('simStorm').disabled=true;
     return;
   }
+  if (window.location.protocol==='file:'){
+    outageModelWorkerStartupError='Open this page through the local website address (http://localhost:8080), not as a file.';
+    updateOutageModelAvailability();
+    return;
+  }
   try{
-    outageModelWorker=new Worker('./outage_location_worker.js');
+    setModelAvailability('warn','Starting outage generator…');
+    document.getElementById('simStorm').disabled=true;
+    const attempt=++outageModelWorkerAttempt;
+    outageModelWorker=new Worker('./outage_location_worker.js?v=2');
     outageModelWorker.onmessage=handleOutageWorkerMessage;
     outageModelWorker.onerror=(event)=>{
+      if (outageModelWorkerStartupTimer){clearTimeout(outageModelWorkerStartupTimer);outageModelWorkerStartupTimer=null;}
       outageModelWorkerReady=false;
-      setModelAvailability('error','The outage-model Worker could not start: '+(event.message||'unknown error'));
+      outageModelWorkerStartupError='The outage generator could not start. Check that the page is opened from the local website, then retry.';
+      updateOutageModelAvailability();
       document.getElementById('simStorm').disabled=true;
     };
+    outageModelWorker.onmessageerror=()=>{
+      outageModelWorkerStartupError='The outage generator returned unreadable data. Retry the generator.';
+      updateOutageModelAvailability();
+    };
+    // Explicit handshake prevents a fast Worker's first ready event from being
+    // missed and gives the UI a deterministic failure path instead of waiting forever.
+    outageModelWorker.postMessage({
+      protocol:OUTAGE_WORKER_PROTOCOL,version:1,type:'status',runId:`startup-${attempt}`,
+    });
+    outageModelWorkerStartupTimer=setTimeout(()=>{
+      if (outageModelWorkerReady||attempt!==outageModelWorkerAttempt) return;
+      outageModelWorker?.terminate();
+      outageModelWorker=null;
+      outageModelWorkerStartupError='The outage generator did not start within 5 seconds. Retry it; if that fails, hard-refresh the page.';
+      updateOutageModelAvailability();
+    },5000);
   }catch(error){
-    setModelAvailability('error','The outage-model Worker could not start: '+error.message);
+    outageModelWorkerStartupError='The outage generator could not start: '+error.message;
+    updateOutageModelAvailability();
     document.getElementById('simStorm').disabled=true;
   }
 }
@@ -2166,6 +2360,7 @@ function initializeOutageModelUI(){
     document.getElementById(id).addEventListener('input',()=>markOutageModelStale('Scientific parameter changed. Generate a new scenario.'));
   }
   document.getElementById('resetModelDefaults').onclick=()=>resetOutageModelDefaults(true);
+  document.getElementById('retryOutageEngine').onclick=initializeOutageModelWorker;
   document.getElementById('outagePlacementModel').onchange=()=>{
     markOutageModelStale('Placement method changed. Generate a new scenario.');
     updateOutageModelAvailability();
@@ -2295,6 +2490,7 @@ function loadLiveOutages(){
   const plannedNote = planned.length ? ` (+${planned.length} planned-maintenance jobs excluded)` : '';
   liveStatusEl.textContent = `LIVE: ${outages.length} unplanned outage points, ${totalCust.toLocaleString()} customers${plannedNote} · snapshot ${ageH.toFixed(1)}h old${staleWarn}`;
   status.textContent = `LIVE outages loaded: ${outages.length} real Eversource CT outage points, ~${totalCust.toLocaleString()} customers without power. Set crews and click "Plan restoration".`;
+  syncMapLayerVisibility();
 }
 document.getElementById('loadLiveBtn').onclick = loadLiveOutages;
 
@@ -3310,6 +3506,7 @@ function renderPlan(crews, totalTime, N, realistic){
       : ' (includes 12 h assessment + overnight downtime)') : ''}.`;
 
   renderRestorationCurve(crews, totalTime, fmtDuration);
+  syncMapLayerVisibility();
 }
 
 // Draw the cumulative-customers-restored curve as an inline SVG line chart.
@@ -3531,6 +3728,7 @@ function resetStorm(){
   document.getElementById('modelSurfaceSelect').value='none';
   status.textContent='Storm cleared.';
   updateOutageModelAvailability();
+  syncMapLayerVisibility();
 }
 
 document.getElementById('genGrid').onclick=generateGrid;
@@ -4456,7 +4654,7 @@ function renderCriticalFacilities(){
   const show = document.getElementById('showCriticalFacilities').checked;
   const countEl = document.getElementById('critFacilityCount');
   if (countEl) countEl.textContent = ` (${facs.length} facilities loaded)`;
-  if (!show || !facs.length) return;
+  if (!show || !facs.length){syncMapLayerVisibility();return;}
   critFacilityLayer = L.layerGroup();
   const critCfg = {
     hospital: { color:'#c0312b', icon:'ti-plus' },
@@ -4472,8 +4670,14 @@ function renderCriticalFacilities(){
       .bindTooltip(tip).addTo(critFacilityLayer);
   }
   critFacilityLayer.addTo(map);
+  syncMapLayerVisibility();
 }
-document.getElementById('showCriticalFacilities').onchange = renderCriticalFacilities;
+document.getElementById('showCriticalFacilities').onchange = function(){
+  mapLayerVisibility.criticalFacilities=this.checked;
+  const picker=document.querySelector('[data-map-layer="criticalFacilities"]');
+  if (picker) picker.checked=this.checked;
+  renderCriticalFacilities();
+};
 
 // --- Census tract count display ---
 (function(){
@@ -4488,10 +4692,10 @@ function renderStormTrack(){
   if (stormTrackLayer){ map.removeLayer(stormTrackLayer); stormTrackLayer=null; }
   const show = document.getElementById('showStormTrack').checked;
   const key = document.getElementById('stormTrackSelect').value;
-  if (!show || !key) return;
+  if (!show || !key){syncMapLayerVisibility();return;}
   const tracks = window.HARTFORD_STORM_TRACKS || {};
   const storm = tracks[key];
-  if (!storm || !storm.track || !storm.track.length) return;
+  if (!storm || !storm.track || !storm.track.length){syncMapLayerVisibility();return;}
   stormTrackLayer = L.layerGroup();
   const pts = storm.track.map(p => [p.lat, p.lon]);
   L.polyline(pts, {color:'#dc2626', weight:3, opacity:0.8, dashArray:'8,6'}).addTo(stormTrackLayer);
@@ -4511,8 +4715,14 @@ function renderStormTrack(){
     })
   }).addTo(stormTrackLayer);
   stormTrackLayer.addTo(map);
+  syncMapLayerVisibility();
 }
-document.getElementById('showStormTrack').onchange = renderStormTrack;
+document.getElementById('showStormTrack').onchange = function(){
+  mapLayerVisibility.stormTrack=this.checked;
+  const picker=document.querySelector('[data-map-layer="stormTrack"]');
+  if (picker) picker.checked=this.checked;
+  renderStormTrack();
+};
 document.getElementById('stormTrackSelect').onchange = renderStormTrack;
 // When HRRR data is populated, auto-set soil saturation based on measured soil moisture.
 document.getElementById('stormTrackSelect').addEventListener('change', function() {
@@ -4524,6 +4734,10 @@ document.getElementById('stormTrackSelect').addEventListener('change', function(
   if (el) el.checked = s.soil_wetness > 0.35;
 });
 document.getElementById('stormTrackSelect').addEventListener('change', function() {
+  // Keep the normal workflow automatic: use the validated research model
+  // when weather fields exist and the explicit network fallback otherwise.
+  document.getElementById('outagePlacementModel').value=
+    stormHasResearchWeather(this.value)?'research':'basic';
   markOutageModelStale('Storm weather event changed. Generate a new outage scenario.');
   updateOutageModelAvailability();
 });
@@ -5242,6 +5456,65 @@ async function recommendCrewCount(){
 }
 
 document.getElementById('recommendCrews').onclick = recommendCrewCount;
+
+function setMapLayerVisible(layer,visible){
+  if (!layer) return;
+  const isVisible=map.hasLayer(layer);
+  if (visible&&!isVisible) layer.addTo(map);
+  if (!visible&&isVisible) map.removeLayer(layer);
+}
+
+function mapLayerAvailability(){
+  const selectedTrack=document.getElementById('stormTrackSelect')?.value;
+  const track=selectedTrack&&window.HARTFORD_STORM_TRACKS?.[selectedTrack];
+  return {
+    outages:{available:!!(window._outageCloud||window._criticalCloud),waiting:'run outage simulation'},
+    impactSurface:{available:!!outageSurfaceLayer,waiting:'run research model'},
+    substations:{available:substations.length>0&&subLayer.getLayers().length>0,waiting:'grid is loading'},
+    gridLines:{available:!!(lateralCloud&&feederCloud&&(feeders.length||laterals.length)),waiting:'grid is loading'},
+    territories:{available:!!territoryLayer,waiting:'territories are loading'},
+    towns:{available:!!window._towns,waiting:'towns are loading'},
+    restoration:{available:repairLayer.getLayers().length>0||!!window._repairCloud,waiting:'plan restoration first'},
+    depots:{available:depotLayer.getLayers().length>0||!!window._depotCloud,waiting:'plan restoration first'},
+    criticalFacilities:{available:(window.CONNECTICUT_CRITICAL_FACILITIES||[]).length>0,waiting:'facility data unavailable'},
+    stormTrack:{available:!!(track?.track?.length),waiting:'no track for this event'},
+  };
+}
+
+function updateMapLayerControlAvailability(){
+  const availability=mapLayerAvailability();
+  document.querySelectorAll('#mapLayerPicker input[data-map-layer]').forEach(input=>{
+    const info=availability[input.dataset.mapLayer];
+    if (!info) return;
+    input.disabled=!info.available;
+    const label=input.closest('label');
+    if (label){
+      label.classList.toggle('layer-unavailable',!info.available);
+      label.title=info.available?'Click to show or hide this map layer.':info.waiting;
+      const state=label.querySelector('.layer-state');
+      if (state) state.textContent=info.available?'':info.waiting;
+    }
+  });
+}
+
+function syncMapLayerVisibility(){
+  setMapLayerVisible(window._towns,mapLayerVisibility.towns);
+  setMapLayerVisible(territoryLayer,mapLayerVisibility.territories);
+  setMapLayerVisible(lateralCloud,mapLayerVisibility.gridLines);
+  setMapLayerVisible(feederCloud,mapLayerVisibility.gridLines);
+  setMapLayerVisible(subLayer,mapLayerVisibility.substations);
+  setMapLayerVisible(outageSurfaceLayer,mapLayerVisibility.impactSurface);
+  setMapLayerVisible(window._outageCloud,mapLayerVisibility.outages);
+  setMapLayerVisible(window._criticalCloud,mapLayerVisibility.outages);
+  setMapLayerVisible(repairLayer,mapLayerVisibility.restoration);
+  setMapLayerVisible(window._repairCloud,mapLayerVisibility.restoration);
+  setMapLayerVisible(depotLayer,mapLayerVisibility.depots);
+  setMapLayerVisible(window._depotCloud,mapLayerVisibility.depots);
+  setMapLayerVisible(critFacilityLayer,mapLayerVisibility.criticalFacilities);
+  setMapLayerVisible(stormTrackLayer,mapLayerVisibility.stormTrack);
+  if (window._boundary) window._boundary.bringToFront();
+  updateMapLayerControlAvailability();
+}
 
 // --- Boot ---
 (async()=>{
