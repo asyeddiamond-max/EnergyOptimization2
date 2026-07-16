@@ -149,6 +149,17 @@
   .model-stale { color:#92400e; font-weight:700; }
   .surface-ramp { height:9px; border-radius:5px; margin:5px 0 2px;
     background:linear-gradient(90deg,rgba(12,24,55,.1),#1e609b,#26b5b2,#f6d344,#c42d26); }
+  .timeline-playback { display:none; margin-top:7px; padding:8px; border:1px solid #93c5fd;
+    border-radius:7px; background:#fff; }
+  .timeline-playback.visible { display:block; }
+  .timeline-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .timeline-time { color:#1e3a8a; font-size:11px; font-weight:750; }
+  .timeline-count { color:#64748b; font-size:9.5px; text-align:right; }
+  .timeline-controls { display:grid; grid-template-columns:54px 1fr; align-items:center; gap:7px; margin-top:6px; }
+  .timeline-controls button { border:1px solid #60a5fa; background:#eff6ff; color:#1d4ed8;
+    border-radius:5px; padding:5px 6px; font-size:10px; font-weight:700; cursor:pointer; }
+  .timeline-controls input { width:100%; margin:0; accent-color:#2563eb; }
+  .timeline-note { color:#64748b; font-size:9px; line-height:1.3; margin-top:4px; }
   .phase-folder {
     border:1px solid #d8e0ee; border-radius:12px; background:rgba(255,255,255,.72);
     margin:0 0 10px; overflow:hidden; box-shadow:0 1px 3px rgba(15,31,58,.06);
@@ -340,12 +351,27 @@
         <div class="model-metric">Runtime<b id="modelSummaryRuntime">—</b></div>
       </div>
       <div id="modelSummaryFormula" style="font-size:9px;color:#64748b;line-height:1.35;margin-top:6px;"></div>
+      <div id="stormPlayback" class="timeline-playback" data-testid="storm-playback">
+        <div class="timeline-heading">
+          <span id="timelineTimestamp" class="timeline-time">—</span>
+          <span id="timelineOutageCount" class="timeline-count">0 outages</span>
+        </div>
+        <div class="timeline-controls">
+          <button type="button" id="timelinePlayPause" data-testid="timeline-play-pause">Play</button>
+          <input type="range" id="timelineSlider" min="0" max="23" value="0" step="1"
+                 aria-label="Storm timeline hour" data-testid="timeline-slider" />
+        </div>
+        <div class="timeline-note">One frame per hour. New outage markers appear at their modeled failure time and remain visible.</div>
+      </div>
       <div id="modelSummaryRestoration" style="font-size:9px;color:#475569;line-height:1.35;margin-top:4px;"></div>
       <label for="modelSurfaceSelect" style="display:block;font-size:10px;color:#475569;margin-top:7px;">Diagnostic map surface</label>
       <select id="modelSurfaceSelect" style="width:100%;font-size:10px;border:1px solid #cbd5e1;border-radius:4px;padding:4px;">
         <option value="none">Outage points only</option>
         <option value="customerExposure">Customer exposure</option>
-        <option value="weatherSeverity">Weather severity</option>
+        <option value="windGustMph">Wind gusts</option>
+        <option value="rain1hIn">Rain during this hour</option>
+        <option value="rain6hIn">Rain during the previous 6 hours</option>
+        <option value="weatherSeverity">Weather damage severity</option>
         <option value="rawImpact">Raw combined impact</option>
         <option value="smoothedImpact">Gaussian-smoothed impact</option>
       </select>
@@ -396,10 +422,14 @@
     <details class="phase-folder" id="phaseRestoration">
       <summary>
         <span class="phase-number">3</span>
-        <span><span class="phase-title">Restoration planning</span><span class="phase-subtitle">Choose crews, schedule repairs, and inspect the curve</span></span>
+        <span><span class="phase-title">Restoration planning</span><span class="phase-subtitle">Begin after storm passage, schedule crews, and inspect the curve</span></span>
       </summary>
       <div class="phase-content">
     <div class="section-label">3 · Restoration plan</div>
+
+    <div class="ctrl" id="restorationHandoffNote" data-testid="restoration-handoff-note" style="background:#eff6ff;border-color:#93c5fd;color:#1e3a8a;line-height:1.45;">
+      <b>Storm-to-restoration handoff:</b> planning uses the complete accumulated outage set, regardless of the animation slider. The restoration clock begins after the storm timeline ends.
+    </div>
 
     <div class="ctrl">
       <div class="row"><span>Repair crews: <b id="cVal">10</b></span></div>
@@ -487,6 +517,7 @@
       <div class="lbl">Total restoration time</div>
       <div class="big" id="restoreTime">—</div>
       <div class="sub" id="restoreDetail">— customers restored</div>
+      <div id="restorationContractSummary" data-testid="restoration-contract-summary" style="display:none;font-size:10px;color:#166534;margin-top:6px;padding:6px;background:#f0fdf4;border:1px solid #86efac;border-radius:4px;line-height:1.45;"></div>
       <div id="restoreCurveBox" style="display:none;margin-top:8px;">
         <div style="font-size:10px;color:#dc2626;margin-bottom:2px;font-weight:600;">Customers without power</div>
         <svg id="restoreCurve" viewBox="0 0 280 80" preserveAspectRatio="none"
@@ -586,7 +617,7 @@
 <script src="./data/connecticut_tree_canopy.js"></script>
 <script src="./data/hartford_storm_tracks.js"></script>
 <script src="./data/hartford_doe_oe417.js"></script>
-<script src="./data/connecticut_storm_wind.js"></script>
+<script src="./data/connecticut_storm_timelines.js"></script>
 <script src="./data/connecticut_flood_corridors.js"></script>
 <script src="./data/connecticut_storm_events.js"></script>
 <!-- LIVE Eversource CT outages (17_fetch_live_outages.py). Optional: a 404
@@ -797,7 +828,7 @@ layerPicker.onAdd=function(){
   div.innerHTML=`
     <div class="ml-title">Map layers</div>
     <label><input type="checkbox" data-map-layer="outages" checked> Outage locations <span class="layer-state"></span></label>
-    <label><input type="checkbox" data-map-layer="impactSurface" checked> Impact surface <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="impactSurface" checked> Weather / impact overlay <span class="layer-state"></span></label>
     <label><input type="checkbox" data-map-layer="substations"> Substations <span class="layer-state"></span></label>
     <label><input type="checkbox" data-map-layer="gridLines"> Grid lines <span class="layer-state"></span></label>
     <label><input type="checkbox" data-map-layer="territories"> Service territories <span class="layer-state"></span></label>
@@ -1308,6 +1339,9 @@ let outageModelRunCounter=0;
 let activeOutageModelRunId=null;
 let currentOutageModelResult=null;
 let outageSurfaceLayer=null;
+let currentTimelineFrameIndex=0;
+let timelinePlaybackTimer=null;
+let timelineSurfaceScales=null;
 let outageResearchGridMaskCache=null;
 const outageResearchWeatherCache=new Map();
 
@@ -1321,6 +1355,14 @@ const status=document.getElementById('status');
 const affectedEl=document.getElementById('affected'), affectedPctEl=document.getElementById('affectedPct');
 const outageCountEl=document.getElementById('outageCount');
 const restoreTimeEl=document.getElementById('restoreTime'), restoreDetailEl=document.getElementById('restoreDetail');
+function clearRestorationResult(){
+  restoreTimeEl.textContent='—';
+  restoreDetailEl.textContent='— customers restored';
+  const contractSummary=document.getElementById('restorationContractSummary');
+  if (contractSummary){contractSummary.textContent='';contractSummary.style.display='none';}
+  const curveBox=document.getElementById('restoreCurveBox');
+  if (curveBox) curveBox.style.display='none';
+}
 const _planProgress=document.getElementById('planProgress');
 const _planProgressBar=document.getElementById('planProgressBar');
 const _planProgressLabel=document.getElementById('planProgressLabel');
@@ -1751,8 +1793,7 @@ async function generateGrid(){
   storm=null; plan=null;
   outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
   affectedEl.textContent='0'; affectedPctEl.textContent='0% of state population';
-  outageCountEl.textContent='0'; restoreTimeEl.textContent='—'; restoreDetailEl.textContent='— customers restored';
-  const _curveBox = document.getElementById('restoreCurveBox'); if (_curveBox) _curveBox.style.display = 'none';
+  outageCountEl.textContent='0'; clearRestorationResult();
 }
 
 let territoryLayer = null;
@@ -1870,20 +1911,21 @@ function showOutageEngineRetry(show){
 }
 
 function stormHasResearchWeather(stormId){
-  const data=window.CONNECTICUT_STORM_WIND;
+  const data=window.CONNECTICUT_STORM_TIMELINES;
   const stormData=data?.storms?.[stormId];
   const rows=data?.grid?.lats?.length||0, columns=data?.grid?.lons?.length||0;
   return !!(data?._populated && rows>=2 && columns>=2 &&
-    Array.isArray(stormData?.peak_wind_mph) && stormData.peak_wind_mph.length===rows &&
-    stormData.peak_wind_mph.every(row=>Array.isArray(row)&&row.length===columns) &&
-    Array.isArray(stormData?.peak_rain_in) && stormData.peak_rain_in.length===rows &&
-    stormData.peak_rain_in.every(row=>Array.isArray(row)&&row.length===columns));
+    Array.isArray(stormData?.frames) && stormData.frames.length>=2 &&
+    stormData.frames.every(frame=>
+      Array.isArray(frame.wind_gust_mph)&&frame.wind_gust_mph.length===rows*columns&&
+      Array.isArray(frame.rain_1h_in)&&frame.rain_1h_in.length===rows*columns&&
+      Array.isArray(frame.rain_6h_in)&&frame.rain_6h_in.length===rows*columns));
 }
 
 function researchWeatherSupport(stormId,windThreshold){
   if (!stormHasResearchWeather(stormId)) return {complete:false,positiveCells:0,maxInStateWind:null};
   if (!stateBoundaryGeo||!window.OutageLocationModel) return {complete:true,positiveCells:null,maxInStateWind:null};
-  const data=window.CONNECTICUT_STORM_WIND,stormData=data.storms[stormId];
+  const data=window.CONNECTICUT_STORM_TIMELINES,stormData=data.storms[stormId];
   if (!outageResearchGridMaskCache||outageResearchGridMaskCache.boundary!==stateBoundaryGeo||outageResearchGridMaskCache.grid!==data.grid){
     const mask=[];
     for (let row=0;row<data.grid.lats.length;row++){
@@ -1899,11 +1941,11 @@ function researchWeatherSupport(stormId,windThreshold){
   let cached=outageResearchWeatherCache.get(stormId);
   if (!cached){
     const inStateWinds=[];
-    let index=0,maxInStateWind=-Infinity;
-    for (let row=0;row<data.grid.lats.length;row++){
-      for (let column=0;column<data.grid.lons.length;column++,index++){
+    let maxInStateWind=-Infinity;
+    for (const frame of stormData.frames){
+      for (let index=0;index<frame.wind_gust_mph.length;index++){
         if (!outageResearchGridMaskCache.mask[index]) continue;
-        const wind=Number(stormData.peak_wind_mph[row][column]);
+        const wind=Number(frame.wind_gust_mph[index]);
         if (!Number.isFinite(wind)) continue;
         inStateWinds.push(wind);maxInStateWind=Math.max(maxInStateWind,wind);
       }
@@ -1921,36 +1963,19 @@ function researchWeatherSupport(stormId,windThreshold){
 
 function populateStormModelOptions(){
   const select=document.getElementById('stormTrackSelect');
-  const weather=window.CONNECTICUT_STORM_WIND?.storms||{};
-  const track=window.HARTFORD_STORM_TRACKS||{};
+  const weather=window.CONNECTICUT_STORM_TIMELINES?.storms||{};
   const prior=select.value||'isaias_2020';
   select.replaceChildren();
   const supported=document.createElement('optgroup');
-  supported.label='Weather + customer exposure available';
+  supported.label='Curated hourly storms';
   for (const [id,data] of Object.entries(weather)){
     if (!stormHasResearchWeather(id)) continue;
     const option=document.createElement('option');
     option.value=id;
-    option.textContent=`${data.name||id}${data.date?' · '+data.date:''}`;
+    option.textContent=`${data.name||id} · hourly HRRR`;
     supported.appendChild(option);
   }
   select.appendChild(supported);
-  const unsupportedIds=new Set([
-    ...Object.keys(track),
-    ...(typeof REAL_STORM_PRESETS==='object'?Object.keys(REAL_STORM_PRESETS):[]),
-  ]);
-  for (const id of Object.keys(weather)) unsupportedIds.delete(id);
-  if (unsupportedIds.size){
-    const basic=document.createElement('optgroup');
-    basic.label='Basic placement only — no complete HRRR field';
-    for (const id of [...unsupportedIds].sort()){
-      const option=document.createElement('option');
-      option.value=id;
-      option.textContent=track[id]?.name||REAL_STORM_PRESETS?.[id]?.label||id;
-      basic.appendChild(option);
-    }
-    select.appendChild(basic);
-  }
   select.value=[...select.options].some(option=>option.value===prior)?prior:'isaias_2020';
 }
 
@@ -1982,6 +2007,10 @@ function removeOutageSurface(){
 }
 
 function clearOutageResultLayers(){
+  stopTimelinePlayback();
+  document.getElementById('stormPlayback').classList.remove('visible');
+  currentTimelineFrameIndex=0;
+  timelineSurfaceScales=null;
   outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
   for (const key of ['_outageCloud','_criticalCloud','_depotCloud','_repairCloud']){
     if (window[key]){map.removeLayer(window[key]);window[key]=null;}
@@ -2001,7 +2030,7 @@ function markOutageModelStale(reason){
     storm=null; plan=null; currentOutageModelResult=null;
     clearOutageResultLayers();
     affectedEl.textContent='0'; affectedPctEl.textContent='0% of state population';
-    outageCountEl.textContent='0'; restoreTimeEl.textContent='—'; restoreDetailEl.textContent='— customers restored';
+    outageCountEl.textContent='0'; clearRestorationResult();
     const summary=document.getElementById('modelSummary');
     if (summary.classList.contains('visible')){
       const fresh=document.getElementById('modelFreshness');
@@ -2034,14 +2063,14 @@ function updateOutageModelAvailability(){
     const threshold=Number(document.getElementById('modelWindThreshold').value);
     const support=researchWeatherSupport(stormId,threshold);
     if (!support.complete){
-      setModelAvailability('error','This event has no complete HRRR wind-and-rain field. Select Basic network placement explicitly or choose a supported event.');
+      setModelAvailability('error','This event has no reviewed hourly HRRR timeline. Choose a curated storm.');
       button.disabled=true;
     } else if (support.positiveCells===0){
       const maximum=support.maxInStateWind===null?'the available':support.maxInStateWind.toFixed(1)+' mph';
       setModelAvailability('error',`No Connecticut weather-grid cells exceed the current ${threshold} mph damage threshold (in-state maximum: ${maximum}). Lower the threshold or select Basic network placement explicitly.`);
       button.disabled=true;
     } else {
-      setModelAvailability('ok','Research model ready: HRRR wind + rain, census exposure, Gaussian smoothing, and live network weighting.');
+      setModelAvailability('ok','Hourly model ready: HRRR wind and recent rain move across Connecticut; outages accumulate from the same frames shown on the map.');
       button.disabled=false;
     }
   } else {
@@ -2074,12 +2103,13 @@ function makeWorkerRequestInput(config,mode){
     inputs:{networkSeed:String(seedI.value),source:'live browser network'},
   };
   if (mode==='basic') return base;
-  const weatherData=window.CONNECTICUT_STORM_WIND;
+  const weatherData=window.CONNECTICUT_STORM_TIMELINES;
   return {
     ...base,
+    mode:'timeline',
     boundary:stateBoundaryGeo,
     censusTracts:window.CONNECTICUT_CENSUS_TRACTS||[],
-    weather:{
+    weatherTimeline:{
       grid:weatherData.grid,
       storm:{storm_id:config.stormId,...weatherData.storms[config.stormId]},
     },
@@ -2088,6 +2118,13 @@ function makeWorkerRequestInput(config,mode){
 
 function renderOutagePoints(outages){
   clearOutageResultLayers();
+  drawOutagePoints(outages);
+}
+
+function drawOutagePoints(outages){
+  for (const key of ['_outageCloud','_criticalCloud']){
+    if (window[key]){map.removeLayer(window[key]);window[key]=null;}
+  }
   const normalPts=[],criticalPts=[];
   for (const outage of outages){
     (outage.critical?criticalPts:normalPts).push({lat:outage.lat,lon:outage.lon});
@@ -2100,10 +2137,12 @@ function renderOutagePoints(outages){
       uniformColor:true,radius:4,fillColor:'#dc2626',stroke:'#facc15',lineWidth:1.2,fillOpacity:0.92,
     }).addTo(map);
   }
+  syncMapLayerVisibility();
 }
 
-function surfaceColor(value,max){
-  const t=Math.max(0,Math.min(1,value/max));
+function surfaceColor(value,max,cutoff=0){
+  if (!Number.isFinite(value)||value<=cutoff||!Number.isFinite(max)||max<=cutoff) return [0,0,0,0];
+  const t=Math.max(0,Math.min(1,(value-cutoff)/(max-cutoff)));
   const stops=[[12,24,55],[30,96,155],[38,181,178],[246,211,68],[196,45,38]];
   const scaled=t*(stops.length-1),left=Math.min(stops.length-2,Math.floor(scaled)),local=scaled-left;
   const a=stops[left],b=stops[left+1];
@@ -2111,17 +2150,37 @@ function surfaceColor(value,max){
     Math.round(a[0]+(b[0]-a[0])*local),
     Math.round(a[1]+(b[1]-a[1])*local),
     Math.round(a[2]+(b[2]-a[2])*local),
-    value>0?Math.round(45+185*Math.sqrt(t)):0,
+    Math.round(35+195*Math.sqrt(t)),
   ];
 }
 
-function renderSelectedModelSurface(){
-  removeOutageSurface();
-  const key=document.getElementById('modelSurfaceSelect').value;
-  const surfaces=currentOutageModelResult?.surfaces;
-  if (key==='none'||!surfaces){syncMapLayerVisibility();return;}
-  const values=surfaces[key],scale=SURFACE_SCALES[key];
-  if (!values||!scale){syncMapLayerVisibility();return;}
+function maxFiniteValue(values){
+  let maximum=0;
+  for (const value of values||[]) if (Number.isFinite(value)&&value>maximum) maximum=value;
+  return maximum;
+}
+
+function timelineSurfaceScale(surfaces,key){
+  if (!timelineSurfaceScales) timelineSurfaceScales={};
+  if (timelineSurfaceScales[key]) return timelineSurfaceScales[key];
+  const labels={
+    customerExposure:'customer accounts / grid node',
+    windGustMph:'mph gust',rain1hIn:'inches in 1 hour',rain6hIn:'inches in 6 hours',
+    weatherSeverity:'damage severity',rawImpact:'raw impact',smoothedImpact:'smoothed impact',
+  };
+  const arrays=key==='customerExposure'
+    ? [surfaces.customerExposure]
+    : surfaces.timeline.frames.map(frame=>frame[key]).filter(Boolean);
+  const maximum=arrays.reduce((best,values)=>Math.max(best,maxFiniteValue(values)),0);
+  const cutoff=key==='windGustMph'?10:maximum*0.015;
+  const rounded=maximum>=10?maximum.toFixed(1):maximum>=1?maximum.toFixed(2):maximum.toFixed(3);
+  return timelineSurfaceScales[key]={
+    max:maximum||1,cutoff,
+    label:`fixed storm max ${rounded} ${labels[key]||''}`.trim(),
+  };
+}
+
+function drawSurfaceRaster(values,scale,surfaces){
   const canvas=document.createElement('canvas');
   canvas.width=surfaces.columns;canvas.height=surfaces.rows;
   const context=canvas.getContext('2d'),image=context.createImageData(surfaces.columns,surfaces.rows);
@@ -2130,21 +2189,136 @@ function renderSelectedModelSurface(){
     for (let column=0;column<surfaces.columns;column++){
       const sourceIndex=sourceRow*surfaces.columns+column;
       const outputIndex=(y*surfaces.columns+column)*4;
-      const color=surfaces.mask[sourceIndex]?surfaceColor(values[sourceIndex],scale.max):[0,0,0,0];
+      const color=surfaces.mask[sourceIndex]
+        ? surfaceColor(values[sourceIndex],scale.max,scale.cutoff||0)
+        : [0,0,0,0];
       image.data.set(color,outputIndex);
     }
   }
   context.putImageData(image,0,0);
   const south=surfaces.latitudes[0],north=surfaces.latitudes[surfaces.latitudes.length-1];
   const west=surfaces.longitudes[0],east=surfaces.longitudes[surfaces.longitudes.length-1];
-  outageSurfaceLayer=L.imageOverlay(canvas.toDataURL(),[[south,west],[north,east]],{
-    opacity:0.68,interactive:false,pane:'overlayPane',
-  }).addTo(map);
-  if (window._outageCloud){map.removeLayer(window._outageCloud);window._outageCloud.addTo(map);}
+  const url=canvas.toDataURL();
+  if (outageSurfaceLayer){
+    outageSurfaceLayer.setUrl(url);
+    outageSurfaceLayer.setBounds([[south,west],[north,east]]);
+  } else {
+    outageSurfaceLayer=L.imageOverlay(url,[[south,west],[north,east]],{
+      opacity:0.72,interactive:false,pane:'overlayPane',
+    }).addTo(map);
+  }
+  if (window._outageCloud&&mapLayerVisibility.outages){
+    map.removeLayer(window._outageCloud);window._outageCloud.addTo(map);
+  }
+  if (window._criticalCloud&&mapLayerVisibility.outages){
+    map.removeLayer(window._criticalCloud);window._criticalCloud.addTo(map);
+  }
   const legend=document.getElementById('modelSurfaceLegend');
   legend.style.display='block';
   document.getElementById('modelSurfaceLegendMax').textContent=scale.label;
   syncMapLayerVisibility();
+}
+
+function renderSelectedModelSurface(){
+  const key=document.getElementById('modelSurfaceSelect').value;
+  const surfaces=currentOutageModelResult?.surfaces;
+  if (key==='none'||!surfaces){removeOutageSurface();syncMapLayerVisibility();return;}
+  if (surfaces.mode==='timeline'){
+    const frame=surfaces.timeline.frames[currentTimelineFrameIndex];
+    const values=key==='customerExposure'?surfaces.customerExposure:frame?.[key];
+    if (!values){removeOutageSurface();syncMapLayerVisibility();return;}
+    drawSurfaceRaster(values,timelineSurfaceScale(surfaces,key),surfaces);
+    return;
+  }
+  const values=surfaces[key],scale=SURFACE_SCALES[key];
+  if (!values||!scale){removeOutageSurface();syncMapLayerVisibility();return;}
+  drawSurfaceRaster(values,scale,surfaces);
+}
+
+function formatTimelineTimestamp(value){
+  const date=new Date(value);
+  if (!Number.isFinite(date.getTime())) return value||'—';
+  return new Intl.DateTimeFormat('en-US',{
+    timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short',
+  }).format(date);
+}
+
+function stopTimelinePlayback(){
+  if (timelinePlaybackTimer!==null){clearInterval(timelinePlaybackTimer);timelinePlaybackTimer=null;}
+  const button=document.getElementById('timelinePlayPause');
+  if (button){button.textContent='Play';button.setAttribute('aria-label','Play storm timeline');}
+}
+
+function prepareTimelineForRestoration(){
+  if (!storm?.outages?.length) throw new Error('Generate an outage scenario first.');
+  const initial=storm.initialContract;
+  const representedCustomers=storm.outages.reduce((sum,outage)=>sum+(outage.popLoss||0),0);
+  if (initial&&(storm.outages.length!==initial.outageCount||representedCustomers!==initial.representedCustomers)){
+    throw new Error(
+      `Restoration handoff changed the generated scenario: ${storm.outages.length}/${initial.outageCount} outages, `+
+      `${representedCustomers}/${initial.representedCustomers} customers.`,
+    );
+  }
+  if (storm.timeline){
+    const frames=currentOutageModelResult?.surfaces?.timeline?.frames||[];
+    if (!frames.length) throw new Error('The storm timeline is unavailable for restoration handoff.');
+    if (storm.outages.some(outage=>!Number.isInteger(outage.stormFrameIndex)||!outage.occurredAt)){
+      throw new Error('A timeline outage is missing its occurrence time. Regenerate the scenario.');
+    }
+    stopTimelinePlayback();
+    setTimelineFrame(frames.length-1);
+  }
+  return {
+    outageCount:storm.outages.length,
+    representedCustomers,
+    stormEnd:storm.timeline?.frames?.at(-1)?.validTime||null,
+  };
+}
+
+function setTimelineFrame(frameIndex){
+  const surfaces=currentOutageModelResult?.surfaces;
+  if (surfaces?.mode!=='timeline'||!storm?.outages?.length) return;
+  const frames=surfaces.timeline.frames;
+  currentTimelineFrameIndex=Math.max(0,Math.min(frames.length-1,Number(frameIndex)||0));
+  const frame=frames[currentTimelineFrameIndex];
+  const visibleOutages=storm.outages.filter(outage=>outage.stormFrameIndex<=currentTimelineFrameIndex);
+  document.getElementById('timelineSlider').value=String(currentTimelineFrameIndex);
+  document.getElementById('timelineTimestamp').textContent=formatTimelineTimestamp(frame.validTime);
+  document.getElementById('timelineOutageCount').textContent=
+    `${visibleOutages.length.toLocaleString()} of ${storm.outages.length.toLocaleString()} outages`;
+  drawOutagePoints(visibleOutages);
+  renderSelectedModelSurface();
+  if (currentTimelineFrameIndex===frames.length-1) stopTimelinePlayback();
+}
+
+function startTimelinePlayback(){
+  const surfaces=currentOutageModelResult?.surfaces;
+  if (surfaces?.mode!=='timeline') return;
+  stopTimelinePlayback();
+  if (currentTimelineFrameIndex>=surfaces.timeline.frames.length-1) setTimelineFrame(0);
+  const button=document.getElementById('timelinePlayPause');
+  button.textContent='Pause';button.setAttribute('aria-label','Pause storm timeline');
+  timelinePlaybackTimer=setInterval(()=>{
+    if (currentTimelineFrameIndex>=surfaces.timeline.frames.length-1){stopTimelinePlayback();return;}
+    setTimelineFrame(currentTimelineFrameIndex+1);
+  },650);
+}
+
+function initializeTimelinePlayback(){
+  const surfaces=currentOutageModelResult?.surfaces;
+  const panel=document.getElementById('stormPlayback');
+  if (surfaces?.mode!=='timeline'){
+    panel.classList.remove('visible');
+    return;
+  }
+  timelineSurfaceScales={};
+  const slider=document.getElementById('timelineSlider');
+  slider.min='0';slider.max=String(surfaces.timeline.frames.length-1);slider.value='0';
+  panel.classList.add('visible');
+  setTimelineFrame(0);
+  setTimeout(()=>{
+    if (currentOutageModelResult?.surfaces===surfaces) startTimelinePlayback();
+  },250);
 }
 
 function applyOutageModelResult(result){
@@ -2190,21 +2364,26 @@ function applyOutageModelResult(result){
     modelConfig:result.config,modelSummary:result.summary,
     initialContract:enriched.contract,
     restorationMetadata:{...enriched.summary,localPlannerReasons},
+    timeline:result.surfaces?.mode==='timeline'?result.surfaces.timeline:null,
   };
   plan=null;
   currentOutageModelResult=result;
-  renderOutagePoints(outages);
+  const isTimeline=result.surfaces?.mode==='timeline';
+  if (isTimeline) clearOutageResultLayers();
+  else renderOutagePoints(outages);
   affectedEl.textContent=expectedCustomers.toLocaleString();
   affectedPctEl.textContent=`${outages.length.toLocaleString()} locations × 50 customers`;
   outageCountEl.textContent=outages.length.toLocaleString();
-  restoreTimeEl.textContent='—';restoreDetailEl.textContent='— customers restored';
+  clearRestorationResult();
   document.getElementById('modelSummaryOutages').textContent=outages.length.toLocaleString();
   document.getElementById('modelSummaryCustomers').textContent=expectedCustomers.toLocaleString();
   document.getElementById('modelSummarySplit').textContent=
     `${result.summary.feederOutages.toLocaleString()} / ${result.summary.lateralOutages.toLocaleString()}`;
   document.getElementById('modelSummaryRuntime').textContent=`${result.summary.totalRuntimeMs.toFixed(0)} ms`;
   const research=!!result.surfaces;
-  document.getElementById('modelSummaryFormula').textContent=research
+  document.getElementById('modelSummaryFormula').textContent=isTimeline
+    ? `${result.summary.timelineFrames} hourly HRRR frames · wind × 6-hour recent-rain amplification × customer exposure · Gaussian-smoothed at ${result.config.gaussianBandwidthKm} km · seed ${result.config.seed}.`
+    : research
     ? `Weather severity × relative customer exposure, Gaussian-smoothed at ${result.config.gaussianBandwidthKm} km · seed ${result.config.seed}.`
     : `Explicit basic fallback: network length × susceptibility · no weather/customer surface · seed ${result.config.seed}.`;
   document.getElementById('modelSummaryRestoration').textContent=
@@ -2216,10 +2395,13 @@ function applyOutageModelResult(result){
   const surfaceSelect=document.getElementById('modelSurfaceSelect');
   surfaceSelect.disabled=!research;
   surfaceSelect.value=research?'smoothedImpact':'none';
-  renderSelectedModelSurface();
+  if (isTimeline) initializeTimelinePlayback();
+  else renderSelectedModelSurface();
   setStormProgress(100);
   setTimeout(()=>setStormProgress(0,false),700);
-  status.textContent=`Generated ${outages.length.toLocaleString()} unique outages representing exactly ${expectedCustomers.toLocaleString()} customers; attached deterministic restoration metadata without moving or removing any point. Ready to plan restoration.`;
+  status.textContent=isTimeline
+    ? `Generated ${outages.length.toLocaleString()} timestamped outages from ${result.summary.timelineFrames} hourly Isaias frames. Playback uses the exact weather and impact arrays used by the model; the full scenario is ready for restoration.`
+    : `Generated ${outages.length.toLocaleString()} unique outages representing exactly ${expectedCustomers.toLocaleString()} customers; attached deterministic restoration metadata without moving or removing any point. Ready to plan restoration.`;
   syncMapLayerVisibility();
 }
 
@@ -2281,7 +2463,7 @@ function initializeOutageModelWorker(){
     setModelAvailability('warn','Starting outage generator…');
     document.getElementById('simStorm').disabled=true;
     const attempt=++outageModelWorkerAttempt;
-    outageModelWorker=new Worker('./outage_location_worker.js?v=2');
+    outageModelWorker=new Worker('./outage_location_worker.js?v=3');
     outageModelWorker.onmessage=handleOutageWorkerMessage;
     outageModelWorker.onerror=(event)=>{
       if (outageModelWorkerStartupTimer){clearTimeout(outageModelWorkerStartupTimer);outageModelWorkerStartupTimer=null;}
@@ -2321,7 +2503,7 @@ function simulateStorm(){
   const mode=document.getElementById('outagePlacementModel').value;
   const stormId=document.getElementById('stormTrackSelect').value;
   if (mode==='research'&&!stormHasResearchWeather(stormId)){
-    setModelAvailability('error','No complete HRRR wind-and-rain data exists for this storm. Choose Basic network placement explicitly.');
+    setModelAvailability('error','No reviewed hourly HRRR timeline exists for this storm. Choose a curated storm.');
     return;
   }
   let config;
@@ -2366,6 +2548,14 @@ function initializeOutageModelUI(){
     updateOutageModelAvailability();
   };
   document.getElementById('modelSurfaceSelect').onchange=renderSelectedModelSurface;
+  document.getElementById('timelinePlayPause').onclick=()=>{
+    if (timelinePlaybackTimer!==null) stopTimelinePlayback();
+    else startTimelinePlayback();
+  };
+  document.getElementById('timelineSlider').addEventListener('input',event=>{
+    stopTimelinePlayback();
+    setTimelineFrame(Number(event.target.value));
+  });
   seedI.addEventListener('change',()=>markOutageModelStale('Random seed changed. Regenerate the network and outage scenario.'));
   for (const id of ['realisticMode','customerCallbackLag','amiCoverage','switchingBackfeed','undergroundLines']){
     document.getElementById(id).addEventListener('change',()=>{
@@ -2485,7 +2675,7 @@ function loadLiveOutages(){
   affectedEl.textContent = Math.round(totalCust).toLocaleString();
   affectedPctEl.textContent = (100*totalCust/TOTAL_POP).toFixed(3)+"% of state population";
   outageCountEl.textContent = outages.length.toLocaleString();
-  restoreTimeEl.textContent='—'; restoreDetailEl.textContent='— customers restored';
+  clearRestorationResult();
   const staleWarn = ageH > 2 ? ` — STALE (run 17_fetch_live_outages.py to refresh)` : '';
   const plannedNote = planned.length ? ` (+${planned.length} planned-maintenance jobs excluded)` : '';
   liveStatusEl.textContent = `LIVE: ${outages.length} unplanned outage points, ${totalCust.toLocaleString()} customers${plannedNote} · snapshot ${ageH.toFixed(1)}h old${staleWarn}`;
@@ -2771,6 +2961,7 @@ function deriveRampParams(totalCust, assessmentDelay){
 
 async function planRestoration(){
   if (!storm){status.textContent="Generate an outage scenario first.";return;}
+  prepareTimelineForRestoration();
   setPlanProgress(0);
   const seed=+seedI.value|0;
   const rnd=mulberry32(seed*31+99);
@@ -2862,11 +3053,9 @@ async function planRestoration(){
   }
   // HRRR temperature + precipitation repair multiplier (constant per simulation call).
   // Cold slows fieldwork; ice storms add re-sag risk and hazard time.
-  const _hrrS = window.CONNECTICUT_STORM_WIND?._populated
-    ? window.CONNECTICUT_STORM_WIND?.storms?.[document.getElementById('stormTrackSelect').value]
-    : null;
-  const _hrrTempF  = _hrrS?.avg_temp_f ?? 65;
-  const _hrrPrecip = _hrrS?.precip_type ?? 'rain';
+  const _timelineStorm=window.CONNECTICUT_STORM_TIMELINES?.storms?.[document.getElementById('stormTrackSelect').value];
+  const _hrrTempF  = _timelineStorm?.avg_temp_f ?? 65;
+  const _hrrPrecip = _timelineStorm?.precipitation_type ?? 'rain';
   const hrrrRepairMult = (_hrrTempF >= 50 ? 1.0 : _hrrTempF >= 32 ? 1.15 : 1.35) *
                          (_hrrPrecip === 'ice' ? 1.45 : _hrrPrecip === 'snow' ? 1.20 :
                           _hrrPrecip === 'mix' ? 1.10 : 1.0);
@@ -3499,11 +3688,24 @@ function renderPlan(crews, totalTime, N, realistic){
   restoreTimeEl.textContent = fmtDuration(totalTime);
   const modeNote = realistic ? ' · realistic mode' : ' · optimistic baseline';
   const automaticCount=plan?.automaticJobs?.length||0;
-  restoreDetailEl.textContent=`${N.toLocaleString()} jobs across ${crews.length.toLocaleString()} crews${automaticCount?` · ${automaticCount.toLocaleString()} automatic`:''}${modeNote}`;
+  const afterStorm=!!storm?.timeline;
+  restoreDetailEl.textContent=`${N.toLocaleString()} jobs across ${crews.length.toLocaleString()} crews${automaticCount?` · ${automaticCount.toLocaleString()} automatic`:''}${modeNote}${afterStorm?' · starts after storm passage':''}`;
+  const contract=plan?.restorationContract;
+  const contractSummary=document.getElementById('restorationContractSummary');
+  if (contract){
+    contractSummary.textContent=
+      `${contract.restoredOutages.toLocaleString()} of ${contract.inputOutages.toLocaleString()} outage locations restored · `+
+      `${Math.round(contract.inputCustomers).toLocaleString()} initial customers · `+
+      `${Math.round(contract.restoredCustomers).toLocaleString()} restored · `+
+      `${Math.round(contract.remainingCustomers).toLocaleString()} remaining`;
+    contractSummary.style.display='block';
+  } else {
+    contractSummary.style.display='none';
+  }
   status.textContent=`Restoration: ${crews.length.toLocaleString()} crews finish all ${N.toLocaleString()} repairs in ${fmtDuration(totalTime)}${
     realistic ? (storm && storm.isLive
       ? ' (LIVE mode: crews start now, outages already reported; includes overnight downtime)'
-      : ' (includes 12 h assessment + overnight downtime)') : ''}.`;
+      : ` (${afterStorm?'starts after storm passage; ':''}includes 12 h assessment + overnight downtime)`) : (afterStorm?' (starts after storm passage)':'')}.`;
 
   renderRestorationCurve(crews, totalTime, fmtDuration);
   syncMapLayerVisibility();
@@ -3722,8 +3924,7 @@ function resetStorm(){
   if (window._repairCloud){ map.removeLayer(window._repairCloud); window._repairCloud=null; }
   removeOutageSurface();
   affectedEl.textContent='0'; affectedPctEl.textContent='0% of state population';
-  outageCountEl.textContent='0'; restoreTimeEl.textContent='—'; restoreDetailEl.textContent='— customers restored';
-  const _curveBox = document.getElementById('restoreCurveBox'); if (_curveBox) _curveBox.style.display = 'none';
+  outageCountEl.textContent='0'; clearRestorationResult();
   document.getElementById('modelSummary').classList.remove('visible');
   document.getElementById('modelSurfaceSelect').value='none';
   status.textContent='Storm cleared.';
@@ -3875,6 +4076,18 @@ document.getElementById('wakeServerBtn').addEventListener('click', () => {
 // recommended crew count would invoke the in-browser scheduler with that
 // crew count + a 25k+ outage storm and crash the page.
 async function runPlanAutoRoute(){
+  if (!storm){status.textContent='Generate an outage scenario first.';return;}
+  try {
+    const handoff=prepareTimelineForRestoration();
+    if (handoff.stormEnd){
+      status.textContent=
+        `Storm passage complete at ${formatTimelineTimestamp(handoff.stormEnd)}. `+
+        `Handing all ${handoff.outageCount.toLocaleString()} outages (${handoff.representedCustomers.toLocaleString()} customers) to restoration…`;
+    }
+  } catch (error){
+    status.textContent=`Restoration handoff failed: ${error.message}`;
+    return;
+  }
   // Live mode always uses the in-browser scheduler: the server's Numba path
   // has no live-mode semantics (it would re-apply the 12h assessment delay,
   // discovery tail, and mutual-aid arrival waves to outages that are already
@@ -3920,6 +4133,7 @@ function showServerStatus(text, isError){
 }
 function buildServerPayload(){
   if (!storm) throw new Error('Generate an outage scenario first.');
+  prepareTimelineForRestoration();
   const priorityOn = document.getElementById('customerPriority').checked;
   // The weight is in units of (customers per squared-degree of lat/lon). At
   // Connecticut coords, a degree is ~70 miles, so a weight of 5000 means
@@ -4724,15 +4938,6 @@ document.getElementById('showStormTrack').onchange = function(){
   renderStormTrack();
 };
 document.getElementById('stormTrackSelect').onchange = renderStormTrack;
-// When HRRR data is populated, auto-set soil saturation based on measured soil moisture.
-document.getElementById('stormTrackSelect').addEventListener('change', function() {
-  const hw = window.CONNECTICUT_STORM_WIND;
-  if (!hw?._populated) return;
-  const s = hw.storms?.[this.value];
-  if (!s || s.soil_wetness == null) return;
-  const el = document.getElementById('soilSaturation');
-  if (el) el.checked = s.soil_wetness > 0.35;
-});
 document.getElementById('stormTrackSelect').addEventListener('change', function() {
   // Keep the normal workflow automatic: use the validated research model
   // when weather fields exist and the explicit network fallback otherwise.
@@ -4751,8 +4956,8 @@ document.getElementById('stormTrackSelect').addEventListener('change', function(
 // duration in hours, shown alongside the simulated result for comparison.
 // Snowtober/March 2023/Dec 2022/Oct 2019/Sep 2021 have no real track or
 // HRRR data (uniform placement, same as leaving the dropdown blank) --
-// their keys here don't exist in HARTFORD_STORM_TRACKS or
-// CONNECTICUT_STORM_WIND on purpose, so placement falls through to the
+// their keys here don't exist in HARTFORD_STORM_TRACKS or the curated
+// timeline cache on purpose, so placement falls through to the
 // default population-weighted behavior.
 const REAL_STORM_PRESETS = {
   isaias_2020:              {outages: 20450, crews: 4500, realH: 264, label: "Isaias 2020"},

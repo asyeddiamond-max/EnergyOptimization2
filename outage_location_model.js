@@ -503,8 +503,94 @@
       name: String(storm.name ?? storm.stormId ?? storm.storm_id ?? ""),
       date: String(storm.date ?? ""),
       precipitationType: String(storm.precipitationType ?? storm.precipitation_type ?? storm.precip_type ?? ""),
+      rainInputKind: String(storm.rainInputKind ?? storm.rain_input_kind ?? "one_hour_accumulation"),
       wind: validateGrid(storm.peakWindMph ?? storm.peak_wind_mph, latitudes.length, longitudes.length, "peakWindMph", [0, 250]),
       rain: validateGrid(storm.peakRainIn ?? storm.peak_rain_in, latitudes.length, longitudes.length, "peakRainIn", [0, 15]),
+    };
+  }
+
+  function normalizeStoredGrid(values, rows, columns, label, bounds) {
+    if (Array.isArray(values) && values.length === rows * columns
+      && values.every((value) => typeof value === "number")) {
+      const nested = Array.from({ length: rows }, (_, row) =>
+        values.slice(row * columns, (row + 1) * columns));
+      return validateGrid(nested, rows, columns, label, bounds);
+    }
+    return validateGrid(values, rows, columns, label, bounds);
+  }
+
+  function normalizeWeatherTimeline(weatherTimeline) {
+    if (!weatherTimeline || typeof weatherTimeline !== "object") {
+      throw new InputValidationError("weatherTimeline must be an object");
+    }
+    const storm = weatherTimeline.storm || weatherTimeline;
+    const grid = weatherTimeline.grid || weatherTimeline;
+    const latitudes = validateCoordinates(grid.lats ?? grid.latitudes, "weatherTimeline.grid.lats");
+    const longitudes = validateCoordinates(grid.lons ?? grid.longitudes, "weatherTimeline.grid.lons");
+    const stormId = String(storm.stormId ?? storm.storm_id ?? "");
+    if (!stormId) throw new InputValidationError("weatherTimeline stormId must not be empty");
+    if (!Array.isArray(storm.frames) || storm.frames.length < 2) {
+      throw new InputValidationError("weatherTimeline.frames must contain at least two hourly frames");
+    }
+    const intervalMinutes = integer(
+      storm.intervalMinutes ?? storm.interval_minutes ?? 60,
+      "weatherTimeline.intervalMinutes",
+      1,
+    );
+    let previousTime = null;
+    const frames = storm.frames.map((frame, index) => {
+      if (!frame || typeof frame !== "object") {
+        throw new InputValidationError(`weatherTimeline.frames[${index}] must be an object`);
+      }
+      const validTime = String(frame.validTime ?? frame.valid_time ?? "");
+      const epochMs = Date.parse(validTime);
+      if (!validTime || !Number.isFinite(epochMs)) {
+        throw new InputValidationError(`weatherTimeline.frames[${index}].validTime is invalid`);
+      }
+      if (previousTime !== null && epochMs - previousTime !== intervalMinutes * 60 * 1000) {
+        throw new InputValidationError("weatherTimeline frame timestamps must match intervalMinutes");
+      }
+      previousTime = epochMs;
+      return {
+        validTime: new Date(epochMs).toISOString().replace(".000Z", "Z"),
+        windGustMph: normalizeStoredGrid(
+          frame.windGustMph ?? frame.wind_gust_mph,
+          latitudes.length,
+          longitudes.length,
+          `weatherTimeline.frames[${index}].windGustMph`,
+          [0, 250],
+        ),
+        rain1hIn: normalizeStoredGrid(
+          frame.rain1hIn ?? frame.rain_1h_in,
+          latitudes.length,
+          longitudes.length,
+          `weatherTimeline.frames[${index}].rain1hIn`,
+          [0, 15],
+        ),
+        rain6hIn: normalizeStoredGrid(
+          frame.rain6hIn ?? frame.rain_6h_in,
+          latitudes.length,
+          longitudes.length,
+          `weatherTimeline.frames[${index}].rain6hIn`,
+          [0, 15],
+        ),
+      };
+    });
+    return {
+      stormId,
+      name: String(storm.name ?? stormId),
+      precipitationType: String(storm.precipitationType ?? storm.precipitation_type ?? storm.precip_type ?? ""),
+      intervalMinutes,
+      antecedentRainHours: integer(
+        storm.antecedentRainHours ?? storm.antecedent_rain_hours ?? 6,
+        "weatherTimeline.antecedentRainHours",
+        1,
+      ),
+      startTime: frames[0].validTime,
+      endTime: frames[frames.length - 1].validTime,
+      latitudes,
+      longitudes,
+      frames,
     };
   }
 
@@ -539,6 +625,7 @@
       stormName: normalized.name,
       stormDate: normalized.date,
       precipitationType: normalized.precipitationType,
+      rainInputKind: normalized.rainInputKind,
       latitudes, longitudes, connecticutMask, windMph, rainInPerHour,
       windDamageScore, rainAmplification, weatherSeverity,
       summary: {
@@ -568,15 +655,28 @@
       ? weatherSurface.weatherSeverity[rowIndex][columnIndex]
         * relativeCustomerExposure[rowIndex][columnIndex] ** exposureExponent
       : 0));
-    const smoothedImpact = boundaryAwareGaussianSmooth(rawImpact, mask, {
-      smoothingKm: gaussianBandwidthKm,
-      latitudeCellKm: customerSurface.latitudeCellKm,
-      longitudeCellKm: customerSurface.longitudeCellKm,
-    });
+    const rawTotal = gridTotal(rawImpact);
+    const allowZeroImpact = options.allowZeroImpact === true;
+    let smoothedImpact;
+    if (rawTotal > 0) {
+      smoothedImpact = boundaryAwareGaussianSmooth(rawImpact, mask, {
+        smoothingKm: gaussianBandwidthKm,
+        latitudeCellKm: customerSurface.latitudeCellKm,
+        longitudeCellKm: customerSurface.longitudeCellKm,
+      });
+    } else if (allowZeroImpact) {
+      smoothedImpact = mask.map((row) => row.map(() => 0));
+    } else {
+      // Preserve the snapshot model's explicit no-damage error contract.
+      smoothedImpact = boundaryAwareGaussianSmooth(rawImpact, mask, {
+        smoothingKm: gaussianBandwidthKm,
+        latitudeCellKm: customerSurface.latitudeCellKm,
+        longitudeCellKm: customerSurface.longitudeCellKm,
+      });
+    }
     const smoothedTotal = gridTotal(smoothedImpact);
     const samplingProbability = mask.map((row, rowIndex) => row.map((inside, columnIndex) =>
-      inside ? smoothedImpact[rowIndex][columnIndex] / smoothedTotal : 0));
-    const rawTotal = gridTotal(rawImpact);
+      inside && smoothedTotal > 0 ? smoothedImpact[rowIndex][columnIndex] / smoothedTotal : 0));
     return {
       schemaVersion: SCHEMA_VERSION,
       schema: "connecticut_combined_impact_v1",
@@ -894,6 +994,239 @@
     };
   }
 
+  function timelineFrameWeatherInput(timeline, frame) {
+    return {
+      grid: { lats: timeline.latitudes, lons: timeline.longitudes },
+      storm: {
+        stormId: timeline.stormId,
+        name: timeline.name,
+        date: frame.validTime.slice(0, 10),
+        precipitationType: timeline.precipitationType,
+        rainInputKind: `antecedent_${timeline.antecedentRainHours}h_accumulation`,
+        peakWindMph: frame.windGustMph,
+        peakRainIn: frame.rain6hIn,
+      },
+    };
+  }
+
+  function buildTimelineFrameSurfaces(timeline, customerSurface, config) {
+    return timeline.frames.map((sourceFrame, frameIndex) => {
+      const weather = buildWeatherSeveritySurface(
+        timelineFrameWeatherInput(timeline, sourceFrame),
+        customerSurface.connecticutMask,
+        config,
+      );
+      const impact = buildCombinedImpactSurface(customerSurface, weather, {
+        ...config,
+        allowZeroImpact: true,
+      });
+      return {
+        frameIndex,
+        validTime: sourceFrame.validTime,
+        rain1hIn: sourceFrame.rain1hIn,
+        rain6hIn: sourceFrame.rain6hIn,
+        weather,
+        impact,
+      };
+    });
+  }
+
+  function buildTimelineWeightedSegments(network, frameSurfaces, config) {
+    if (!Array.isArray(frameSurfaces) || !frameSurfaces.length) {
+      throw new InputValidationError("frameSurfaces must contain at least one frame");
+    }
+    const latitudes = frameSurfaces[0].impact.latitudes;
+    const longitudes = frameSurfaces[0].impact.longitudes;
+    const segments = buildBasicNetworkSegments(network, config).map((segment) => ({
+      ...segment,
+      segmentId: segment.segmentId.replace(/^basic:/, ""),
+      weight: 0,
+    }));
+    for (const frame of frameSurfaces) {
+      for (const segment of segments) {
+        const localImpact = bilinearGridValue(
+          latitudes,
+          longitudes,
+          frame.impact.smoothedImpact,
+          segment.midpoint[1],
+          segment.midpoint[0],
+        );
+        const frameWeight = localImpact * segment.lengthKm * segment.susceptibility;
+        if (frameWeight > 0 && Number.isFinite(frameWeight)) segment.weight += frameWeight;
+      }
+    }
+    const positiveSegments = segments.filter((segment) => segment.weight > 0 && Number.isFinite(segment.weight));
+    if (!positiveSegments.length) {
+      throw new InputValidationError("storm timeline has no positive network impact at the configured threshold");
+    }
+    return positiveSegments;
+  }
+
+  function sampleTimelineOutageScenario(
+    weightedSegments,
+    frameSurfaces,
+    customerSurface,
+    configInput = {},
+    inputs = {},
+    boundary = null,
+  ) {
+    const config = validateConfig(configInput);
+    const baseScenario = sampleOutageScenario(
+      weightedSegments,
+      config,
+      inputs,
+      boundary,
+    );
+    const segmentById = new Map(weightedSegments.map((segment) => [segment.segmentId, segment]));
+    const latitudes = customerSurface.latitudes;
+    const longitudes = customerSurface.longitudes;
+    const timeRandom = mulberry32(config.seed ^ 0x51F15E5D);
+    const frameOutageCounts = Array(frameSurfaces.length).fill(0);
+
+    const outages = baseScenario.outages.map((outage) => {
+      const segment = segmentById.get(outage.networkSegmentId);
+      if (!segment) throw new InputValidationError(`missing timeline segment ${outage.networkSegmentId}`);
+      const frameWeights = frameSurfaces.map((frame) => {
+        const localImpact = bilinearGridValue(
+          latitudes,
+          longitudes,
+          frame.impact.smoothedImpact,
+          segment.midpoint[1],
+          segment.midpoint[0],
+        );
+        return Math.max(0, localImpact * segment.lengthKm * segment.susceptibility);
+      });
+      const totalFrameWeight = frameWeights.reduce((sum, value) => sum + value, 0);
+      if (totalFrameWeight <= 0) {
+        throw new InputValidationError(`timeline segment ${segment.segmentId} has no positive frame weight`);
+      }
+      const target = timeRandom() * totalFrameWeight;
+      let cumulative = 0;
+      let selectedFrameIndex = frameWeights.length - 1;
+      for (let frameIndex = 0; frameIndex < frameWeights.length; frameIndex += 1) {
+        cumulative += frameWeights[frameIndex];
+        if (target <= cumulative) {
+          selectedFrameIndex = frameIndex;
+          break;
+        }
+      }
+      const frame = frameSurfaces[selectedFrameIndex];
+      const latitude = segment.midpoint[1];
+      const longitude = segment.midpoint[0];
+      frameOutageCounts[selectedFrameIndex] += 1;
+      return {
+        ...outage,
+        occurredAt: frame.validTime,
+        stormFrameIndex: selectedFrameIndex,
+        localWindMph: bilinearGridValue(latitudes, longitudes, frame.weather.windMph, latitude, longitude),
+        localRain1hIn: bilinearGridValue(latitudes, longitudes, frame.rain1hIn, latitude, longitude),
+        localRain6hIn: bilinearGridValue(latitudes, longitudes, frame.rain6hIn, latitude, longitude),
+        localRainIn: bilinearGridValue(latitudes, longitudes, frame.rain6hIn, latitude, longitude),
+        customerExposure: bilinearGridValue(
+          latitudes, longitudes, customerSurface.smoothedCustomerAccounts, latitude, longitude,
+        ),
+        relativeCustomerExposure: bilinearGridValue(
+          latitudes, longitudes, frame.impact.relativeCustomerExposure, latitude, longitude,
+        ),
+        localWeatherSeverity: bilinearGridValue(
+          latitudes, longitudes, frame.weather.weatherSeverity, latitude, longitude,
+        ),
+        rawImpact: bilinearGridValue(latitudes, longitudes, frame.impact.rawImpact, latitude, longitude),
+        smoothedImpact: bilinearGridValue(
+          latitudes, longitudes, frame.impact.smoothedImpact, latitude, longitude,
+        ),
+        frameSamplingWeight: frameWeights[selectedFrameIndex] / totalFrameWeight,
+      };
+    });
+
+    return {
+      ...baseScenario,
+      schema: "connecticut_timeline_outage_scenario_v1",
+      scenarioId: `${config.stormId}_timeline_seed${config.seed}`,
+      outages,
+      frameOutageCounts,
+    };
+  }
+
+  function generateTimelineOutageScenario(input) {
+    if (!input || typeof input !== "object") throw new InputValidationError("model input must be an object");
+    const config = validateConfig(input.config);
+    const timeline = normalizeWeatherTimeline(input.weatherTimeline ?? input.weather_timeline);
+    if (config.stormId !== timeline.stormId) {
+      throw new InputValidationError(
+        `config stormId ${config.stormId} does not match timeline stormId ${timeline.stormId}`,
+      );
+    }
+    const customerSurface = buildCustomerExposureSurface(
+      input.boundary,
+      input.censusTracts,
+      timeline.latitudes,
+      timeline.longitudes,
+      { smoothingKm: config.customerSmoothingKm, ruralBaselineFraction: config.ruralBaselineFraction },
+    );
+    const frameSurfaces = buildTimelineFrameSurfaces(timeline, customerSurface, config);
+    const weightedSegments = buildTimelineWeightedSegments(input.network, frameSurfaces, config);
+    const scenario = sampleTimelineOutageScenario(
+      weightedSegments,
+      frameSurfaces,
+      customerSurface,
+      config,
+      {
+        ...(input.inputs || {}),
+        weatherMode: "curated_hourly_timeline",
+        timelineStart: timeline.startTime,
+        timelineEnd: timeline.endTime,
+        antecedentRainHours: timeline.antecedentRainHours,
+      },
+      input.boundary,
+    );
+    const feederOutages = scenario.outages.filter((outage) => outage.is_feeder === 1).length;
+    const activeFrameCount = scenario.frameOutageCounts.filter((count) => count > 0).length;
+    return {
+      ...scenario,
+      surfaces: {
+        customer: customerSurface,
+        timeline: {
+          stormId: timeline.stormId,
+          stormName: timeline.name,
+          startTime: timeline.startTime,
+          endTime: timeline.endTime,
+          intervalMinutes: timeline.intervalMinutes,
+          antecedentRainHours: timeline.antecedentRainHours,
+          rainInputKind: `antecedent_${timeline.antecedentRainHours}h_accumulation`,
+          frames: frameSurfaces,
+        },
+      },
+      summary: {
+        placementModel: "curated_hourly_timeline_v1",
+        candidateSegments: weightedSegments.length,
+        feederCandidateSegments: weightedSegments.filter(
+          (segment) => segment.networkKind === "feeder",
+        ).length,
+        lateralCandidateSegments: weightedSegments.filter(
+          (segment) => segment.networkKind === "lateral",
+        ).length,
+        sampledOutages: scenario.outages.length,
+        uniqueSampledSegments: new Set(scenario.outages.map((outage) => outage.networkSegmentId)).size,
+        feederOutages,
+        lateralOutages: scenario.outages.length - feederOutages,
+        representedCustomers: scenario.totalCustomers,
+        totalSegmentWeight: weightedSegments.reduce((sum, segment) => sum + segment.weight, 0),
+        timelineFrames: frameSurfaces.length,
+        activeOutageFrames: activeFrameCount,
+        frameOutageCounts: scenario.frameOutageCounts.slice(),
+        firstOccurrence: scenario.outages.reduce(
+          (earliest, outage) => !earliest || outage.occurredAt < earliest ? outage.occurredAt : earliest,
+          null,
+        ),
+        lastOccurrence: scenario.outages.reduce(
+          (latest, outage) => !latest || outage.occurredAt > latest ? outage.occurredAt : latest,
+          null,
+        ),
+      },
+    };
+  }
+
   return Object.freeze({
     SCHEMA_VERSION,
     POPULATION_TO_CUSTOMER_RATIO,
@@ -908,6 +1241,7 @@
     buildCustomerExposureSurface,
     weatherSeverityScore,
     normalizeWeather,
+    normalizeWeatherTimeline,
     buildWeatherSeveritySurface,
     buildCombinedImpactSurface,
     haversineKm,
@@ -917,6 +1251,10 @@
     buildBasicNetworkSegments,
     mulberry32,
     sampleOutageScenario,
+    buildTimelineFrameSurfaces,
+    buildTimelineWeightedSegments,
+    sampleTimelineOutageScenario,
     generateOutageScenario,
+    generateTimelineOutageScenario,
   });
 });

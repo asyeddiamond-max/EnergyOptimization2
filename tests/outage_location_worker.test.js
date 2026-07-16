@@ -6,7 +6,10 @@ const path = require("node:path");
 const test = require("node:test");
 const { Worker } = require("node:worker_threads");
 const model = require("../outage_location_model.js");
-const { buildPerformanceNetwork } = require("./helpers/outage_location_test_network.js");
+const {
+  buildPerformanceNetwork,
+  buildReviewNetwork,
+} = require("./helpers/outage_location_test_network.js");
 
 const ROOT = path.resolve(__dirname, "..");
 const WORKER_PATH = path.join(ROOT, "outage_location_worker.js");
@@ -55,6 +58,30 @@ function fullInput() {
   };
 }
 
+function timelineInput() {
+  const boundary = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "connecticut_boundary.json"), "utf8"));
+  const censusTracts = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "connecticut_census_tracts.json"), "utf8"));
+  const timelineText = fs.readFileSync(
+    path.join(ROOT, "data", "connecticut_storm_timelines.js"),
+    "utf8",
+  );
+  const timelineData = JSON.parse(
+    timelineText.slice(timelineText.indexOf("=") + 1).trim().replace(/;$/, ""),
+  );
+  return {
+    mode: "timeline",
+    config: model.DEFAULT_CONFIG,
+    boundary,
+    censusTracts,
+    weatherTimeline: {
+      grid: timelineData.grid,
+      storm: timelineData.storms.isaias_2020,
+    },
+    network: buildReviewNetwork(model, boundary, timelineData.grid),
+    inputs: { fixture: "timeline-worker" },
+  };
+}
+
 function createWorker() {
   return new Worker(WORKER_PATH);
 }
@@ -92,6 +119,7 @@ test("Worker announces its versioned capabilities", async (t) => {
   assert.equal(ready.version, 1);
   assert.equal(ready.capabilities.progress, true);
   assert.equal(ready.capabilities.transferableSurfaces, true);
+  assert.equal(ready.capabilities.timelineWeather, true);
 });
 
 test("Worker answers an explicit startup status handshake", async (t) => {
@@ -132,6 +160,38 @@ test("Worker reports real stages and returns typed surfaces plus restoration-com
   assert.deepEqual([result.surfaces.rows, result.surfaces.columns], [3, 3]);
   assert.equal(result.surfaces.smoothedImpact.length, 9);
   assert.ok(result.summary.timingsMs["network-weighting"] >= 0);
+});
+
+test("Worker returns 24 transferable Isaias frames and 2,000 timestamped outages", { timeout: 30000 }, async (t) => {
+  const worker = createWorker();
+  t.after(() => worker.terminate());
+  await waitFor(worker, (message) => message.type === "ready");
+  const stages = [];
+  worker.on("message", (message) => {
+    if (message.type === "progress" && message.runId === "timeline") stages.push(message.stage);
+  });
+  worker.postMessage(request("timeline", timelineInput()));
+  const message = await waitFor(
+    worker,
+    (value) => value.type === "result" && value.runId === "timeline",
+    30000,
+  );
+  const { result } = message;
+  assert.deepEqual(stages, [
+    "timeline-validation", "timeline-modeling", "timeline-serialization", "complete",
+  ]);
+  assert.equal(result.summary.placementModel, "curated_hourly_timeline_v1");
+  assert.equal(result.outages.length, 2000);
+  assert.equal(result.totalCustomers, 100000);
+  assert.equal(result.summary.uniqueSampledSegments, 2000);
+  assert.ok(result.outages.every((outage) => typeof outage.occurredAt === "string"));
+  assert.equal(result.surfaces.mode, "timeline");
+  assert.equal(result.surfaces.timeline.frames.length, 24);
+  assert.ok(result.surfaces.timeline.frames[0].windGustMph instanceof Float32Array);
+  assert.ok(result.surfaces.timeline.frames[0].rain1hIn instanceof Float32Array);
+  assert.ok(result.surfaces.timeline.frames[0].rain6hIn instanceof Float32Array);
+  assert.ok(result.surfaces.timeline.frames[0].smoothedImpact instanceof Float32Array);
+  assert.equal(result.surfaces.timeline.frames[0].windGustMph.length, 41 * 65);
 });
 
 test("Worker returns human-readable validation errors with the failing stage", async (t) => {

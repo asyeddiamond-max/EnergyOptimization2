@@ -250,21 +250,48 @@ fit.
 
 | | |
 |---|---|
-| **What** | Peak 10m wind and rain fields on a 41×65 grid (~3km resolution) covering Connecticut for 8 cached events; temperature and soil-wetness metadata are retained where available |
+| **What** | Representative-hour surface-gust and rain fields on a 41×65 grid (~3km resolution) covering Connecticut for 8 cached events; temperature and soil-wetness metadata are retained where available |
 | **Source** | NOAA HRRR model, AWS public archive, accessed via the `herbie-data` Python library |
 | **Endpoint** | `noaa-hrrr-bdp-pds.s3.amazonaws.com` |
 | **Fetch script** | [`12_fetch_hrrr_storm_wind.py`](12_fetch_hrrr_storm_wind.py) |
 | **Cached file** | [`data/connecticut_storm_wind.js`](data/connecticut_storm_wind.js) |
 | **Storms** | Isaias 2020, Henri 2021, May 2018 tornado/derecho outbreak, January 2024 wind storm, December 2023 nor'easter, October 2020 derecho, July 2026 severe thunderstorm complex, and December 2022 windstorm |
-| **Used by** | `outage_location_model.js` combines thresholded wind damage with rain amplification, census customer exposure, and boundary-aware Gaussian smoothing before weighting the live feeder/lateral network. |
+| **Used by** | Offline regression tests and older calibration scripts. The professor-facing website no longer loads this representative-hour cache; its active Isaias workflow uses the hourly timeline below. |
 | **License** | Public domain (U.S. government work) |
 
-**Method**: HRRR uses a Lambert Conformal projection (lat/lon are 2-D arrays), so each storm's `WIND:10 m above ground` / `TMP:2 m above ground` field is clipped to a CT bounding box and regridded onto the regular target grid via `scipy.interpolate.griddata`.
+**Method**: HRRR uses a Lambert Conformal projection (lat/lon are 2-D arrays), so each storm's `GUST:surface`, `APCP:surface`, and `TMP:2 m above ground` fields are clipped to a CT bounding box and regridded onto the regular target grid via `scipy.interpolate.griddata`.
 
 **Honest coverage notes**
 - Sandy (2012) and Irene (2011) predate the HRRR archive (which starts ~2014) and have no gridded wind/rain data. The UI requires the explicitly labeled basic network-placement mode for events without a complete field; it never silently changes methods.
 - Soil moisture (`SOILW`) is not present in the HRRR surface product for any of the 5 storm hours checked (confirmed directly against the raw GRIB index files, not just a failed field-name guess). The one semantically-adjacent field available, `MSTAV` (moisture availability), returned a flat 100% across the entire region for at least one storm — not reliable enough to use as a substitute. `soil_wetness` is left `null` for all 5 storms rather than filled with a fabricated or low-confidence value; the soil-saturation auto-toggle already handles a null value gracefully (no-op).
 - **History**: originally a 15×21 grid covering only Hartford County; densified to the current 41×65 statewide grid at the same underlying ~3km native HRRR resolution.
+
+---
+
+## 12b · Curated hourly HRRR storm timeline (statewide)
+
+| | |
+|---|---|
+| **What** | A 24-frame hourly wind/rain timeline on the same 41×65 Connecticut grid, intended as the single weather source for both animation and time-dependent outage placement |
+| **Source** | NOAA HRRR surface product, AWS public archive, accessed via `herbie-data` |
+| **Fetch script** | [`12_fetch_hrrr_storm_wind.py`](12_fetch_hrrr_storm_wind.py) with `--timeline-only --timeline isaias_2020` |
+| **Cached file** | [`data/connecticut_storm_timelines.js`](data/connecticut_storm_timelines.js) |
+| **Curated storms** | Tropical Storm Isaias (2020) only in Phase 1 |
+| **Window** | 2020-08-04 06:00 UTC through 2020-08-05 05:00 UTC, hourly |
+| **Fields** | Surface gust in mph; one-hour accumulated precipitation ending at the frame time; six-hour antecedent precipitation, all stored as row-major arrays |
+| **License** | Public domain (U.S. government work) |
+
+**Time alignment**: wind uses the HRRR analysis (`f00`) valid at time `T`.
+Rain uses the one-hour accumulated precipitation forecast (`f01`) initialized
+at `T-1`, so its accumulation interval also ends at `T`. Five rain frames
+before the visible window are fetched to give the first visible frame a full
+six-hour antecedent total.
+
+**Scope note**: this is a curated catalog, not an arbitrary-date service. The
+browser consumes the committed, reviewed data and does not download or decode
+raw GRIB files. The JavaScript model and Worker now produce timestamped outage
+locations and transferable map surfaces from this timeline. The existing map
+animates those exact arrays with hourly playback and cumulative outage markers.
 
 ---
 

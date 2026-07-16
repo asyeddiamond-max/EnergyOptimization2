@@ -28,6 +28,7 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
 | NLCD tree canopy per substation | USGS 30m canopy cover (live-computed 1km buffer mean per substation) replaces the distance-based urban/suburban/rural heuristic |
 | NOAA HURDAT2 storm tracks | Sandy, Isaias, Irene, Henri track overlays on the map with wind-speed markers |
 | Statewide HRRR wind/rain grid | 41×65 grid (~3km resolution) for 8 cached events; sourced from the NOAA AWS archive |
+| Curated hourly storm playback | 24 hourly Isaias HRRR frames drive both the animated Wind/Rain/Impact overlay and timestamped outage placement |
 | DOE OE-417 disturbance database | 8 real CT outage events for calibrating simulated vs. actual restoration timelines |
 | Census tract population | 883 tracts (2020 Census P.L. 94-171) for much finer demand placement than the 169-town model |
 | Customer-impact-weighted dispatch | scheduler can favor outages serving more customers, not just nearest |
@@ -107,7 +108,7 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
 No Python, backend, JSON import, or downloaded handoff file is required:
 
 1. Open `03_grid_simulation.html` through GitHub Pages or any static web server.
-2. Choose a storm, seed, outage count, and optional scientific parameters.
+2. Choose a curated storm (currently Isaias), seed, outage count, and optional scientific parameters.
 3. Click **Generate outage scenario**.
 4. Inspect outage points and the customer, weather, raw-impact, or
    Gaussian-smoothed diagnostic surface.
@@ -152,13 +153,12 @@ basic network-placement mode; the page never silently changes algorithms.
 ├── 04_geojson_to_shapefile.py     # offline GeoJSON → shapefile converter (optional)
 ├── 05_generate_artifacts.py       # offline matplotlib PNG generator for output/
 ├── 07_server.py                   # FastAPI backend (~780 LOC), disk-backed result cache
-├── OUTAGE_LOCATION_WEB_MIGRATION_PLAN.md # completed browser migration record
-├── OUTAGE_LOCATION_IMPLEMENTATION_PLAN.md # historical superseded Python plan
+├── STORM_TIMELINE_IMPLEMENTATION_PLAN.md # phased curated-storm integration plan
 ├── 08_fetch_substations.py        # cache 299 real HIFLD substations statewide
 ├── 09_fetch_critical_facilities.py # cache 1,143 real HIFLD/EPA critical facilities statewide
 ├── 10_fetch_tree_canopy.py        # live-compute NLCD tree canopy per substation (1km buffer)
 ├── 11_fetch_census_tracts.py      # cache 883 real census tracts + 169 town populations (keyless)
-├── 12_fetch_hrrr_storm_wind.py    # builds the statewide 41x65 HRRR weather grid
+├── 12_fetch_hrrr_storm_wind.py    # builds curated hourly HRRR weather + offline legacy cache
 ├── 13_fetch_flood_corridors.py    # 12 real USGS NHD river corridors for the other 7 counties
 ├── scheduler_fast.py              # NumPy-vectorized fallback scheduler
 ├── scheduler_numba.py             # Numba-JIT production scheduler (~730 LOC)
@@ -171,7 +171,8 @@ basic network-placement mode; the page never silently changes algorithms.
 │   ├── connecticut_census_tracts.js    #   883 real census tract centroids + populations
 │   ├── connecticut_towns_population.js #   169 real town populations + centroids
 │   ├── connecticut_tree_canopy.js      #   live-computed NLCD canopy per substation
-│   ├── connecticut_storm_wind.js       #   statewide HRRR wind/temp grid (41x65)
+│   ├── connecticut_storm_wind.js       #   legacy peak-hour cache for offline regression only
+│   ├── connecticut_storm_timelines.js  #   24 hourly Isaias wind/rain frames
 │   ├── connecticut_flood_corridors.js  #   12 USGS-traced river corridors (7 counties)
 │   ├── hartford_storm_tracks.js   #   NOAA HURDAT2 tracks (Sandy, Isaias, Irene, Henri)
 │   ├── hartford_doe_oe417.js      #   DOE OE-417 disturbance events for CT
@@ -202,6 +203,12 @@ python -m http.server 8080
 
 The page works entirely client-side. The server backend is optional; the page auto-detects whether it's reachable and falls back to in-browser compute.
 
+For the curated Isaias workflow, the animated map and outage generator consume
+the same 24 hourly weather frames. Clicking **Plan restoration** stops playback,
+shows the final accumulated 2,000 locations, and hands all 100,000 represented
+customers to the existing scheduler. Restoration time starts after the final
+storm frame; the result card verifies that zero customers remain.
+
 ### With the FastAPI backend locally
 
 ```bash
@@ -231,12 +238,17 @@ npm test
 The dependency-free suite covers frozen Python-to-JavaScript component parity,
 scientific controls, determinism, every complete HRRR event, exact customer
 totals, Connecticut geography, network membership, Worker cancellation and
-responsiveness, restoration metadata, and zero-endpoint accounting. The
+responsiveness, 24-frame Isaias timeline generation, timestamped storm-path
+movement, restoration metadata, and zero-endpoint accounting. The
 100,000-segment performance fixture is built deterministically in JavaScript;
 there is no exported production-network file or second generator to maintain.
 
 ## Current limitations
 
+- Isaias is currently the only curated hourly storm. The eight older
+  representative-hour caches remain for offline compatibility and regression
+  comparison, but the website does not load them or present them as equivalent
+  full-storm timelines.
 - Feeder and lateral topology is synthetic around 299 real HIFLD substations;
   it is not utility GIS topology.
 - The model creates plausible outage locations, but it has not yet been

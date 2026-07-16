@@ -144,6 +144,54 @@
     return { surfaces, transfer };
   }
 
+  function prepareTimelineSurfaceTransport(customer, timeline) {
+    const surfaces = {
+      mode: "timeline",
+      rows: customer.latitudes.length,
+      columns: customer.longitudes.length,
+      latitudes: Float64Array.from(customer.latitudes),
+      longitudes: Float64Array.from(customer.longitudes),
+      mask: flattenGrid(customer.connecticutMask, Uint8Array),
+      customerExposure: flattenGrid(customer.smoothedCustomerAccounts, Float32Array),
+      timeline: {
+        stormId: timeline.stormId,
+        stormName: timeline.stormName,
+        startTime: timeline.startTime,
+        endTime: timeline.endTime,
+        intervalMinutes: timeline.intervalMinutes,
+        antecedentRainHours: timeline.antecedentRainHours,
+        rainInputKind: timeline.rainInputKind,
+        frames: timeline.frames.map((frame) => ({
+          frameIndex: frame.frameIndex,
+          validTime: frame.validTime,
+          windGustMph: flattenGrid(frame.weather.windMph, Float32Array),
+          rain1hIn: flattenGrid(frame.rain1hIn, Float32Array),
+          rain6hIn: flattenGrid(frame.rain6hIn, Float32Array),
+          weatherSeverity: flattenGrid(frame.weather.weatherSeverity, Float32Array),
+          rawImpact: flattenGrid(frame.impact.rawImpact, Float32Array),
+          smoothedImpact: flattenGrid(frame.impact.smoothedImpact, Float32Array),
+        })),
+      },
+    };
+    const transfer = [
+      surfaces.latitudes.buffer,
+      surfaces.longitudes.buffer,
+      surfaces.mask.buffer,
+      surfaces.customerExposure.buffer,
+    ];
+    for (const frame of surfaces.timeline.frames) {
+      transfer.push(
+        frame.windGustMph.buffer,
+        frame.rain1hIn.buffer,
+        frame.rain6hIn.buffer,
+        frame.weatherSeverity.buffer,
+        frame.rawImpact.buffer,
+        frame.smoothedImpact.buffer,
+      );
+    }
+    return { surfaces, transfer };
+  }
+
   function buildSummary(segments, scenario, customer, weather, impact, timingsMs) {
     const feederCandidateSegments = segments.reduce(
       (count, segment) => count + (segment.networkKind === "feeder" ? 1 : 0), 0,
@@ -231,6 +279,69 @@
     }
   }
 
+  async function generateTimeline(runId, input, timingsMs, runStarted) {
+    let currentStage = "timeline-validation";
+    try {
+      await stage(
+        runId,
+        timingsMs,
+        currentStage,
+        0.04,
+        "Validating curated storm timeline…",
+        () => {
+          const config = model.validateConfig(input.config);
+          const timeline = model.normalizeWeatherTimeline(input.weatherTimeline ?? input.weather_timeline);
+          if (config.stormId !== timeline.stormId) {
+            throw new model.InputValidationError(
+              `config stormId ${config.stormId} does not match timeline stormId ${timeline.stormId}`,
+            );
+          }
+        },
+      );
+      currentStage = "timeline-modeling";
+      const result = await stage(
+        runId,
+        timingsMs,
+        currentStage,
+        0.18,
+        "Calculating 24 hourly weather, impact, and outage-risk frames…",
+        () => model.generateTimelineOutageScenario(input),
+      );
+
+      currentStage = "timeline-serialization";
+      postProgress(runId, currentStage, 0.94, "Preparing animated map frames…", timingsMs);
+      await yieldToMessages();
+      ensureCurrent(runId, currentStage);
+      const started = performance.now();
+      const transported = prepareTimelineSurfaceTransport(
+        result.surfaces.customer,
+        result.surfaces.timeline,
+      );
+      timingsMs[currentStage] = performance.now() - started;
+      const summary = {
+        ...result.summary,
+        timingsMs: { ...timingsMs },
+        calculationRuntimeMs: Object.values(timingsMs).reduce((sum, value) => sum + value, 0),
+        totalRuntimeMs: performance.now() - runStarted,
+      };
+      const { surfaces: unusedSurfaces, ...scenario } = result;
+      ensureCurrent(runId, currentStage);
+      postProgress(runId, "complete", 1, "Timestamped outage locations generated.", timingsMs);
+      send(envelope("result", runId, {
+        result: {
+          ...scenario,
+          surfaces: transported.surfaces,
+          summary,
+        },
+      }), transported.transfer);
+      return true;
+    } catch (error) {
+      if (error === CANCELLED) throw error;
+      error.workerStage = currentStage;
+      throw error;
+    }
+  }
+
   async function generate(message) {
     const { runId, input } = message;
     const timingsMs = {};
@@ -239,11 +350,15 @@
     activeRuns.add(runId);
     try {
       const mode = input.mode || "research";
-      if (mode !== "research" && mode !== "basic") {
-        throw new model.InputValidationError("input.mode must be research or basic");
+      if (mode !== "research" && mode !== "basic" && mode !== "timeline") {
+        throw new model.InputValidationError("input.mode must be research, timeline, or basic");
       }
       if (mode === "basic") {
         await generateBasic(runId, input, timingsMs, runStarted);
+        return;
+      }
+      if (mode === "timeline") {
+        await generateTimeline(runId, input, timingsMs, runStarted);
         return;
       }
       const validated = await stage(runId, timingsMs, "validation", 0.03, "Validating model inputs…", () => {
@@ -345,6 +460,7 @@
           cancellation: "between-stages",
           supersession: true,
           transferableSurfaces: true,
+          timelineWeather: true,
         } }));
         return;
       }
@@ -377,5 +493,6 @@
     cancellation: "between-stages",
     supersession: true,
     transferableSurfaces: true,
+    timelineWeather: true,
   } }));
 })();
