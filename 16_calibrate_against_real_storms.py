@@ -216,8 +216,21 @@ STORMS = [
     ("irene_2011", 21350, 3800, 288, "Irene 2011"),
     ("", 26050, 4800, 264, "Snowtober 2011"),
     ("may2018", 3980, 1000, 192, "May 2018"),
-    ("jan2024", 1650, 500, 72, "Jan 2024"),
-    ("dec2023", 2850, 700, 96, "Dec 2023"),
+    # CORRECTED 2026-07-15 vs EAGLE-I (19_validate_against_eaglei.py) -- the
+    # largest correction in this suite. EAGLE-I shows Jan 2024 was never a
+    # single 52k storm but a cluster of three MINOR CT events (Jan 9-10 6.4k,
+    # Jan 13-14 10.6k, Jan 16-17 ~6k). Corrected to its own dated Jan 9-10
+    # event: peak 6,409 (~8x overstatement) / 26h (was 72h). n_out 1650->200,
+    # crews 500->100 (the old 500 was interpolated FROM the disproven 52k peak;
+    # re-interpolated between Sep 2019 2.9k/60 and Henri 23k/300). Neither the
+    # crew count nor the ratio below is a meaningful validation signal now --
+    # it is an honest, EAGLE-I-measured small event, nothing more.
+    ("jan2024", 200, 100, 26, "Jan 2024"),
+    # CORRECTED 2026-07-15 vs EAGLE-I: peak 89,000->86,770 (CONFIRMED within
+    # 2.5% -- a sourced entry that held up), real_h 96->83 (measured full
+    # restoration; the old 96h was ~13h long). n_out 2850 kept (the 2.5% peak
+    # change is well inside placement noise).
+    ("dec2023", 2850, 700, 83, "Dec 2023"),
     # n_out 950->830 to hit the 23k Eversource peak (EAGLE-I confirmed:
     # 32,279 all-utility = 23k ES + ~9k UI); real_h 48->34 (EAGLE-I measured
     # full restoration). See 19_validate_against_eaglei.py.
@@ -248,17 +261,19 @@ STORMS = [
     # recalibrated 1800->2050) and measured full restoration 66h (was 96h,
     # an outer news bound).
     ("ct_aug2020_tornado", 2050, 380, 66, "Aug 2020 Tornado"),
-    # LOWER CONFIDENCE than the entries above: real, sourced peak customer
-    # count (~26,800, Eversource press release + live news) and a same-day
-    # partial-restoration snapshot, but duration_h (72) and crew count (300,
-    # used here) are interpolated from Henri 2021 (closest real neighbor by
-    # customer count), not directly sourced -- see the notes on this entry
-    # in data/hartford_doe_oe417.js. Broad nor'easter (not is_localized_
-    # reports), so uses uniform placement like Snowtober. Crew count barely
-    # moves sim_h here (48-49.5h across 250-350 crews tested) -- this storm
-    # isn't crew-constrained at this scale, so the ratio below reflects
-    # uncertainty in the real duration estimate more than a model gap.
-    ("", 900, 300, 72, "March 2023 Nor'easter"),
+    # CORRECTED 2026-07-15 vs EAGLE-I (19_validate_against_eaglei.py): peak
+    # 26,800->13,863 and real_h 72->60 (both measured). The old peak summed a
+    # same-day snapshot's "12,800 restored + ~14,000 still out," double-counting
+    # early restorations against later ones -- ~2x high. n_out 900->450.
+    # Crew count (300) still interpolated, not sourced. Broad nor'easter (not
+    # is_localized_reports), so uniform placement like Snowtober.
+    # OPEN GAP, now sharper than before: 60h to restore only ~13.9k is very
+    # slow for the size (cf. Henri 23k/34h, Oct 2020 27.9k/28h), so the model
+    # runs FAST here and 21_crew_backout.py implies only ~49 crews vs the ~350
+    # estimated. That looks like a real repair-difficulty mechanism the model
+    # lacks -- heavy WET SNOW on high-elevation Litchfield County trees plus
+    # hard road access -- not a data error. Documented, not chased.
+    ("", 450, 300, 60, "March 2023 Nor'easter"),
     # Second real tornado/derecho-type event (NWS-confirmed serial derecho,
     # 2020-10-07), placed via the real HRRR grid + real NCEI storm reports
     # like May 2018, NOT synthetic town-centroid decay. The wind-severity
@@ -293,13 +308,16 @@ STORMS = [
     # meaningful validation signal either way; the wind-severity match
     # above is the useful, sourced part of this addition.
     ("ct_sep2019_tornado", 80, 60, 24, "Sep 2019 Tornado"),
-    # Real, well-documented broad windstorm (not tornado/derecho). Higher
-    # confidence than the last few additions: both crew count (1,100+) and
-    # a restoration-complete date are directly sourced from an Eversource
-    # press release, not interpolated. Real duration is "99% restored" by
-    # 72h, not literally 100%, so a slightly-sub-1.0 ratio here is expected
-    # rather than a miss.
-    ("", 3900, 1100, 72, "Dec 2022 Windstorm"),
+    # Real, well-documented broad windstorm (not tornado/derecho). Highest-
+    # confidence crew count in this suite: 1,100+ is a genuine Eversource
+    # press-release disclosure, not an interpolation.
+    # VALIDATED 2026-07-15 vs EAGLE-I: peak 120,000->106,021 (~13% high, right
+    # ballpark -- a sourced entry that held up); real_h 72->75, which CORROBORATES
+    # the "99% restored by ~72h" milestone -- EAGLE-I puts bulk (95%) at 53h and
+    # the true last-customer tail at 75h, i.e. the sub-1% remainder ran ~3h past
+    # the press milestone, exactly as the old note predicted. n_out 3900->3450.
+    # Now also has its own HRRR grid (12_/dec2022, peak gust 64mph).
+    ("", 3450, 1100, 75, "Dec 2022 Windstorm"),
     # Real "bomb cyclone" nor'easter, 2019-10-16 overnight into 10-17 (set
     # October low-pressure records in Boston/Providence/Portland). Peak
     # ~45,200 (41,000 Eversource + 4,200 UI) sourced from live news at the

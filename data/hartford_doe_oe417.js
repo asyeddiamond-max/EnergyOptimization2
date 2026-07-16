@@ -137,30 +137,74 @@ window.HARTFORD_DOE_OE417 = [
     daily_crews: [200, 300, 100],
   },
   {
+    // CORRECTED 2026-07-15 against ORNL's EAGLE-I dataset
+    // (doi:10.6084/m9.figshare.24237376; see 19_validate_against_eaglei.py).
+    // This is the single largest correction in this file. The original
+    // 52,000 / 72h was never sourced, and EAGLE-I's 15-minute record shows
+    // January 2024 in CT was not one big storm at all -- it was a CLUSTER of
+    // three MINOR events, none remotely near 52,000:
+    //     Jan  9-10  peak  6,409  (this entry's dated event)
+    //     Jan 13-14  peak 10,558  (the month's largest)
+    //     Jan 16-17  peak ~6,000
+    // each restoring in well under a day. Corrected to this entry's OWN dated
+    // event (Jan 9-10, consistent with the one-entry-per-dated-storm convention
+    // used throughout this file): peak 6,409 (an ~8x overstatement in the old
+    // figure) and full restoration 26h (EAGLE-I measured; old 72h was ~3x long).
+    // A naive Jan 9-17 window measures a spurious 137h because outages never
+    // fall below the restoration threshold BETWEEN the three events -- that is
+    // a multi-storm artifact, not this storm's duration.
+    // CREW COUNT: the old 500 was interpolated FROM the now-disproven 52k peak,
+    // so it is doubly unreliable and has been re-interpolated to ~100 by linear
+    // scaling between the two nearest real-size neighbors (Sep 2019 tornado:
+    // 2,900 cust / 60 crews; Henri 2021: 23,000 cust / 300 crews). Still NOT
+    // sourced -- treat as low confidence.
     date: "2024-01-10",
     event: "January 2024 Wind Storm",
     type: "Severe Weather — High Winds",
     utility: "Eversource Energy",
     state: "CT",
-    customers_affected: 52000,
+    customers_affected: 6409,
     demand_loss_mw: null,
-    duration_h: 72,
-    restoration_complete: "2024-01-13",
-    notes: "60+ mph wind gusts; scattered damage across Hartford County",
-    daily_pct_out: [1.0, 0.50, 0.10, 0.0],
-    daily_crews: [250, 500, 400, 100],
+    duration_h: 26,
+    restoration_complete: "2024-01-10",
+    notes: "60+ mph wind gusts; scattered damage. CORRECTED vs EAGLE-I: peak " +
+      "6,409 CT customers (not the 52,000 previously carried here, which was " +
+      "unsourced and ~8x too high), full restoration 26h (not 72h). EAGLE-I " +
+      "shows January 2024 was a cluster of three minor CT events (Jan 9-10 " +
+      "6.4k, Jan 13-14 10.6k, Jan 16-17 ~6k), not a single major storm -- " +
+      "this entry represents its own dated Jan 9-10 event. Crew count (~100) " +
+      "re-interpolated from the corrected size; not sourced.",
+    daily_pct_out: [1.0, 0.10, 0.0],
+    daily_crews: [100, 80, 20],
   },
   {
+    // VALIDATED 2026-07-15 against ORNL's EAGLE-I dataset
+    // (doi:10.6084/m9.figshare.24237376; see 19_validate_against_eaglei.py).
+    // PEAK CONFIRMED: EAGLE-I's measured all-CT-utility peak was 86,770 at
+    // 2023-12-18 14:30 UTC, within ~2.5% of the 89,000 previously carried
+    // here -- one of the best-corroborated entries in this file, and evidence
+    // that this file's SOURCED figures hold up (contrast the unsourced Jan
+    // 2024 / March 2023 entries, which EAGLE-I found 8x / 2x overstated).
+    // duration_h CORRECTED 96h -> 83h (EAGLE-I measured full restoration);
+    // the old 96h was an outer estimate ~13h too long.
+    // CREW COUNT (700) remains NOT independently sourced -- it is this file's
+    // own daily_crews estimate, not a utility disclosure (unlike Dec 2022's
+    // press-released 1,100+ or July 2026's disclosed 702). Treated as
+    // interpolated, not "real," in 21_crew_backout.py.
     date: "2023-12-18",
     event: "December 2023 Nor'easter",
     type: "Severe Weather — Winter Storm",
     utility: "Eversource Energy",
     state: "CT",
-    customers_affected: 89000,
+    customers_affected: 86770,
     demand_loss_mw: null,
-    duration_h: 96,
+    duration_h: 83,
     restoration_complete: "2023-12-22",
-    notes: "Heavy wet snow + wind; significant tree damage in rural Hartford County towns",
+    notes: "Heavy wet snow + wind; significant tree damage in rural Hartford " +
+      "County towns. VALIDATED vs EAGLE-I: measured peak 86,770 CT customers " +
+      "(confirms the ~89,000 previously used here, within 2.5%); duration " +
+      "CORRECTED 96h -> 83h (EAGLE-I-measured full restoration). Crew count " +
+      "(700) is this file's own estimate, not a sourced utility disclosure.",
     daily_pct_out: [1.0, 0.60, 0.25, 0.08, 0.0],
     daily_crews: [300, 600, 700, 400, 100],
   },
@@ -342,23 +386,41 @@ window.HARTFORD_DOE_OE417 = [
     // and daily_crews below are interpolated from Henri 2021 (closest real
     // neighbor by customer count: 23,000 cust / 48h / peak 300 crews) and
     // Jan 2024 (52,000 cust / 72h / peak 500 crews), not directly sourced.
+    // CORRECTED 2026-07-15 against ORNL's EAGLE-I dataset
+    // (doi:10.6084/m9.figshare.24237376; see 19_validate_against_eaglei.py).
+    // customers_affected 26,800 -> 13,863 (EAGLE-I's measured all-CT-utility
+    // peak, at 2023-03-14 20:00 UTC): the old figure came from summing a
+    // same-day news snapshot's "12,800 restored + ~14,000 still out," which
+    // double-counts -- customers restored EARLY in the event were never
+    // simultaneously out with those still waiting at 4pm, so the sum overstates
+    // the peak-simultaneous count this file's convention uses. ~2x too high.
+    // duration_h 72h -> 60h (EAGLE-I measured full restoration).
+    // NOTE the model UNDER-predicts this storm badly (21_crew_backout.py:
+    // implied 49 crews vs ~350 estimated): 60h to restore only ~13.9k is very
+    // slow for its size (cf. Henri 23k/34h, Oct 2020 27.9k/28h). That is a
+    // real signal, not a data error -- heavy WET SNOW in high-elevation
+    // Litchfield County means snow-laden trees and hard road access, a
+    // repair-difficulty mechanism the model does not represent. Kept as an
+    // open, documented gap.
     date: "2023-03-14",
     event: "March 2023 Nor'easter (elevation-dependent wet snow)",
     type: "Severe Weather — Winter Storm (heavy wet snow, elevation-dependent)",
     utility: "Eversource Energy",
     state: "CT",
-    customers_affected: 26800,
+    customers_affected: 13863,
     demand_loss_mw: null,
-    duration_h: 72,
+    duration_h: 60,
     restoration_complete: "2023-03-17",
     notes: "Rapidly-intensifying nor'easter, heaviest impact in higher-" +
       "elevation Litchfield County (consistent with 'heavy, wet snow' being " +
       "elevation-dependent per Eversource's own statement) -- a normal " +
       "within-storm geographic skew for a broad statewide system, not " +
       "spatially-confined the way the tornado/thunderstorm-complex entries " +
-      "above are, so NOT flagged is_localized_reports. Peak ~26,800 " +
-      "Eversource CT customers (12,800 restored + ~14,000 still out, both " +
-      "as of 4pm on the storm day itself). Crews: 'hundreds' of Eversource " +
+      "above are, so NOT flagged is_localized_reports. Peak 13,863 CT " +
+      "customers (EAGLE-I-measured; CORRECTED from ~26,800, which came from " +
+      "summing a same-day snapshot's '12,800 restored + ~14,000 still out' " +
+      "and so double-counted early restorations against later ones -- ~2x " +
+      "too high). Full restoration 60h (EAGLE-I). Crews: 'hundreds' of Eversource " +
       "line/tree crews plus mutual aid from Indiana, Missouri, Ohio, " +
       "Tennessee, Texas, Massachusetts, New Hampshire, and Canada -- no " +
       "precise total given.",
@@ -469,16 +531,32 @@ window.HARTFORD_DOE_OE417 = [
     // complete," same convention as other entries using that phrase, not
     // literally 100%, so true full restoration may run a bit past the 72h
     // used here.
+    // VALIDATED 2026-07-15 against ORNL's EAGLE-I dataset
+    // (doi:10.6084/m9.figshare.24237376; see 19_validate_against_eaglei.py).
+    // customers_affected 120,000 -> 106,021 (EAGLE-I's measured all-CT-utility
+    // peak at 2022-12-23 14:00 UTC) -- the old figure was ~13% high but in the
+    // right ballpark, consistent with this being a well-sourced entry.
+    // duration_h 72h -> 75h: EAGLE-I measures full restoration (last-customer
+    // tail) at 75h, which CORROBORATES the "99% restored by Christmas Day
+    // (~72h)" press milestone -- the extra ~3h is exactly the sub-1% tail the
+    // note below predicted would run past 72h. Bulk (95%) restoration measures
+    // 53h. Rare case where the model and the record agree closely.
+    // This is the file's strongest crew-count data point: 1,100+ is a genuine
+    // Eversource press-release DISCLOSURE, not an interpolation -- and it is
+    // EVERSOURCE-ONLY, with "hundreds of out-of-state mutual-aid workers" on
+    // top. 21_crew_backout.py independently implies ~1,541 effective crews,
+    // reconciling almost exactly with 1,100 + ~400 mutual aid.
     date: "2022-12-22",
     event: "December 2022 Pre-Christmas Windstorm",
     type: "Severe Weather — Rain and Windstorm",
     utility: "Eversource Energy",
     state: "CT",
-    customers_affected: 120000,
+    customers_affected: 106021,
     demand_loss_mw: null,
-    duration_h: 72,
+    duration_h: 75,
     restoration_complete: "2022-12-25",
-    notes: "Peak ~120,000 Eversource CT customers (pre-storm worst-case " +
+    notes: "Peak 106,021 CT customers (EAGLE-I-measured; corrected from the " +
+      "~120,000 previously used here, ~13% high. Pre-storm worst-case " +
       "estimate had been 125,000-380,000, similar to other entries' " +
       "documented pattern of forecasts overshooting actual impact). 1,100+ " +
       "Eversource crews at peak, plus hundreds of out-of-state mutual-aid " +
@@ -486,7 +564,10 @@ window.HARTFORD_DOE_OE417 = [
       "broken utility poles replaced, 28+ miles of downed line repaired or " +
       "replaced. 99% restoration reached by Christmas Day (12/25, ~72h " +
       "after the storm), described as 'substantially complete' -- crews " +
-      "worked around the clock through the holiday to reach it.",
+      "worked around the clock through the holiday to reach it. EAGLE-I " +
+      "corroborates: 53h to bulk (95%) restoration and 75h to the true " +
+      "last-customer tail, i.e. the sub-1% remainder ran ~3h past the 72h " +
+      "'99%' milestone, exactly as this entry originally predicted it would.",
     daily_pct_out: [1.0, 0.35, 0.10, 0.01],
     daily_crews: [600, 1100, 900, 400],
   },
