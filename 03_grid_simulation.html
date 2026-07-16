@@ -117,14 +117,39 @@
   .rf-name:hover { color:#1d4ed8; }
   .rf-desc { display:none; font-size:9.5px; color:#64748b; line-height:1.35; margin:2px 0 1px 20px; }
   .rf-item.rf-expanded .rf-desc { display:block; }
+  .rf-compat { margin:4px 0; padding:5px 7px; border-radius:4px; background:#fff7ed;
+    color:#9a3412; font-size:9.5px; line-height:1.35; }
   .sub-star { background:none !important; border:none !important; }
+  .model-card { background:#eff6ff; border-color:#93c5fd; }
+  .model-card select, .model-card input[type=number] {
+    background:#fff; color:#1e293b; border:1px solid #bfdbfe; border-radius:5px;
+    padding:4px 6px; font-size:11px;
+  }
+  .model-card select { width:100%; }
+  .model-availability { margin-top:6px; padding:6px 8px; border-radius:5px; font-size:10px; line-height:1.4; }
+  .model-availability.ok { color:#065f46; background:#d1fae5; }
+  .model-availability.warn { color:#92400e; background:#fef3c7; }
+  .model-availability.error { color:#991b1b; background:#fee2e2; }
+  .model-advanced { margin-top:8px; border-top:1px solid #bfdbfe; padding-top:7px; }
+  .model-advanced summary { color:#1d4ed8; cursor:pointer; font-weight:700; font-size:11px; }
+  .model-param-grid { display:grid; grid-template-columns:1fr 82px; gap:5px 8px; align-items:center; margin-top:7px; }
+  .model-param-grid label { color:#475569; font-size:10px; line-height:1.2; }
+  .model-param-grid input { width:68px !important; }
+  .model-summary { display:none; background:#f8fafc; border:1px solid #cbd5e1; padding:8px; border-radius:7px; margin:7px 0; }
+  .model-summary.visible { display:block; }
+  .model-summary-grid { display:grid; grid-template-columns:1fr 1fr; gap:5px 8px; }
+  .model-metric { font-size:10px; color:#64748b; }
+  .model-metric b { display:block; color:#1e3a8a; font-size:13px; }
+  .model-stale { color:#92400e; font-weight:700; }
+  .surface-ramp { height:9px; border-radius:5px; margin:5px 0 2px;
+    background:linear-gradient(90deg,rgba(12,24,55,.1),#1e609b,#26b5b2,#f6d344,#c42d26); }
 </style>
 </head>
 <body>
 <div id="app">
   <aside id="sidebar">
     <h1>Connecticut — Storm &amp; Restoration</h1>
-    <p>Mock distribution grid for the state of Connecticut. Simulate storm outages, count affected customers, and plan crew-based restoration.</p>
+    <p>Model weather-driven outage locations across Connecticut, then plan crew-based restoration.</p>
 
     <div class="seed-explainer">
       <b>Random seed</b> — controls <i>every</i> random choice in the model: where feeders branch, where the storm strikes, where crew depots sit. Same seed + same sliders → identical result every time (reproducible). Change the seed to explore a different scenario.
@@ -150,8 +175,9 @@
       </div>
       <div id="realisticSubToggles" class="rf-panel">
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="customerPriority" checked /><span class="rf-name">Customer-impact priority</span></label><div class="rf-desc">Crews favour outages restoring more customers instead of pure nearest-neighbour. Server-routed only.</div></div>
-        <div class="rf-item"><label class="rf-label"><input type="checkbox" id="crewSpecialization" checked /><span class="rf-name">Crew specialization (line vs tree)</span></label><div class="rf-desc">80/20 line/tree crew split. 30% of outages need tree clearing first. Two independent dispatch subsystems. Server-routed only.</div></div>
+        <div class="rf-item"><label class="rf-label"><input type="checkbox" id="crewSpecialization" /><span class="rf-name">Crew specialization (line vs tree)</span></label><div class="rf-desc">80/20 line/tree crew split. This is an alternative to hierarchical restoration; the current server scheduler cannot safely combine both.</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="hierarchicalMode" checked /><span class="rf-name">Hierarchical restoration</span></label><div class="rf-desc">Top-down: laterals can't energize until parent feeder backbone is repaired. Server-routed only.</div></div>
+        <div id="restorationCompatibilityNote" class="rf-compat">Hierarchical restoration is selected. Crew specialization is off because the two server modes cannot safely be combined.</div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="tieredPriority" checked /><span class="rf-name">Tiered priority dispatch</span></label><div class="rf-desc">Make-safe hazards first (~3%), then critical facilities (~2%), then general load. Server-routed only.</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="crewStickiness" checked /><span class="rf-name">Crew territory stickiness</span></label><div class="rf-desc">Crews work their assigned substation territory only. Fleet split proportionally by customer count. Works in browser and server.</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="stormDrag" checked /><span class="rf-name">Multi-day storm drag</span></label><div class="rf-desc">Fatigue, unfamiliar mutual-aid crews, resource exhaustion. +6 h staging delay, +15% travel impedance. Server-routed only.</div></div>
@@ -165,8 +191,8 @@
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="floodZoneClosures" checked /><span class="rf-name">Flood-zone road closures</span></label><div class="rf-desc">+35% road impedance near 17 real river corridors statewide: 5 in Hartford County (Connecticut, Park, Hockanum, Farmington, Salmon Brook — FEMA flood-zone maps) plus 12 more across the other 7 counties (Housatonic, Naugatuck, Quinnipiac, Norwalk, Shepaug, Salmon, Thames, Yantic, Shetucket, Quinebaug, Willimantic, Natchaug — USGS NHD-traced).</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="equipmentShortage" checked /><span class="rf-name">Equipment shortage</span></label><div class="rf-desc">After 60% of repairs done, parts run thin — up to +40% penalty on final third. Eversource Isaias reports.</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="customerCallbackLag" checked /><span class="rf-name">Customer callback lag</span></label><div class="rf-desc">15% of rural outages discovered only by customer call. +2-8 h discovery delay. CT PURA testimony.</div></div>
-        <div class="rf-item"><label class="rf-label"><input type="checkbox" id="undergroundLines" checked /><span class="rf-name">Underground lines</span></label><div class="rf-desc">Urban areas ~40% underground laterals, 90% less storm damage. Eversource filings.</div></div>
-        <div class="rf-item"><label class="rf-label"><input type="checkbox" id="switchingBackfeed" checked /><span class="rf-name">Switching / back-feed</span></label><div class="rf-desc">~42% of feeder outages restored via tie switches in &lt;5 min. Eversource FLISR deployment.</div></div>
+        <div class="rf-item"><label class="rf-label"><input type="checkbox" id="undergroundLines" checked /><span class="rf-name">Underground lines</span></label><div class="rf-desc">Tags ~40% of sampled urban lateral failures as underground. It never removes a generated outage; local repairs take 1.35× longer because access is more complex.</div></div>
+        <div class="rf-item"><label class="rf-label"><input type="checkbox" id="switchingBackfeed" checked /><span class="rf-name">Switching / back-feed</span></label><div class="rf-desc">Tags eligible feeder failures for automatic restoration in 5 minutes. They remain part of the initial outage/customer total and appear in the restoration curve.</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="amiCoverage" checked /><span class="rf-name">AMI smart meters</span></label><div class="rf-desc">Instant outage detection in urban areas (~70% AMI). Rural areas fall back to callbacks. Eversource AMI reports.</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="mutualAidTravel" checked /><span class="rf-name">Mutual-aid travel time</span></label><div class="rf-desc">Out-of-state crews: MA/RI +2h, NY +4h, PA/OH +6h travel before work starts. IBEW protocols.</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="roadClosure" checked /><span class="rf-name">Road closure & debris clearing</span></label><div class="rf-desc">30% of outages blocked by downed trees/debris. Specialized crews clear roads (2.5h per major blockage) before line crews can access. ~60 blockages per 1000 outages. Happens in parallel with phase 1.</div></div>
@@ -191,20 +217,72 @@
 
     <div class="section-label">2 · Storm simulation</div>
 
+    <div class="ctrl model-card">
+      <div style="font-weight:700;color:#1e3a8a;margin-bottom:5px;">Storm outage model</div>
+      <label for="stormTrackSelect" style="font-size:10px;color:#475569;">Storm weather event</label>
+      <select id="stormTrackSelect">
+        <option value="isaias_2020">Isaias 2020</option>
+      </select>
+      <label for="outagePlacementModel" style="display:block;font-size:10px;color:#475569;margin-top:6px;">Placement method</label>
+      <select id="outagePlacementModel">
+        <option value="research">Weather + customer exposure</option>
+        <option value="basic">Basic network placement (no weather field)</option>
+      </select>
+      <div id="modelAvailability" class="model-availability warn">Checking weather data and Worker support…</div>
+      <div class="small"><b>50 customers per outage.</b> The default 2,000-point scenario represents exactly 100,000 customers without power.</div>
+      <button type="button" id="applyHistoricalPreset" style="margin-top:7px;width:100%;border:1px solid #93c5fd;background:#fff;color:#1d4ed8;border-radius:5px;padding:5px;font-size:10px;cursor:pointer;">Apply historical restoration preset</button>
+      <details class="model-advanced" id="outageModelAdvanced">
+        <summary>Outage model parameters</summary>
+        <div class="model-param-grid">
+          <label for="modelWindThreshold">Wind threshold (mph)</label><input id="modelWindThreshold" type="number" min="0" max="249" step="1" />
+          <label for="modelWindScale">Wind exceedance scale (mph)</label><input id="modelWindScale" type="number" min="0.1" step="1" />
+          <label for="modelWindExponent">Wind exponent</label><input id="modelWindExponent" type="number" min="0.1" step="0.1" />
+          <label for="modelRainCoefficient">Rain amplification</label><input id="modelRainCoefficient" type="number" min="0" step="0.1" />
+          <label for="modelRainCap">Rain-score cap</label><input id="modelRainCap" type="number" min="0.1" step="0.1" />
+          <label for="modelExposureExponent">Exposure exponent</label><input id="modelExposureExponent" type="number" min="0.1" step="0.1" />
+          <label for="modelCustomerSmoothing">Customer smoothing (km)</label><input id="modelCustomerSmoothing" type="number" min="0.1" step="0.5" />
+          <label for="modelRuralBaseline">Rural baseline fraction</label><input id="modelRuralBaseline" type="number" min="0" step="0.01" />
+          <label for="modelGaussianBandwidth">Impact bandwidth (km)</label><input id="modelGaussianBandwidth" type="number" min="0.1" step="0.5" />
+          <label for="modelFeederSusceptibility">Feeder susceptibility</label><input id="modelFeederSusceptibility" type="number" min="0.1" step="0.05" />
+          <label for="modelLateralSusceptibility">Lateral susceptibility</label><input id="modelLateralSusceptibility" type="number" min="0.1" step="0.05" />
+        </div>
+        <button type="button" id="resetModelDefaults" style="margin-top:7px;width:100%;border:1px solid #bfdbfe;background:#fff;color:#1d4ed8;border-radius:5px;padding:5px;font-size:10px;cursor:pointer;">Reset scientific defaults</button>
+      </details>
+    </div>
+
     <div class="ctrl">
-      <div class="row"><span>Storm outages: <b id="oVal">500</b></span></div>
-      <input type="range" id="oSlider" min="50" max="100000" value="500" step="10" />
+      <div class="row"><span>Storm outages: <b id="oVal">2000</b></span></div>
+      <input type="range" id="oSlider" min="50" max="100000" value="2000" step="10" />
       <div class="small">How many failure points to place across feeders and laterals.</div>
     </div>
 
-    <div class="ctrl" style="background:#fef3c7;border-color:#fcd34d;">
-      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#78350f;line-height:1.4;">
-        <input type="checkbox" id="windFieldWeighting" checked style="margin-top:2px;flex-shrink:0;" />
-        <span><b style="color:#b45309">Wind-field weighted placement</b> — when a storm track is selected, outages concentrate near the track path proportional to interpolated wind speed. Segments closer to the track and in higher-wind zones get 3–5× more outages than distant areas. Uses HURDAT2 track data and a statewide HRRR wind grid (41×65, ~3km resolution) for 5 storms (Isaias 2020, Henri 2021, May 2018, Jan 2024, Dec 2023). When no track is selected, or the selected storm predates the HRRR archive (Sandy 2012, Irene 2011), falls back to uniform placement.</span>
-      </label>
+    <div id="modelSummary" class="model-summary">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <b style="color:#1e3a8a">Generated scenario</b><span id="modelFreshness" style="font-size:10px;color:#047857;font-weight:700;">current</span>
+      </div>
+      <div class="model-summary-grid">
+        <div class="model-metric">Outages<b id="modelSummaryOutages">—</b></div>
+        <div class="model-metric">Customers<b id="modelSummaryCustomers">—</b></div>
+        <div class="model-metric">Feeder / lateral<b id="modelSummarySplit">—</b></div>
+        <div class="model-metric">Runtime<b id="modelSummaryRuntime">—</b></div>
+      </div>
+      <div id="modelSummaryFormula" style="font-size:9px;color:#64748b;line-height:1.35;margin-top:6px;"></div>
+      <div id="modelSummaryRestoration" style="font-size:9px;color:#475569;line-height:1.35;margin-top:4px;"></div>
+      <label for="modelSurfaceSelect" style="display:block;font-size:10px;color:#475569;margin-top:7px;">Diagnostic map surface</label>
+      <select id="modelSurfaceSelect" style="width:100%;font-size:10px;border:1px solid #cbd5e1;border-radius:4px;padding:4px;">
+        <option value="none">Outage points only</option>
+        <option value="customerExposure">Customer exposure</option>
+        <option value="weatherSeverity">Weather severity</option>
+        <option value="rawImpact">Raw combined impact</option>
+        <option value="smoothedImpact">Gaussian-smoothed impact</option>
+      </select>
+      <div id="modelSurfaceLegend" style="display:none;font-size:9px;color:#64748b;margin-top:4px;">
+        <div class="surface-ramp"></div>
+        <div style="display:flex;justify-content:space-between"><span>0</span><span id="modelSurfaceLegendMax">fixed scale</span></div>
+      </div>
     </div>
 
-    <button class="action btn-storm" id="simStorm">Simulate storm</button>
+    <button class="action btn-storm" id="simStorm">Generate outage scenario</button>
     <div class="progress" id="stormProgress"><span class="label" id="stormProgressLabel">0%</span><div class="bar orange" id="stormProgressBar"></div></div>
 
     <!-- LIVE MODE: real current Eversource CT outages (17_fetch_live_outages.py) -->
@@ -335,7 +413,7 @@
       <div class="stat-box" style="background:#fffbeb;border-color:#fcd34d;margin-bottom:0;">
         <div class="lbl">Recommended crews</div>
         <div class="big" id="recCrewCount" style="color:#b45309">—</div>
-        <div class="sub" id="recCrewDetail">— click button after simulating a storm</div>
+        <div class="sub" id="recCrewDetail">— generate an outage scenario first</div>
         <button id="applyRecCrews" style="display:none;margin-top:8px;width:100%;border:1px solid #fcd34d;background:white;color:#b45309;padding:6px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Apply to slider</button>
       </div>
     </div>
@@ -368,27 +446,7 @@
         </div>
         <div class="rf-item">
           <label class="rf-label"><input type="checkbox" id="showStormTrack" /><span class="rf-name">NOAA storm track</span></label>
-          <div class="rf-desc">HURDAT2 best-track overlay. Also weights outage placement by wind exposure along the selected track.</div>
-          <select id="stormTrackSelect" style="width:100%;font-size:10px;border:1px solid #cbd5e1;border-radius:3px;padding:2px 4px;margin-top:4px;">
-            <option value="">— Select storm —</option>
-            <option value="sandy_2012">Sandy 2012</option>
-            <option value="isaias_2020">Isaias 2020</option>
-            <option value="irene_2011">Irene 2011</option>
-            <option value="henri_2021">Henri 2021</option>
-            <option value="may2018">May 2018 Tornado/Derecho</option>
-            <option value="jan2024">January 2024 Wind Storm</option>
-            <option value="dec2023">December 2023 Nor'easter</option>
-            <option value="ct_july2026_severe_tstorm">CT Severe T-storm Jul 2026 (provisional)</option>
-            <option value="ct_aug2020_tornado">Bethany-Hamden-N.Haven Tornado Aug 2020</option>
-            <option value="oct2020_derecho">October 2020 Northeast Derecho</option>
-            <option value="ct_sep2019_tornado">Coventry-Mansfield Tornado Sep 2019</option>
-            <option value="snowtober_2011">Snowtober 2011 (uniform placement)</option>
-            <option value="march2023_noreaster">March 2023 Nor'easter (uniform placement)</option>
-            <option value="dec2022_windstorm">December 2022 Windstorm (uniform placement)</option>
-            <option value="oct2019_bomb_cyclone">October 2019 Bomb Cyclone (uniform placement)</option>
-            <option value="sep2021_ida">Sep 2021 Ida Flooding (uniform placement)</option>
-            <option value="dec2025_windstorm">December 2025 Windstorm (uniform placement)</option>
-          </select>
+          <div class="rf-desc">HURDAT2 best-track visualization for the storm selected in the Storm outage model above. The track overlay does not alter outage placement.</div>
         </div>
         <div class="rf-item">
           <label class="rf-label"><input type="checkbox" id="showDoePanel" /><span class="rf-name">DOE OE-417 events</span></label>
@@ -425,6 +483,8 @@
      here just means the fetch script hasn't been run yet; live mode shows
      instructions instead of data. -->
 <script src="./data/connecticut_live_outages.js"></script>
+<script src="./outage_location_model.js"></script>
+<script src="./outage_restoration_adapter.js"></script>
 <script>
 // Real Connecticut town population + centroid (169 towns), from the 2020
 // Census P.L. 94-171 Redistricting Data (11_fetch_census_tracts.py). Used as
@@ -1102,11 +1162,20 @@ function sqEuclid(a,b){const dx=a.lat-b.lat,dy=a.lon-b.lon;return dx*dx+dy*dy;}
 
 // --- State ---
 let countyGeo=null;
+let stateBoundaryGeo=null;
 let substations=[];   // {lat,lon,color,popServed}
 let feeders=[];       // {subIdx, pts:[[lat,lon],...], popServed}
 let laterals=[];      // {feederIdx, pts, popServed}
 let storm=null;       // {outages:[{lat,lon,feederIdx,lateralIdx,custAffected}], totalCust}
 let plan=null;        // {crews:[{depot,jobs:[outageIdx,...],time}], totalTime}
+let outageModelWorker=null;
+let outageModelWorkerReady=false;
+let outageModelRunCounter=0;
+let activeOutageModelRunId=null;
+let currentOutageModelResult=null;
+let outageSurfaceLayer=null;
+let outageResearchGridMaskCache=null;
+const outageResearchWeatherCache=new Map();
 
 // --- UI refs ---
 const fS=document.getElementById('fSlider'), fV=document.getElementById('fVal');
@@ -1157,8 +1226,8 @@ function setRecProgress(pct, visible){
   _recProgressBar.style.width = v + "%";
   _recProgressLabel.textContent = v + "%";
 }
-fS.oninput=()=>fV.textContent=fS.value;
-oS.oninput=()=>{oV.textContent=oS.value; updateEstimate();};
+fS.oninput=()=>{fV.textContent=fS.value; markOutageModelStale('Network density changed. Regenerate the grid and outage scenario.');};
+oS.oninput=()=>{oV.textContent=oS.value; updateEstimate(); markOutageModelStale('Requested outage count changed. Generate a new scenario.');};
 cS.oninput=()=>{cV.textContent=cS.value; updateEstimate();};
 
 // --- Closed-form restoration-time estimate (Alternative #1) ---
@@ -1249,7 +1318,9 @@ function updateEstimate(){}
   const countEl = document.getElementById('realisticActiveCount');
   const expandBtn = document.getElementById('realisticExpandBtn');
   const boxes = panel.querySelectorAll('input[type=checkbox]');
-  boxes.forEach(b => { b.checked = true; });
+  const specialization = document.getElementById('crewSpecialization');
+  const hierarchy = document.getElementById('hierarchicalMode');
+  const compatibilityNote = document.getElementById('restorationCompatibilityNote');
   expandBtn.addEventListener('click', () => {
     const open = panel.classList.toggle('rf-open');
     expandBtn.innerHTML = open ? 'Advanced features &#9652;' : 'Advanced features &#9662;';
@@ -1265,9 +1336,35 @@ function updateEstimate(){}
     const on = [...boxes].filter(b=>b.checked).length;
     countEl.textContent = on + '/' + boxes.length;
   }
-  boxes.forEach(cb => cb.addEventListener('change', updateCount));
-  document.getElementById('rfSelectAll').addEventListener('click', () => { boxes.forEach(b=>{b.checked=true;}); updateCount(); });
-  document.getElementById('rfSelectNone').addEventListener('click', () => { boxes.forEach(b=>{b.checked=false;}); updateCount(); });
+  function enforceRestorationCompatibility(changed){
+    if (specialization.checked && hierarchy.checked){
+      if (changed === specialization) hierarchy.checked = false;
+      else specialization.checked = false;
+    }
+    compatibilityNote.textContent = hierarchy.checked
+      ? 'Hierarchical restoration is selected. Crew specialization is off because the two server modes cannot safely be combined.'
+      : specialization.checked
+        ? 'Crew specialization is selected. Hierarchical restoration is off because the two server modes cannot safely be combined.'
+        : 'Choose either hierarchical restoration (recommended) or crew specialization; both may remain off.';
+  }
+  boxes.forEach(cb => cb.addEventListener('change', () => {
+    if (cb === specialization || cb === hierarchy) enforceRestorationCompatibility(cb);
+    updateCount();
+  }));
+  document.getElementById('rfSelectAll').addEventListener('click', () => {
+    boxes.forEach(b=>{b.checked=true;});
+    specialization.checked=false;
+    enforceRestorationCompatibility(hierarchy);
+    updateCount();
+    if (storm) markOutageModelStale('Restoration metadata settings changed. Generate a new outage scenario.');
+  });
+  document.getElementById('rfSelectNone').addEventListener('click', () => {
+    boxes.forEach(b=>{b.checked=false;});
+    enforceRestorationCompatibility(null);
+    updateCount();
+    if (storm) markOutageModelStale('Restoration metadata settings changed. Generate a new outage scenario.');
+  });
+  enforceRestorationCompatibility(hierarchy);
   updateCount();
 })();
 
@@ -1381,6 +1478,7 @@ function kmeans(pts,k,geo,rnd,iters=15){
 
 // --- Step 2: Generate feeders (radial backbones) + laterals (random walks) ---
 async function generateGrid(){
+  markOutageModelStale('Distribution grid is being regenerated.');
   setGridProgress(0);
   const seed=+seedI.value|0;
   const rnd=mulberry32(seed+1);
@@ -1505,7 +1603,7 @@ async function generateGrid(){
     setGridProgress(0, false);
     return;
   }
-  status.textContent=`Grid: ${substations.length} ${useReal?'real':'synthetic'} substations, ${feeders.length} feeders, ${laterals.length} laterals. Ready to simulate storm.`;
+  status.textContent=`Grid: ${substations.length} ${useReal?'real':'synthetic'} substations, ${feeders.length} feeders, ${laterals.length} laterals. Ready to generate an outage scenario.`;
   setGridProgress(100);
   setTimeout(()=>setGridProgress(0,false), 600);
   // Reset downstream state
@@ -1595,345 +1693,491 @@ function renderGrid(){
   if (window._mask) window._mask.bringToFront();
 }
 
-// Bilinear interpolation of wind speed (mph) from the HRRR 41×65 statewide CT grid.
-function getHrrrWindMph(lat, lon, hrrrStorm, grid) {
-  const wind = hrrrStorm.peak_wind_mph;
-  if (!wind) return 30;
-  const lats = grid.lats, lons = grid.lons;
-  const latC = Math.max(lats[0], Math.min(lats[lats.length-1], lat));
-  const lonC = Math.max(lons[0], Math.min(lons[lons.length-1], lon));
-  let r0 = 0;
-  for (let i = 1; i < lats.length - 1; i++) { if (lats[i] <= latC) r0 = i; }
-  let c0 = 0;
-  for (let i = 1; i < lons.length - 1; i++) { if (lons[i] <= lonC) c0 = i; }
-  const r1 = Math.min(r0 + 1, lats.length - 1);
-  const c1 = Math.min(c0 + 1, lons.length - 1);
-  const dr = (lats[r1] - lats[r0]) > 0 ? (latC - lats[r0]) / (lats[r1] - lats[r0]) : 0;
-  const dc = (lons[c1] - lons[c0]) > 0 ? (lonC - lons[c0]) / (lons[c1] - lons[c0]) : 0;
-  return wind[r0][c0]*(1-dr)*(1-dc) + wind[r0][c1]*(1-dr)*dc +
-         wind[r1][c0]*dr*(1-dc)     + wind[r1][c1]*dr*dc;
+
+// --- Browser-native weather + customer exposure outage model ---
+const OUTAGE_WORKER_PROTOCOL = 'connecticut_outage_worker_v1';
+const MODEL_PARAMETER_INPUTS = {
+  windThresholdMph:'modelWindThreshold',
+  windExcessScaleMph:'modelWindScale',
+  windExponent:'modelWindExponent',
+  rainCoefficient:'modelRainCoefficient',
+  rainScoreCap:'modelRainCap',
+  exposureExponent:'modelExposureExponent',
+  customerSmoothingKm:'modelCustomerSmoothing',
+  ruralBaselineFraction:'modelRuralBaseline',
+  gaussianBandwidthKm:'modelGaussianBandwidth',
+  feederSusceptibility:'modelFeederSusceptibility',
+  lateralSusceptibility:'modelLateralSusceptibility',
+};
+const SURFACE_SCALES = {
+  customerExposure:{max:4000,label:'4,000 customer accounts / grid node'},
+  weatherSeverity:{max:4,label:'severity 4.0'},
+  rawImpact:{max:8,label:'impact 8.0'},
+  smoothedImpact:{max:4,label:'impact 4.0'},
+};
+
+function setModelAvailability(kind, text){
+  const el=document.getElementById('modelAvailability');
+  el.className='model-availability '+kind;
+  el.textContent=text;
 }
 
-// --- Step 3: Storm — pick N outage points on the network ---
-async function simulateStorm(){
-  if (!feeders.length){status.textContent="Generate the grid first.";return;}
-  setStormProgress(0);
-  const seed=+seedI.value|0;
-  const rnd=mulberry32(seed*7919+13);
-  const N=+oS.value;
-  const realistic=document.getElementById('realisticMode').checked;
-  // Sectionalizer model: in reality, protective devices isolate just the broken
-  // segment between two switches rather than killing the whole downstream branch.
-  // Real impact per outage is ~half the simple "drop everything downstream" model.
-  const popMultiplier = realistic ? 0.5 : 1.0;
-  // Critical facilities: use real HIFLD locations when available. An outage
-  // within ~0.5 miles of a real hospital/fire/EMS/water plant is flagged
-  // priority-1. Falls back to random 2% if no facility data loaded.
-  const critFacilities = window.CONNECTICUT_CRITICAL_FACILITIES || [];
-  const useCritFacilities = realistic && critFacilities.length > 0;
-  const CRIT_RADIUS_MI = 0.5;
-  const critRate = (realistic && !useCritFacilities) ? 0.02 : 0;
+function stormHasResearchWeather(stormId){
+  const data=window.CONNECTICUT_STORM_WIND;
+  const stormData=data?.storms?.[stormId];
+  const rows=data?.grid?.lats?.length||0, columns=data?.grid?.lons?.length||0;
+  return !!(data?._populated && rows>=2 && columns>=2 &&
+    Array.isArray(stormData?.peak_wind_mph) && stormData.peak_wind_mph.length===rows &&
+    stormData.peak_wind_mph.every(row=>Array.isArray(row)&&row.length===columns) &&
+    Array.isArray(stormData?.peak_rain_in) && stormData.peak_rain_in.length===rows &&
+    stormData.peak_rain_in.every(row=>Array.isArray(row)&&row.length===columns));
+}
 
-  const outages=[];
-  // Outages are placed on a random line segment (feeder or lateral, weighted by laterals for realism)
-  const allSegs=[];
-  feeders.forEach((f,fi)=>{for (let s=0;s<f.pts.length-1;s++) allSegs.push({kind:'f',fi,s,popServed:f.popServed/(f.pts.length-1)});});
-  laterals.forEach((l,li)=>{for (let s=0;s<l.pts.length-1;s++) allSegs.push({kind:'l',li,s,popServed:l.popServed/(l.pts.length-1)});});
-
-  // Wind-field weighted outage placement.
-  // Priority: (1) HRRR gridded wind when populated, (2) Gaussian track-decay fallback.
-  const useWindField = document.getElementById('windFieldWeighting').checked;
-  const trackKey = document.getElementById('stormTrackSelect').value;
-  const trackData = trackKey && window.HARTFORD_STORM_TRACKS && window.HARTFORD_STORM_TRACKS[trackKey];
-  const _hw = window.CONNECTICUT_STORM_WIND;
-  const _hrrrStorm = _hw?._populated && _hw.storms?.[trackKey];
-  // Real per-report storm damage locations (15_fetch_storm_events.py), when
-  // available for the selected storm's date -- HRRR's ~3km grid structurally
-  // cannot resolve tornado-scale wind (narrower than its own resolution, no
-  // matter which field is pulled), but individual NWS storm reports capture
-  // real, localized severe/tornadic gusts. Used below to override the
-  // gridded wind estimate near a real report location.
-  const _stormDate = _hrrrStorm?.date;
-  const _realReports = (_stormDate && window.CONNECTICUT_STORM_EVENTS?.[_stormDate]) || null;
-  function realReportWindMph(lat, lon){
-    if (!_realReports) return 0;
-    let best = 0;
-    for (const r of _realReports){
-      const dLatMi = (r.lat - lat) * 69;
-      const dLonMi = (r.lon - lon) * 69 * Math.cos(lat * Math.PI / 180);
-      const miles = Math.sqrt(dLatMi*dLatMi + dLonMi*dLonMi);
-      if (miles <= 3){ // within ~3mi of a real storm report
-        const mph = r.wind_kt * 1.15078;
-        if (mph > best) best = mph;
+function researchWeatherSupport(stormId,windThreshold){
+  if (!stormHasResearchWeather(stormId)) return {complete:false,positiveCells:0,maxInStateWind:null};
+  if (!stateBoundaryGeo||!window.OutageLocationModel) return {complete:true,positiveCells:null,maxInStateWind:null};
+  const data=window.CONNECTICUT_STORM_WIND,stormData=data.storms[stormId];
+  if (!outageResearchGridMaskCache||outageResearchGridMaskCache.boundary!==stateBoundaryGeo||outageResearchGridMaskCache.grid!==data.grid){
+    const mask=[];
+    for (let row=0;row<data.grid.lats.length;row++){
+      for (let column=0;column<data.grid.lons.length;column++){
+        mask.push(OutageLocationModel.pointInBoundary(
+          stateBoundaryGeo,data.grid.lats[row],data.grid.lons[column],
+        ));
       }
     }
-    return best;
+    outageResearchGridMaskCache={boundary:stateBoundaryGeo,grid:data.grid,mask};
+    outageResearchWeatherCache.clear();
   }
-  const useHrrrGrid = !!(_hrrrStorm && _hrrrStorm.peak_wind_mph);
-  let segWeights = null;
-  let totalWeight = 0;
-  // Raw wind speed (mph) per segment, alongside segWeights (a transformed
-  // placement-probability weight). Carried onto each outage as wind_mph so
-  // planRestoration can scale repair time for severe-wind sites -- a plain
-  // downed line and a snapped pole/destroyed transformer from tornado-force
-  // wind take very different amounts of time to fix, and the repair-time
-  // model previously had no way to tell them apart.
-  let segWindMph = null;
-  if (useHrrrGrid) {
-    // HRRR path: bilinear interpolation from the statewide grid, weight ∝ wind² (kinetic energy).
-    const grid = _hw.grid;
-    segWeights = new Float64Array(allSegs.length);
-    segWindMph = new Float64Array(allSegs.length);
-    for (let si = 0; si < allSegs.length; si++){
-      const seg = allSegs[si];
-      const arr = seg.kind==='f' ? feeders[seg.fi].pts : laterals[seg.li].pts;
-      const a = arr[seg.s], b = arr[seg.s+1];
-      const midLat = (a[0]+b[0])/2, midLon = (a[1]+b[1])/2;
-      const w = getHrrrWindMph(midLat, midLon, _hrrrStorm, grid);
-      segWeights[si] = Math.max(0.05, (w / 30) ** 2);
-      segWindMph[si] = w;
-      totalWeight += segWeights[si];
-    }
-  } else if (useWindField && trackData && trackData.track && trackData.track.length >= 2){
-    // Gaussian track-decay fallback (HURDAT2 track + Gaussian spatial decay).
-    const track = trackData.track;
-    segWeights = new Float64Array(allSegs.length);
-    segWindMph = new Float64Array(allSegs.length);
-    for (let si = 0; si < allSegs.length; si++){
-      const seg = allSegs[si];
-      const arr = seg.kind==='f' ? feeders[seg.fi].pts : laterals[seg.li].pts;
-      const a = arr[seg.s], b = arr[seg.s+1];
-      const midLat = (a[0]+b[0])/2, midLon = (a[1]+b[1])/2;
-      // Miles per degree of latitude is ~constant (69 mi/deg) everywhere,
-      // but miles per degree of longitude shrinks with latitude as
-      // meridians converge toward the poles: 69*cos(lat). Using a flat
-      // 69 for both axes overstates east-west distance by ~33% at
-      // Connecticut's latitude (cos(41.8°) ≈ 0.746).
-      const miPerDegLon = 69 * Math.cos(midLat * Math.PI / 180);
-      let bestMi2 = Infinity, windAtSeg = 30;
-      for (let ti = 0; ti < track.length; ti++){
-        const dLatMi = (track[ti].lat - midLat) * 69;
-        const dLonMi = (track[ti].lon - midLon) * miPerDegLon;
-        const mi2 = dLatMi*dLatMi + dLonMi*dLonMi;
-        if (mi2 < bestMi2){ bestMi2 = mi2; windAtSeg = track[ti].wind_kt; }
-      }
-      const distMi = Math.sqrt(bestMi2);
-      const sigma = 30;
-      const spatialWeight = Math.exp(-(distMi * distMi) / (2 * sigma * sigma));
-      const windFactor = windAtSeg / 50;
-      segWeights[si] = Math.max(0.1, spatialWeight * windFactor);
-      // wind_kt is the storm's reported max sustained wind at the nearest
-      // track point, not a local gust -- decayed by the same spatial falloff
-      // used for placement, then converted to mph (1kt = 1.15078mph).
-      segWindMph[si] = windAtSeg * 1.15078 * Math.max(0.15, spatialWeight);
-      totalWeight += segWeights[si];
-    }
-  }
-
-  // Underground line model: urban substations (low canopy) have ~40% underground laterals
-  const undergroundOn = realistic && document.getElementById('undergroundLines') &&
-    document.getElementById('undergroundLines').checked;
-
-  // Switching/back-feed: ~20% of feeder outages can be restored via tie switches
-  const switchingOn = realistic && document.getElementById('switchingBackfeed') &&
-    document.getElementById('switchingBackfeed').checked;
-  let switchRestoredCount = 0;
-
-  // AMI coverage model: replaces flat callback lag with spatially-varying detection
-  const amiOn = realistic && document.getElementById('amiCoverage') &&
-    document.getElementById('amiCoverage').checked;
-
-  // Sampling is without replacement: a physical stretch of wire either fails
-  // once or it doesn't during a given storm -- a utility wouldn't log two
-  // independent trouble tickets for the same 0.3-mile span. A Fenwick tree
-  // (binary indexed tree) over the segment weights gives O(log N) weighted
-  // sampling AND O(log N) removal, so once a segment is drawn its weight is
-  // zeroed and it truly cannot be drawn again -- unlike a capped retry loop,
-  // which can silently fail to find a rare remaining segment and accept a
-  // duplicate anyway. If every segment gets used before N draws are done,
-  // the tree is rebuilt from the original weights so sampling can continue
-  // -- at that point a repeat is physically necessary since there is no
-  // unused wire left to place it on.
-  // peek()/commit() are split rather than one atomic draw-and-remove: the
-  // underground-immunity check below can discard a candidate entirely
-  // ("this segment turned out to be protected, no outage here, try again").
-  // A discarded candidate must stay in the pool -- being exempted on one
-  // random roll doesn't mean it can never fail later -- so only commit()
-  // once a candidate is confirmed to become a real outage.
-  const baseWeights = segWeights || new Float64Array(allSegs.length).fill(1);
-  function buildFenwick(weights){
-    const n = weights.length;
-    const tree = new Float64Array(n + 1);
-    function add(i, delta){ for (i++; i <= n; i += i & (-i)) tree[i] += delta; }
-    function prefix(i){ let s = 0; for (; i > 0; i -= i & (-i)) s += tree[i]; return s; }
-    for (let i = 0; i < n; i++) add(i, weights[i]);
-    return {
-      total: () => prefix(n),
-      peek(r){
-        let idx = 0, remaining = r, pw = 1;
-        while (pw * 2 <= n) pw *= 2;
-        for (; pw > 0; pw = Math.floor(pw / 2)){
-          const next = idx + pw;
-          if (next <= n && tree[next] <= remaining){ idx = next; remaining -= tree[next]; }
-        }
-        return idx;
-      },
-      remove(idx){ add(idx, -(prefix(idx + 1) - prefix(idx))); }
-    };
-  }
-  let fenwick = buildFenwick(baseWeights);
-  function peekSegIdx(){
-    let total = fenwick.total();
-    if (total <= 0){ fenwick = buildFenwick(baseWeights); total = fenwick.total(); }
-    return fenwick.peek(rnd() * total);
-  }
-  function commitSegIdx(idx){ fenwick.remove(idx); }
-
-  // Spatial grids for the per-outage nearest-substation and critical-facility
-  // checks below -- built once here instead of a linear scan per outage.
-  // At 100K outages x 299 substations x 1,143 facilities the linear scans
-  // were tens to hundreds of millions of distance checks.
-  const SUB_CELL_DEG = 0.05;
-  const CRIT_CELL_DEG = 0.01;
-  const subGrid = buildStaticGrid(substations, SUB_CELL_DEG);
-  const critGrid = useCritFacilities ? buildStaticGrid(critFacilities, CRIT_CELL_DEG) : null;
-
-  for (let i=0;i<N;i++){
-    const segIdx = peekSegIdx();
-    const seg=allSegs[segIdx];
-
-    // Underground immunity: urban laterals have ~40% chance of being underground,
-    // and underground segments have 90% lower outage probability.
-    if (undergroundOn && seg.kind === 'l'){
-      const parentFeeder = laterals[seg.li] ? laterals[seg.li].feederIdx : -1;
-      const subIdx = parentFeeder >= 0 && feeders[parentFeeder] ? feeders[parentFeeder].sub_id : -1;
-      if (subIdx >= 0 && substations[subIdx]){
-        const canopy = canopyOf(substations[subIdx]);
-        if (canopy != null && canopy < 25){
-          const isUnderground = rnd() < 0.40;
-          if (isUnderground && rnd() < 0.90){ i--; continue; }
-        }
+  let cached=outageResearchWeatherCache.get(stormId);
+  if (!cached){
+    const inStateWinds=[];
+    let index=0,maxInStateWind=-Infinity;
+    for (let row=0;row<data.grid.lats.length;row++){
+      for (let column=0;column<data.grid.lons.length;column++,index++){
+        if (!outageResearchGridMaskCache.mask[index]) continue;
+        const wind=Number(stormData.peak_wind_mph[row][column]);
+        if (!Number.isFinite(wind)) continue;
+        inStateWinds.push(wind);maxInStateWind=Math.max(maxInStateWind,wind);
       }
     }
-    commitSegIdx(segIdx);
-
-    const t=rnd();
-    const arr=seg.kind==='f'?feeders[seg.fi].pts:laterals[seg.li].pts;
-    const a=arr[seg.s], b=arr[seg.s+1];
-    const lat=a[0]+(b[0]-a[0])*t, lon=a[1]+(b[1]-a[1])*t;
-    const bestSub = staticGridNearest(subGrid, SUB_CELL_DEG, lat, lon, substations);
-    // Per-outage tree-blocked flag (environmental realism). Combines:
-    //   (a) per-substation TREE FACTOR — state-center urban = 0.4×,
-    //       suburban = 1.0×, rural perimeter = 1.5×.
-    //   (b) per-feeder VEGETATION TRIM AGE — feeders trimmed recently are
-    //       less tree-blocked; older trims more so. trimAgeMult(age):
-    //       age 0 -> 0.6×, age 4 -> 1.6×.
-    // Multiplied against a base ~0.30 rate to produce a per-outage probability.
-    const baseTreeRate = EVERSOURCE_CT.treesCauseStorm;
-    const parentFeederIdx = seg.kind === 'f' ? seg.fi :
-                            (laterals[seg.li] ? laterals[seg.li].feederIdx : -1);
-    const feederTrim = (parentFeederIdx >= 0 && feeders[parentFeederIdx])
-                       ? feeders[parentFeederIdx].trimAge : 2;
-    const subTF = (bestSub >= 0) ? substations[bestSub].treeFactor : 1.0;
-    const pTree = Math.max(0, Math.min(1,
-      baseTreeRate * subTF * trimAgeMult(feederTrim)));
-    const isTreeBlocked = rnd() < pTree ? 1 : 0;
-    let isCritical = false;
-    if (useCritFacilities){
-      isCritical = staticGridAnyWithin(critGrid, CRIT_CELL_DEG, lat, lon, critFacilities, CRIT_RADIUS_MI);
-    } else {
-      isCritical = rnd() < critRate;
-    }
-    const floodProx = distToFloodCorridor(lat, lon);
-    const nearFloodZone = floodProx <= 1.5;
-    // Switching/back-feed: ~20% of feeder outages can be auto-restored via
-    // normally-open tie switches (FLISR) in ~30 min without a crew visit.
-    let switchRestored = false;
-    if (switchingOn && seg.kind === 'f' && !isCritical && rnd() < EVERSOURCE_CT.restoredUnder5min){
-      switchRestoredCount++;
-      switchRestored = true;
-    }
-
-    // AMI-aware callback lag: replaces flat 15% model with spatially-varying
-    // detection based on smart meter penetration.
-    let callbackLagH = 0;
-    if (amiOn){
-      const subCanopy = bestSub >= 0 ? (canopyOf(substations[bestSub]) ?? 50) : 50;
-      // Urban (<25% canopy) = ~70% AMI → 30% chance of delayed detection (1-3h)
-      // Suburban (25-50%) = ~50% AMI → 50% chance of delayed detection (2-5h)
-      // Rural (>50%) = ~30% AMI → 70% chance of delayed detection (3-8h)
-      if (subCanopy < 25){
-        if (seg.kind === 'l' && rnd() < 0.30) callbackLagH = 1 + rnd() * 2;
-      } else if (subCanopy < 50){
-        if (seg.kind === 'l' && rnd() < 0.50) callbackLagH = 2 + rnd() * 3;
-      } else {
-        if (rnd() < 0.70) callbackLagH = 3 + rnd() * 5;
-      }
-    } else {
-      const isLateralRural = seg.kind === 'l' && bestSub >= 0 && substations[bestSub].treeFactor > 1.0;
-      callbackLagH = isLateralRural && rnd() < 0.15 ? 2 + rnd() * 6 : 0;
-    }
-
-    outages.push({
-      lat, lon, kind:seg.kind, fi:seg.fi, li:seg.li,
-      popLoss: seg.popServed * popMultiplier,
-      critical: isCritical,
-      sub_id: bestSub,
-      tree_blocked: isTreeBlocked,
-      near_flood_zone: nearFloodZone,
-      callback_lag_h: callbackLagH,
-      switch_restored: switchRestored,
-      // Real per-report wind (tornado-scale, sub-HRRR-grid-resolution)
-      // overrides the gridded estimate when this outage lands near one.
-      wind_mph: Math.max(segWindMph ? segWindMph[segIdx] : 30, realReportWindMph(lat, lon)),
-    });
-
-    // Yield every 5000 placements so the browser can repaint and the page
-    // stays responsive at statewide scale (up to 100K outages).
-    if ((i + 1) % 5000 === 0){
-      const pct = 100*(i+1)/N;
-      status.textContent = `Placing outages… ${Math.round(pct)}% (${(i+1).toLocaleString()}/${N.toLocaleString()})`;
-      setStormProgress(pct);
-      await new Promise(r => setTimeout(r, 0));
-    }
+    cached={inStateWinds,maxInStateWind:Number.isFinite(maxInStateWind)?maxInStateWind:null};
+    outageResearchWeatherCache.set(stormId,cached);
   }
+  const positiveCells=cached.inStateWinds.reduce((count,wind)=>count+(wind>windThreshold?1:0),0);
+  return {
+    complete:true,
+    positiveCells,
+    maxInStateWind:cached.maxInStateWind,
+  };
+}
 
-  // Remove switch-restored outages from the repair queue (they're auto-fixed)
-  if (switchingOn && switchRestoredCount > 0){
-    for (const o of outages){
-      if (o.switch_restored) o.popLoss = 0;
-    }
+function populateStormModelOptions(){
+  const select=document.getElementById('stormTrackSelect');
+  const weather=window.CONNECTICUT_STORM_WIND?.storms||{};
+  const track=window.HARTFORD_STORM_TRACKS||{};
+  const prior=select.value||'isaias_2020';
+  select.replaceChildren();
+  const supported=document.createElement('optgroup');
+  supported.label='Weather + customer exposure available';
+  for (const [id,data] of Object.entries(weather)){
+    if (!stormHasResearchWeather(id)) continue;
+    const option=document.createElement('option');
+    option.value=id;
+    option.textContent=`${data.name||id}${data.date?' · '+data.date:''}`;
+    supported.appendChild(option);
   }
+  select.appendChild(supported);
+  const unsupportedIds=new Set([
+    ...Object.keys(track),
+    ...(typeof REAL_STORM_PRESETS==='object'?Object.keys(REAL_STORM_PRESETS):[]),
+  ]);
+  for (const id of Object.keys(weather)) unsupportedIds.delete(id);
+  if (unsupportedIds.size){
+    const basic=document.createElement('optgroup');
+    basic.label='Basic placement only — no complete HRRR field';
+    for (const id of [...unsupportedIds].sort()){
+      const option=document.createElement('option');
+      option.value=id;
+      option.textContent=track[id]?.name||REAL_STORM_PRESETS?.[id]?.label||id;
+      basic.appendChild(option);
+    }
+    select.appendChild(basic);
+  }
+  select.value=[...select.options].some(option=>option.value===prior)?prior:'isaias_2020';
+}
 
-  // Customers affected = sum of popLoss, capped at state population.
-  let totalCust=outages.reduce((s,o)=>s+o.popLoss,0);
-  totalCust=Math.min(totalCust,TOTAL_POP);
+function resetOutageModelDefaults(markStale=true){
+  const defaults=window.OutageLocationModel?.DEFAULT_CONFIG;
+  if (!defaults) return;
+  for (const [key,id] of Object.entries(MODEL_PARAMETER_INPUTS)){
+    document.getElementById(id).value=String(defaults[key]);
+  }
+  if (markStale) markOutageModelStale('Scientific defaults restored. Generate a new scenario.');
+}
 
-  storm={outages,totalCust,switchRestoredCount,isLocalized:!!trackData?.is_localized_reports};
-  plan=null;
+function readOutageModelConfig(){
+  const config={
+    stormId:document.getElementById('stormTrackSelect').value,
+    seed:Number(seedI.value),
+    nOutages:Number(oS.value),
+    customersPerOutage:50,
+  };
+  for (const [key,id] of Object.entries(MODEL_PARAMETER_INPUTS)){
+    config[key]=Number(document.getElementById(id).value);
+  }
+  return OutageLocationModel.validateConfig(config);
+}
 
-  // Render — single canvas pass for all outages instead of N circleMarker
-  // objects. At N=25K this brings storm-render time from seconds to milliseconds.
+function removeOutageSurface(){
+  if (outageSurfaceLayer){map.removeLayer(outageSurfaceLayer);outageSurfaceLayer=null;}
+  document.getElementById('modelSurfaceLegend').style.display='none';
+}
+
+function clearOutageResultLayers(){
   outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
-  if (window._outageCloud){ map.removeLayer(window._outageCloud); window._outageCloud=null; }
-  if (window._criticalCloud){ map.removeLayer(window._criticalCloud); window._criticalCloud=null; }
-  if (window._depotCloud){ map.removeLayer(window._depotCloud); window._depotCloud=null; }
-  if (window._repairCloud){ map.removeLayer(window._repairCloud); window._repairCloud=null; }
-  const normalPts = [], critPts = [];
-  for (const o of outages){ (o.critical ? critPts : normalPts).push({lat:o.lat, lon:o.lon}); }
-  window._outageCloud = new PointCloudLayer(normalPts, {uniformColor:true, marker:'x', radius:3.5, markerWidth:1.6, fillColor:"#dc2626", fillOpacity:0.95}).addTo(map);
-  if (critPts.length){
-    window._criticalCloud = new PointCloudLayer(critPts, {uniformColor:true, radius:4, fillColor:"#dc2626", stroke:"#facc15", lineWidth:1.2, fillOpacity:0.92}).addTo(map);
+  for (const key of ['_outageCloud','_criticalCloud','_depotCloud','_repairCloud']){
+    if (window[key]){map.removeLayer(window[key]);window[key]=null;}
   }
+  removeOutageSurface();
+}
 
-  affectedEl.textContent=Math.round(totalCust).toLocaleString();
-  affectedPctEl.textContent=(100*totalCust/TOTAL_POP).toFixed(1)+"% of state population";
-  outageCountEl.textContent=N.toLocaleString();
-  restoreTimeEl.textContent='—'; restoreDetailEl.textContent='— customers restored';
-  const switchMsg = switchRestoredCount > 0 ? ` (${switchRestoredCount} auto-restored via switching)` : '';
-  status.textContent=`Storm: ${N.toLocaleString()} outages${switchMsg}, ~${Math.round(totalCust).toLocaleString()} customers without power.`;
+function markOutageModelStale(reason){
+  if (activeOutageModelRunId!==null && outageModelWorker){
+    outageModelWorker.postMessage({
+      protocol:OUTAGE_WORKER_PROTOCOL,version:1,type:'cancel',runId:activeOutageModelRunId,
+    });
+  }
+  activeOutageModelRunId=null;
+  if (storm || currentOutageModelResult){
+    storm=null; plan=null; currentOutageModelResult=null;
+    clearOutageResultLayers();
+    affectedEl.textContent='0'; affectedPctEl.textContent='0% of state population';
+    outageCountEl.textContent='0'; restoreTimeEl.textContent='—'; restoreDetailEl.textContent='— customers restored';
+    const summary=document.getElementById('modelSummary');
+    if (summary.classList.contains('visible')){
+      const fresh=document.getElementById('modelFreshness');
+      fresh.textContent='stale — regenerate'; fresh.className='model-stale';
+    }
+  }
+  if (reason) status.textContent=reason;
+  setStormProgress(0,false);
+  updateOutageModelAvailability();
+}
+
+function updateOutageModelAvailability(){
+  const stormId=document.getElementById('stormTrackSelect').value;
+  const mode=document.getElementById('outagePlacementModel').value;
+  const button=document.getElementById('simStorm');
+  if (!window.Worker || !outageModelWorkerReady){
+    setModelAvailability('warn','Waiting for the browser Worker…');
+    button.disabled=true;
+    return;
+  }
+  if (mode==='research'){
+    const threshold=Number(document.getElementById('modelWindThreshold').value);
+    const support=researchWeatherSupport(stormId,threshold);
+    if (!support.complete){
+      setModelAvailability('error','This event has no complete HRRR wind-and-rain field. Select Basic network placement explicitly or choose a supported event.');
+      button.disabled=true;
+    } else if (support.positiveCells===0){
+      const maximum=support.maxInStateWind===null?'the available':support.maxInStateWind.toFixed(1)+' mph';
+      setModelAvailability('error',`No Connecticut weather-grid cells exceed the current ${threshold} mph damage threshold (in-state maximum: ${maximum}). Lower the threshold or select Basic network placement explicitly.`);
+      button.disabled=true;
+    } else {
+      setModelAvailability('ok','Research model ready: HRRR wind + rain, census exposure, Gaussian smoothing, and live network weighting.');
+      button.disabled=false;
+    }
+  } else {
+    setModelAvailability('warn','Basic fallback selected: network length only. Weather and customer exposure do not affect placement, and no diagnostic surface will be produced.');
+    button.disabled=false;
+  }
+}
+
+function buildWorkerNetworkInput(){
+  return {
+    substations:substations.map((substation,sub_id)=>({
+      sub_id,name:substation.name||`Substation ${sub_id}`,lat:substation.lat,lon:substation.lon,
+      customers_served:substation.popServed||0,
+    })),
+    feeders:feeders.map((feeder,feeder_id)=>({
+      feeder_id,sub_id:feeder.subIdx??feeder.sub_id??0,pts:feeder.pts,
+    })),
+    laterals:laterals.map((lateral,lateral_id)=>({
+      lateral_id,feeder_id:lateral.feederIdx,pts:lateral.pts,
+    })),
+  };
+}
+
+function makeWorkerRequestInput(config,mode){
+  const base={
+    mode,
+    config,
+    network:buildWorkerNetworkInput(),
+    boundary:stateBoundaryGeo,
+    inputs:{networkSeed:String(seedI.value),source:'live browser network'},
+  };
+  if (mode==='basic') return base;
+  const weatherData=window.CONNECTICUT_STORM_WIND;
+  return {
+    ...base,
+    boundary:stateBoundaryGeo,
+    censusTracts:window.CONNECTICUT_CENSUS_TRACTS||[],
+    weather:{
+      grid:weatherData.grid,
+      storm:{storm_id:config.stormId,...weatherData.storms[config.stormId]},
+    },
+  };
+}
+
+function renderOutagePoints(outages){
+  clearOutageResultLayers();
+  const normalPts=[],criticalPts=[];
+  for (const outage of outages){
+    (outage.critical?criticalPts:normalPts).push({lat:outage.lat,lon:outage.lon});
+  }
+  window._outageCloud=new PointCloudLayer(normalPts,{
+    uniformColor:true,marker:'x',radius:3.5,markerWidth:1.6,fillColor:'#dc2626',fillOpacity:0.95,
+  }).addTo(map);
+  if (criticalPts.length){
+    window._criticalCloud=new PointCloudLayer(criticalPts,{
+      uniformColor:true,radius:4,fillColor:'#dc2626',stroke:'#facc15',lineWidth:1.2,fillOpacity:0.92,
+    }).addTo(map);
+  }
+}
+
+function surfaceColor(value,max){
+  const t=Math.max(0,Math.min(1,value/max));
+  const stops=[[12,24,55],[30,96,155],[38,181,178],[246,211,68],[196,45,38]];
+  const scaled=t*(stops.length-1),left=Math.min(stops.length-2,Math.floor(scaled)),local=scaled-left;
+  const a=stops[left],b=stops[left+1];
+  return [
+    Math.round(a[0]+(b[0]-a[0])*local),
+    Math.round(a[1]+(b[1]-a[1])*local),
+    Math.round(a[2]+(b[2]-a[2])*local),
+    value>0?Math.round(45+185*Math.sqrt(t)):0,
+  ];
+}
+
+function renderSelectedModelSurface(){
+  removeOutageSurface();
+  const key=document.getElementById('modelSurfaceSelect').value;
+  const surfaces=currentOutageModelResult?.surfaces;
+  if (key==='none'||!surfaces) return;
+  const values=surfaces[key],scale=SURFACE_SCALES[key];
+  if (!values||!scale) return;
+  const canvas=document.createElement('canvas');
+  canvas.width=surfaces.columns;canvas.height=surfaces.rows;
+  const context=canvas.getContext('2d'),image=context.createImageData(surfaces.columns,surfaces.rows);
+  for (let y=0;y<surfaces.rows;y++){
+    const sourceRow=surfaces.rows-1-y;
+    for (let column=0;column<surfaces.columns;column++){
+      const sourceIndex=sourceRow*surfaces.columns+column;
+      const outputIndex=(y*surfaces.columns+column)*4;
+      const color=surfaces.mask[sourceIndex]?surfaceColor(values[sourceIndex],scale.max):[0,0,0,0];
+      image.data.set(color,outputIndex);
+    }
+  }
+  context.putImageData(image,0,0);
+  const south=surfaces.latitudes[0],north=surfaces.latitudes[surfaces.latitudes.length-1];
+  const west=surfaces.longitudes[0],east=surfaces.longitudes[surfaces.longitudes.length-1];
+  outageSurfaceLayer=L.imageOverlay(canvas.toDataURL(),[[south,west],[north,east]],{
+    opacity:0.68,interactive:false,pane:'overlayPane',
+  }).addTo(map);
+  if (window._outageCloud){map.removeLayer(window._outageCloud);window._outageCloud.addTo(map);}
+  const legend=document.getElementById('modelSurfaceLegend');
+  legend.style.display='block';
+  document.getElementById('modelSurfaceLegendMax').textContent=scale.label;
+}
+
+function applyOutageModelResult(result){
+  const expectedCustomers=result.outages.length*50;
+  if (result.totalCustomers!==expectedCustomers||result.outages.some(outage=>outage.popLoss!==50)){
+    throw new Error('Generated scenario violated the fixed 50-customers-per-outage contract.');
+  }
+  if (!window.OutageRestorationAdapter){
+    throw new Error('The restoration metadata adapter did not load. Refresh the page and try again.');
+  }
+  const sampledOutages=result.outages.map(outage=>({
+    ...outage,popLoss:50,customers:50,
+    wind_mph:Number.isFinite(outage.localWindMph)?outage.localWindMph:30,
+    rain_in:Number.isFinite(outage.localRainIn)?outage.localRainIn:0,
+  }));
+  const realistic=document.getElementById('realisticMode').checked;
+  const enriched=window.OutageRestorationAdapter.enrichOutages(sampledOutages,{
+    seed:+seedI.value|0,
+    realistic,
+    substations:substations.map(substation=>({
+      ...substation,canopyPercent:canopyOf(substation),
+    })),
+    feeders,laterals,
+    criticalFacilities:window.CONNECTICUT_CRITICAL_FACILITIES||[],
+    floodCorridors:FLOOD_CORRIDORS,
+    callbackEnabled:document.getElementById('customerCallbackLag').checked,
+    amiEnabled:document.getElementById('amiCoverage').checked,
+    switchingEnabled:document.getElementById('switchingBackfeed').checked,
+    undergroundEnabled:document.getElementById('undergroundLines').checked,
+  });
+  const outages=enriched.outages;
+  const trackKey=document.getElementById('stormTrackSelect').value;
+  const trackData=trackKey&&window.HARTFORD_STORM_TRACKS&&window.HARTFORD_STORM_TRACKS[trackKey];
+  const localPlannerReasons=[];
+  if (enriched.summary.switchRestored) localPlannerReasons.push('automatic switching');
+  if (enriched.summary.underground) localPlannerReasons.push('underground repair-time modifiers');
+  if (document.getElementById('floodZoneClosures').checked&&enriched.summary.nearFloodZone) localPlannerReasons.push('flood-zone travel penalties');
+  if (document.getElementById('customerCallbackLag').checked&&enriched.summary.callbackDelayed) localPlannerReasons.push('callback discovery delays');
+  storm={
+    outages,totalCust:expectedCustomers,switchRestoredCount:enriched.summary.switchRestored,
+    isLocalized:!!trackData?.is_localized_reports,
+    placementModel:result.summary.placementModel||'weather_customer_exposure_v1',
+    modelConfig:result.config,modelSummary:result.summary,
+    initialContract:enriched.contract,
+    restorationMetadata:{...enriched.summary,localPlannerReasons},
+  };
+  plan=null;
+  currentOutageModelResult=result;
+  renderOutagePoints(outages);
+  affectedEl.textContent=expectedCustomers.toLocaleString();
+  affectedPctEl.textContent=`${outages.length.toLocaleString()} locations × 50 customers`;
+  outageCountEl.textContent=outages.length.toLocaleString();
+  restoreTimeEl.textContent='—';restoreDetailEl.textContent='— customers restored';
+  document.getElementById('modelSummaryOutages').textContent=outages.length.toLocaleString();
+  document.getElementById('modelSummaryCustomers').textContent=expectedCustomers.toLocaleString();
+  document.getElementById('modelSummarySplit').textContent=
+    `${result.summary.feederOutages.toLocaleString()} / ${result.summary.lateralOutages.toLocaleString()}`;
+  document.getElementById('modelSummaryRuntime').textContent=`${result.summary.totalRuntimeMs.toFixed(0)} ms`;
+  const research=!!result.surfaces;
+  document.getElementById('modelSummaryFormula').textContent=research
+    ? `Weather severity × relative customer exposure, Gaussian-smoothed at ${result.config.gaussianBandwidthKm} km · seed ${result.config.seed}.`
+    : `Explicit basic fallback: network length × susceptibility · no weather/customer surface · seed ${result.config.seed}.`;
+  document.getElementById('modelSummaryRestoration').textContent=
+    `Restoration tags: ${enriched.summary.critical} critical · ${enriched.summary.treeBlocked} tree-blocked · `+
+    `${enriched.summary.nearFloodZone} flood-zone · ${enriched.summary.callbackDelayed} delayed callbacks · `+
+    `${enriched.summary.switchRestored} quick-switch · ${enriched.summary.underground} underground. Placement and the ${expectedCustomers.toLocaleString()}-customer initial total are unchanged.`;
+  const fresh=document.getElementById('modelFreshness');fresh.textContent='current';fresh.className='';
+  document.getElementById('modelSummary').classList.add('visible');
+  const surfaceSelect=document.getElementById('modelSurfaceSelect');
+  surfaceSelect.disabled=!research;
+  surfaceSelect.value=research?'smoothedImpact':'none';
+  renderSelectedModelSurface();
   setStormProgress(100);
-  setTimeout(()=>setStormProgress(0,false), 600);
+  setTimeout(()=>setStormProgress(0,false),700);
+  status.textContent=`Generated ${outages.length.toLocaleString()} unique outages representing exactly ${expectedCustomers.toLocaleString()} customers; attached deterministic restoration metadata without moving or removing any point. Ready to plan restoration.`;
+}
+
+function handleOutageWorkerMessage(event){
+  const message=event.data;
+  if (!message||message.protocol!==OUTAGE_WORKER_PROTOCOL||message.version!==1) return;
+  if (message.type==='ready'){
+    outageModelWorkerReady=true;
+    updateOutageModelAvailability();
+    return;
+  }
+  if (message.runId!==activeOutageModelRunId) return;
+  if (message.type==='progress'){
+    setStormProgress(message.progress*100);
+    status.textContent=message.message;
+  } else if (message.type==='cancelled'){
+    activeOutageModelRunId=null;
+    document.getElementById('simStorm').disabled=false;
+    setStormProgress(0,false);
+    updateOutageModelAvailability();
+  } else if (message.type==='error'){
+    activeOutageModelRunId=null;
+    setStormProgress(0,false);
+    setModelAvailability('error',`Generation failed during ${message.error.stage}: ${message.error.message}`);
+    status.textContent=`Outage generation failed: ${message.error.message}`;
+    document.getElementById('simStorm').disabled=false;
+  } else if (message.type==='result'){
+    activeOutageModelRunId=null;
+    try{applyOutageModelResult(message.result);}
+    catch(error){
+      setModelAvailability('error',error.message);
+      status.textContent='Outage generation failed validation: '+error.message;
+    }
+    updateOutageModelAvailability();
+  }
+}
+
+function initializeOutageModelWorker(){
+  if (!window.Worker){
+    setModelAvailability('error','This browser does not support Web Workers. Outage generation is unavailable.');
+    document.getElementById('simStorm').disabled=true;
+    return;
+  }
+  try{
+    outageModelWorker=new Worker('./outage_location_worker.js');
+    outageModelWorker.onmessage=handleOutageWorkerMessage;
+    outageModelWorker.onerror=(event)=>{
+      outageModelWorkerReady=false;
+      setModelAvailability('error','The outage-model Worker could not start: '+(event.message||'unknown error'));
+      document.getElementById('simStorm').disabled=true;
+    };
+  }catch(error){
+    setModelAvailability('error','The outage-model Worker could not start: '+error.message);
+    document.getElementById('simStorm').disabled=true;
+  }
+}
+
+function simulateStorm(){
+  if (!feeders.length||!laterals.length){status.textContent='Generate the distribution grid first.';return;}
+  if (!outageModelWorkerReady||!outageModelWorker){
+    status.textContent='The outage-model Worker is not ready.';updateOutageModelAvailability();return;
+  }
+  const mode=document.getElementById('outagePlacementModel').value;
+  const stormId=document.getElementById('stormTrackSelect').value;
+  if (mode==='research'&&!stormHasResearchWeather(stormId)){
+    setModelAvailability('error','No complete HRRR wind-and-rain data exists for this storm. Choose Basic network placement explicitly.');
+    return;
+  }
+  let config;
+  try{config=readOutageModelConfig();}
+  catch(error){setModelAvailability('error',error.message);status.textContent='Check the outage model parameters.';return;}
+  if (mode==='research'){
+    const support=researchWeatherSupport(stormId,config.windThresholdMph);
+    if (support.positiveCells===0){
+      const maximum=support.maxInStateWind===null?'the available':support.maxInStateWind.toFixed(1)+' mph';
+      const message=`No Connecticut weather-grid cells exceed the current ${config.windThresholdMph} mph damage threshold (in-state maximum: ${maximum}). Lower the threshold or select Basic network placement explicitly.`;
+      setModelAvailability('error',message);status.textContent=message;return;
+    }
+  }
+  if (activeOutageModelRunId!==null){
+    outageModelWorker.postMessage({protocol:OUTAGE_WORKER_PROTOCOL,version:1,type:'cancel',runId:activeOutageModelRunId});
+  }
+  storm=null;plan=null;currentOutageModelResult=null;
+  clearOutageResultLayers();
+  document.getElementById('modelSummary').classList.remove('visible');
+  const runId=`browser-${++outageModelRunCounter}`;
+  activeOutageModelRunId=runId;
+  document.getElementById('simStorm').disabled=true;
+  setStormProgress(1);
+  status.textContent='Sending the live network to the outage-model Worker…';
+  outageModelWorker.postMessage({
+    protocol:OUTAGE_WORKER_PROTOCOL,version:1,type:'generate',runId,
+    input:makeWorkerRequestInput(config,mode),
+  });
+}
+
+function initializeOutageModelUI(){
+  populateStormModelOptions();
+  resetOutageModelDefaults(false);
+  const parameterIds=Object.values(MODEL_PARAMETER_INPUTS);
+  for (const id of parameterIds){
+    document.getElementById(id).addEventListener('input',()=>markOutageModelStale('Scientific parameter changed. Generate a new scenario.'));
+  }
+  document.getElementById('resetModelDefaults').onclick=()=>resetOutageModelDefaults(true);
+  document.getElementById('outagePlacementModel').onchange=()=>{
+    markOutageModelStale('Placement method changed. Generate a new scenario.');
+    updateOutageModelAvailability();
+  };
+  document.getElementById('modelSurfaceSelect').onchange=renderSelectedModelSurface;
+  seedI.addEventListener('change',()=>markOutageModelStale('Random seed changed. Regenerate the network and outage scenario.'));
+  for (const id of ['realisticMode','customerCallbackLag','amiCoverage','switchingBackfeed','undergroundLines']){
+    document.getElementById(id).addEventListener('change',()=>{
+      markOutageModelStale('A restoration-metadata setting changed. Generate a new outage scenario.');
+    });
+  }
+  initializeOutageModelWorker();
 }
 
 // --- LIVE MODE: load real current Eversource CT outages as the storm ---
@@ -1978,6 +2222,13 @@ function loadLiveOutages(){
       `${planned.length} planned-maintenance jobs only, zero unplanned outages — nothing to restore.`;
     return;
   }
+  if (activeOutageModelRunId!==null&&outageModelWorker){
+    outageModelWorker.postMessage({protocol:OUTAGE_WORKER_PROTOCOL,version:1,type:'cancel',runId:activeOutageModelRunId});
+  }
+  activeOutageModelRunId=null;
+  currentOutageModelResult=null;
+  removeOutageSurface();
+  document.getElementById('modelSummary').classList.remove('visible');
 
   const outages = unplanned.map(o => ({
     lat: o.lat, lon: o.lon,
@@ -2157,6 +2408,20 @@ function nnGridFindVisible(grid, cLat, cLon, done, oLat, oLon, discTime, cTime){
   return bestI;
 }
 
+// For review-sized scenarios, a tight linear scan is substantially faster
+// than probing thousands of mostly-empty 500 m grid cells as the final few
+// outages become sparse. The spatial hash remains the better path for large
+// historical presets; this threshold selects the cheaper algorithm by scale.
+function linearFindVisible(cLat,cLon,done,oLat,oLon,discTime,cTime){
+  let bestI=-1,bestSq=Infinity;
+  for (let i=0;i<oLat.length;i++){
+    if (done[i]||(discTime&&discTime[i]>cTime)) continue;
+    const dx=oLat[i]-cLat,dy=oLon[i]-cLon,sq=dx*dx+dy*dy;
+    if (sq<bestSq){bestSq=sq;bestI=i;}
+  }
+  return bestI;
+}
+
 // --- Static-point spatial grid (substations, critical facilities) ---
 // Same expanding-ring bucketing as buildNNGrid/nnGridFind above, but for
 // point sets that never get "used up" (no `done` mask needed) -- built once
@@ -2309,7 +2574,7 @@ function deriveRampParams(totalCust, assessmentDelay){
 }
 
 async function planRestoration(){
-  if (!storm){status.textContent="Simulate a storm first.";return;}
+  if (!storm){status.textContent="Generate an outage scenario first.";return;}
   setPlanProgress(0);
   const seed=+seedI.value|0;
   const rnd=mulberry32(seed*31+99);
@@ -2465,6 +2730,14 @@ async function planRestoration(){
   // Live mode: every outage is already reported (that's literally where the
   // data came from), so discTime stays all-zero -- no discovery model.
   if (realistic && !isLive){
+    if (storm.restorationMetadata){
+      // W4 scenarios already carry an explicit, deterministic callback/AMI
+      // delay per outage. Make the assessed queue visible together and let
+      // callback_lag_h below control delayed discovery; applying this older
+      // independent random ramp as well would double-count detection delay
+      // and cause large idle-crew churn at every synthetic timestamp.
+      discTime.fill(ASSESSMENT_DELAY);
+    } else {
     // With a fixed 36h cap regardless of N, any storm with more than ~100
     // outages was virtually guaranteed to have at least one outage undiscovered
     // until t=ASSESSMENT_DELAY+1+36=49h, no matter how few crews were needed
@@ -2485,6 +2758,7 @@ async function planRestoration(){
         const tAfter = -Math.log(Math.max(1e-9, 1 - 0.99*v)) / 0.1;
         discTime[i] = ASSESSMENT_DELAY + 1 + Math.min(discMaxTail, tAfter);
       }
+    }
     }
   }
 
@@ -2623,10 +2897,22 @@ async function planRestoration(){
   }
 
   const done=new Uint8Array(N);
-  // Pre-mark switch-restored outages as already done (auto-fixed via FLISR)
+  // Automatic FLISR/tie-switch restorations remain part of the initial
+  // scenario. They are represented as explicit five-minute restoration
+  // events so the customer curve starts at the full generated total and
+  // ends at zero without consuming a field crew.
+  const automaticJobs=[];
   let switchSkipped = 0;
   for (let i=0;i<N;i++){
-    if (storm.outages[i].switch_restored){ done[i]=1; switchSkipped++; }
+    if (storm.outages[i].switch_restored){
+      const outage=storm.outages[i];
+      done[i]=1;switchSkipped++;
+      automaticJobs.push({
+        outageIdx:i,o:outage,
+        etaFinish:Number.isFinite(outage.switch_restore_h)?outage.switch_restore_h:5/60,
+        automatic:true,type:'switching',
+      });
+    }
   }
   // Tier-1 critical-facility priority (existing behavior, retained).
   // LATENT BUG FIX (surfaced by live mode, where no outage is critical):
@@ -2678,7 +2964,7 @@ async function planRestoration(){
   function hPush(h,item){h.push(item);let i=h.length-1;while (i>0){const p=(i-1)>>1;if (h[p][0]<=h[i][0]) break;const t=h[i];h[i]=h[p];h[p]=t;i=p;}}
   function hPop(h){const top=h[0];const last=h.pop();if (h.length>0){h[0]=last;let i=0;const L=h.length;while (true){const l=2*i+1,r=2*i+2;let s=i;if (l<L&&h[l][0]<h[s][0]) s=l;if (r<L&&h[r][0]<h[s][0]) s=r;if (s===i) break;const t=h[i];h[i]=h[s];h[s]=t;i=s;}}return top;}
 
-  const nnGrid=buildNNGrid(oLat,oLon,N);
+  const nnGrid=N>5000?buildNNGrid(oLat,oLon,N):null;
 
   const heap=[];
   for (let c=0;c<crews.length;c++) hPush(heap,[crewArrivals[c],c]);
@@ -2804,7 +3090,9 @@ async function planRestoration(){
     }
 
     if (bestI === -1){
-      if (realistic){
+      if (N<=5000){
+        bestI=linearFindVisible(cLat,cLon,done,oLat,oLon,realistic?discTime:null,cTime);
+      } else if (realistic){
         bestI = anyDiscoveredUndone(cTime)
           ? nnGridFindVisible(nnGrid, cLat, cLon, done, oLat, oLon, discTime, cTime)
           : -1;
@@ -2814,18 +3102,20 @@ async function planRestoration(){
     }
 
     if (bestI===-1){
-      if (inCriticalPhase){
-        for (let i=0;i<N;i++) if (!storm.outages[i].critical) done[i]=0;
-        remaining = N - criticalCount;
-        inCriticalPhase = false;
-        firstUndoneDisc = 0;   // un-marked entries may live anywhere in the sorted list
-        hPush(heap,[cTime,ci]);
-        continue;
-      }
       if (realistic){
         // No visible work yet — fast-forward this crew to the next discovery time.
         const nextT = nextDiscoveryAfter(cTime);
-        if (!isFinite(nextT)) break;
+        if (!isFinite(nextT)){
+          throw new Error(`Restoration scheduler lost track of ${remaining} unfinished outages.`);
+        }
+        // Every other idle crew whose clock is also before nextT has no work
+        // it could legally see either. Advance that whole idle cohort in one
+        // pass instead of popping and re-queuing hundreds of crews at every
+        // discovery timestamp. Raising all entries below the same threshold
+        // preserves the min-heap ordering.
+        for (const entry of heap){
+          if (entry[0]<nextT){entry[0]=nextT;crews[entry[1]].time=nextT;}
+        }
         crew.time = nextT;
         hPush(heap,[nextT,ci]);
         continue;
@@ -2856,6 +3146,10 @@ async function planRestoration(){
     }
     const driveMiles = dist({lat:cLat,lon:cLon},o) * roadMult;
     let repairH = sampleRepairHours(o.wind_mph) * hrrrRepairMult;
+    if (realistic && o.underground){
+      repairH *= Number.isFinite(o.underground_repair_multiplier)
+        ? o.underground_repair_multiplier : 1.35;
+    }
     if (realistic && document.getElementById('equipmentShortage').checked && N >= 5000){
       const pctDone = (N - remaining) / N;
       if (pctDone > 0.6) repairH *= 1.0 + 0.4 * ((pctDone - 0.6) / 0.4);
@@ -2919,7 +3213,17 @@ async function planRestoration(){
   // instead of re-relying on this artifact.
   let totalTime=0;
   for (const c of crews) if (c.jobs.length > 0 && c.time > totalTime) totalTime = c.time;
-  plan={crews,totalTime};
+  for (const job of automaticJobs) if (job.etaFinish>totalTime) totalTime=job.etaFinish;
+  const restorationContract=window.OutageRestorationAdapter.summarizeRestorationJobs(
+    storm.outages,crews,automaticJobs,
+  );
+  if (!restorationContract.complete||restorationContract.remainingCustomers!==0){
+    throw new Error(
+      `Restoration plan violated the initial contract: ${restorationContract.restoredOutages}/${restorationContract.inputOutages} outages, `+
+      `${restorationContract.restoredCustomers}/${restorationContract.inputCustomers} customers.`,
+    );
+  }
+  plan={crews,totalTime,automaticJobs,restorationContract,source:'browser'};
 
   // Yield before rendering so the status text from the scheduler shows up.
   status.textContent = `Rendering ${crews.length.toLocaleString()} depots and ${N.toLocaleString()} repair markers…`;
@@ -2998,7 +3302,8 @@ function renderPlan(crews, totalTime, N, realistic){
   }
   restoreTimeEl.textContent = fmtDuration(totalTime);
   const modeNote = realistic ? ' · realistic mode' : ' · optimistic baseline';
-  restoreDetailEl.textContent=`${N.toLocaleString()} jobs across ${crews.length.toLocaleString()} crews${modeNote}`;
+  const automaticCount=plan?.automaticJobs?.length||0;
+  restoreDetailEl.textContent=`${N.toLocaleString()} jobs across ${crews.length.toLocaleString()} crews${automaticCount?` · ${automaticCount.toLocaleString()} automatic`:''}${modeNote}`;
   status.textContent=`Restoration: ${crews.length.toLocaleString()} crews finish all ${N.toLocaleString()} repairs in ${fmtDuration(totalTime)}${
     realistic ? (storm && storm.isLive
       ? ' (LIVE mode: crews start now, outages already reported; includes overnight downtime)'
@@ -3017,22 +3322,25 @@ function renderRestorationCurve(crews, totalTime, fmtDuration){
   const labelsRow = document.getElementById('restoreCurveLabels');
   if (!storm || !crews || !crews.length) { box.style.display = 'none'; return; }
 
-  // Collect (eta, customers) for every job. Look up customers by matching
-  // the job's outage lat/lon to the closest known outage in the storm
-  // (server response doesn't carry customer counts back; client already
-  // has them).
+  // Collect (eta, customers) for field-crew and automatic switching jobs.
+  // Local jobs carry outageIdx directly; deployed server versions that do
+  // not return it use the generated coordinate key as a compatibility path.
   const pairs = [];
   // Build a quick index of customers by lat,lon key for O(1) lookup.
   const custByKey = new Map();
   for (const o of storm.outages){
     custByKey.set(`${o.lat.toFixed(6)},${o.lon.toFixed(6)}`, o.popLoss || 0);
   }
-  for (const c of crews){
-    for (const j of (c.jobs || [])){
+  const allJobs=[...(plan?.automaticJobs||[]),...crews.flatMap(c=>c.jobs||[])];
+  for (const j of allJobs){
+    let cust=0;
+    if (Number.isInteger(j.outageIdx)&&storm.outages[j.outageIdx]){
+      cust=storm.outages[j.outageIdx].popLoss||0;
+    } else {
       const k = `${j.o.lat.toFixed(6)},${j.o.lon.toFixed(6)}`;
-      const cust = custByKey.get(k) || 0;
-      pairs.push([j.etaFinish, cust]);
+      cust = custByKey.get(k) || 0;
     }
+    pairs.push([j.etaFinish, cust]);
   }
   if (!pairs.length){ box.style.display = 'none'; return; }
   pairs.sort((a, b) => a[0] - b[0]);
@@ -3045,6 +3353,9 @@ function renderRestorationCurve(crews, totalTime, fmtDuration){
     cumRestored.push([t, running]);
   }
   const totalCust = running;
+  if (Math.abs(totalCust-storm.totalCust)>1e-6){
+    throw new Error(`Restoration curve accounts for ${totalCust} customers, expected ${storm.totalCust}.`);
+  }
   const curve = cumRestored.map(([t, cum]) => [t, totalCust - cum]);
   const tMax = totalTime;
   if (totalCust <= 0 || tMax <= 0){ box.style.display = 'none'; return; }
@@ -3202,16 +3513,24 @@ function renderRestorationCurve(crews, totalTime, fmtDuration){
 }
 
 function resetStorm(){
+  if (activeOutageModelRunId!==null&&outageModelWorker){
+    outageModelWorker.postMessage({protocol:OUTAGE_WORKER_PROTOCOL,version:1,type:'cancel',runId:activeOutageModelRunId});
+  }
+  activeOutageModelRunId=null;currentOutageModelResult=null;
   storm=null; plan=null;
   outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
   if (window._outageCloud){ map.removeLayer(window._outageCloud); window._outageCloud=null; }
   if (window._criticalCloud){ map.removeLayer(window._criticalCloud); window._criticalCloud=null; }
   if (window._depotCloud){ map.removeLayer(window._depotCloud); window._depotCloud=null; }
   if (window._repairCloud){ map.removeLayer(window._repairCloud); window._repairCloud=null; }
+  removeOutageSurface();
   affectedEl.textContent='0'; affectedPctEl.textContent='0% of state population';
   outageCountEl.textContent='0'; restoreTimeEl.textContent='—'; restoreDetailEl.textContent='— customers restored';
   const _curveBox = document.getElementById('restoreCurveBox'); if (_curveBox) _curveBox.style.display = 'none';
+  document.getElementById('modelSummary').classList.remove('visible');
+  document.getElementById('modelSurfaceSelect').value='none';
   status.textContent='Storm cleared.';
+  updateOutageModelAvailability();
 }
 
 document.getElementById('genGrid').onclick=generateGrid;
@@ -3223,15 +3542,9 @@ document.getElementById('simStorm').onclick=simulateStorm;
   const n = (window.CONNECTICUT_SUBSTATIONS||[]).length;
   if (el) el.textContent = n ? `${n} real substations loaded` : 'no real substation data found — run 08_fetch_substations.py';
 })();
-// Auto-build the grid on page load using the real HIFLD substations so the
-// map shows real names + locations immediately — no need to click anything
-// first. Without this, the user can see "Substation 71" tooltips if they
-// click Plan/Storm before clicking Generate.
-window.addEventListener('load', () => {
-  if (window.CONNECTICUT_SUBSTATIONS && window.CONNECTICUT_SUBSTATIONS.length){
-    generateGrid().catch(e => console.error('Initial grid generation failed:', e));
-  }
-});
+// The boot sequence below auto-builds the grid after the state and land
+// boundaries are ready. Keeping one initialization path prevents two network
+// generations from racing on first load.
 // Auto-detect server availability: ping /health and /version on load,
 // update the dot + version label, and decide whether to auto-route Plan
 // restoration through the server. Re-checks every 60s.
@@ -3369,6 +3682,20 @@ async function runPlanAutoRoute(){
   // discovery tail, and mutual-aid arrival waves to outages that are already
   // reported and crews that are already in the field).
   if (storm && storm.isLive) return planRestoration();
+  const metadata=storm?.restorationMetadata||{};
+  const localReasons=[];
+  if (metadata.switchRestored) localReasons.push('automatic switching');
+  if (metadata.underground) localReasons.push('underground repair-time modifiers');
+  if (document.getElementById('floodZoneClosures').checked&&metadata.nearFloodZone) localReasons.push('flood-zone travel penalties');
+  if (document.getElementById('customerCallbackLag').checked&&metadata.callbackDelayed) localReasons.push('callback discovery delays');
+  if (localReasons.length){
+    showServerStatus(
+      `Running locally so the plan includes ${localReasons.join(', ')}. `+
+      `The server path remains available when these browser-only behaviors are disabled.`,
+      false,
+    );
+    return planRestoration();
+  }
   const wantServer = document.getElementById('useServerToggle').checked;
   if (wantServer && _serverHealthy) return runServerPlan();
   if (wantServer && !_serverHealthy){
@@ -3394,7 +3721,7 @@ function showServerStatus(text, isError){
   el.textContent = text;
 }
 function buildServerPayload(){
-  if (!storm) throw new Error('Simulate a storm first.');
+  if (!storm) throw new Error('Generate an outage scenario first.');
   const priorityOn = document.getElementById('customerPriority').checked;
   // The weight is in units of (customers per squared-degree of lat/lon). At
   // Connecticut coords, a degree is ~70 miles, so a weight of 5000 means
@@ -3404,6 +3731,9 @@ function buildServerPayload(){
   const customerWeight = priorityOn ? 5000.0 : 0.0;
   const specializationOn = document.getElementById('crewSpecialization').checked;
   const hierarchicalOn = document.getElementById('hierarchicalMode').checked;
+  if (specializationOn&&hierarchicalOn){
+    throw new Error('Crew specialization and hierarchical restoration cannot be enabled together. Choose one mode.');
+  }
   const tieredOn = document.getElementById('tieredPriority').checked;
   const weatherOn = document.getElementById('weatherWindow').checked;
   const stormDur = weatherOn ? Math.max(0, +document.getElementById('stormDurationH').value || 0) : 0;
@@ -3411,16 +3741,26 @@ function buildServerPayload(){
   const dragOn = document.getElementById('stormDrag').checked;
   const soilOn = document.getElementById('soilSaturation').checked;
   const stagingOn = document.getElementById('preStormStaging').checked;
-  return {
-    outages: storm.outages.map((o, idx) => ({
+  const payloadOutages=storm.outages.map((o, idx) => {
+    const feederId=Number.isInteger(o.feeder_id)&&o.feeder_id>=0
+      ? o.feeder_id
+      : o.kind === 'f' ? (o.fi | 0)
+        : (laterals[o.li] ? (laterals[o.li].feederIdx | 0) : -1);
+    const subId=Number.isInteger(o.sub_id)?o.sub_id:-1;
+    if (!storm.isLive&&(feederId<0||!feeders[feederId])){
+      throw new Error(`Outage ${idx+1} has no valid parent feeder for restoration.`);
+    }
+    if (!storm.isLive&&(subId<0||!substations[subId])){
+      throw new Error(`Outage ${idx+1} has no valid substation territory for restoration.`);
+    }
+    return {
       lat: o.lat, lon: o.lon,
       critical: !!o.critical,
       customers: +(o.popLoss || 0),
       // Hierarchy: map each outage to its parent feeder. A feeder-backbone
       // fault (kind 'f') is its own feeder; a lateral fault (kind 'l') points
       // to the feeder its lateral branches from.
-      feeder_id: o.kind === 'f' ? (o.fi | 0)
-                 : (laterals[o.li] ? (laterals[o.li].feederIdx | 0) : -1),
+      feeder_id: feederId,
       is_feeder: o.kind === 'f' ? 1 : 0,
       // Priority tier: 2 = make-safe / public-safety hazard (deterministic
       // ~3% of outages — downed live wires), 1 = critical facility, 0 normal.
@@ -3429,12 +3769,19 @@ function buildServerPayload(){
       priority: (idx % 33 === 0) ? 2 : (o.critical ? 1 : 0),
       // Substation territory (nearest substation index, precomputed during storm).
       // Used by crew-stickiness to assign crews to service areas.
-      sub_id: (o.sub_id != null ? (o.sub_id | 0) : -1),
+      sub_id: subId,
       // Per-outage tree-blocked flag, precomputed during storm based on the
       // substation's tree-density factor and the parent feeder's vegetation
       // trim age. -1 = let server decide stochastically (legacy fallback).
       tree_blocked: (o.tree_blocked != null ? (o.tree_blocked | 0) : -1),
-    })),
+    };
+  });
+  const payloadCustomers=payloadOutages.reduce((sum,outage)=>sum+outage.customers,0);
+  if (Math.abs(payloadCustomers-storm.totalCust)>1e-6){
+    throw new Error(`Server payload has ${payloadCustomers} customers; generated scenario has ${storm.totalCust}.`);
+  }
+  return {
+    outages:payloadOutages,
     crews: +cS.value,
     seed: +seedI.value | 0,
     realistic: document.getElementById('realisticMode').checked,
@@ -3452,6 +3799,14 @@ function buildServerPayload(){
     is_localized: !!storm.isLocalized,
   };
 }
+// Narrow read-only integration surface for website tests and future UI
+// components. It avoids exposing or duplicating the scientific generator.
+window.OutageRestorationIntegration=Object.freeze({
+  buildServerPayload:()=>buildServerPayload(),
+  getScenarioContract:()=>storm?.initialContract||null,
+  getRestorationContract:()=>plan?.restorationContract||null,
+  getRestorationMetadata:()=>storm?.restorationMetadata||null,
+});
 // Fake-progress timer used while waiting on a server response. The server
 // runs the whole scheduler atomically — there's no real progress signal
 // to report — so we asymptote toward 90% to communicate "still working,"
@@ -3496,12 +3851,22 @@ async function runServerPlan(){
       depot: {lat: c.depot_lat, lon: c.depot_lon},
       color: PALETTE[i % PALETTE.length],
       time: c.finish_time_h,
+      arrival:0,
       jobs: (c.jobs || []).map(j => ({
         o: {lat: j.lat, lon: j.lon},
         etaFinish: j.eta,
       })),
     }));
-    plan = {crews, totalTime: data.total_time_h};
+    const restorationContract=window.OutageRestorationAdapter.summarizeRestorationJobs(
+      storm.outages,crews,[],
+    );
+    if (!restorationContract.complete||restorationContract.remainingCustomers!==0){
+      throw new Error('Server restoration response did not return every generated outage/customer.');
+    }
+    plan = {
+      crews,totalTime:data.total_time_h,automaticJobs:[],restorationContract,
+      source:'server',backend:data.backend,
+    };
     renderPlan(crews, data.total_time_h, N, payload.realistic);
     showServerStatus(
       `OK in ${elapsed} ms — ${data.crews.length} crews, total ${data.total_time_h.toFixed(2)} h\n` +
@@ -3546,7 +3911,7 @@ document.getElementById('batchRunBtn').onclick = async function(){
     progressPct.textContent = '0%';
   }
 
-  if (!storm){ show('Simulate a storm first.', true); return; }
+  if (!storm){ show('Generate an outage scenario first.', true); return; }
 
   const workers = document.getElementById('batchWorkers').value
     .split('\n').map(s => s.trim()).filter(Boolean);
@@ -3811,7 +4176,7 @@ function runJsSchedulerReference(outages, M, seed, realistic){
   }
   let remaining = realistic ? criticalCount : N;
   let inCriticalPhase = realistic && criticalCount > 0;
-  const nnGrid = buildNNGrid(oLat,oLon,N);
+  const nnGrid = N>5000?buildNNGrid(oLat,oLon,N):null;
   const heap=[];
   function hPush(h,it){h.push(it);let i=h.length-1;while (i>0){const p=(i-1)>>1;if (h[p][0]<=h[i][0]) break;const t=h[i];h[i]=h[p];h[p]=t;i=p;}}
   function hPop(h){const top=h[0];const last=h.pop();if (h.length>0){h[0]=last;let i=0;const L=h.length;while (true){const l=2*i+1,r=2*i+2;let s=i;if (l<L&&h[l][0]<h[s][0]) s=l;if (r<L&&h[r][0]<h[s][0]) s=r;if (s===i) break;const t=h[i];h[i]=h[s];h[s]=t;i=s;}}return top;}
@@ -3879,7 +4244,7 @@ function runJsSchedulerReference(outages, M, seed, realistic){
 async function runBenchmark(){
   if (!storm || !storm.outages.length){
     document.getElementById('benchmarkResult').style.display = 'block';
-    document.getElementById('benchmarkResult').textContent = 'Simulate a storm first.';
+    document.getElementById('benchmarkResult').textContent = 'Generate an outage scenario first.';
     return;
   }
   const resEl = document.getElementById('benchmarkResult');
@@ -3931,7 +4296,7 @@ async function runBenchmark(){
 document.getElementById('benchmarkBtn').onclick = runBenchmark;
 document.getElementById('resetAll').onclick=resetStorm;
 
-// --- Export (report only — GeoJSON/Shapefile removed) ---
+// --- Export helpers ---
 function buildFeatureCollections(){
   const seed = +seedI.value|0;
   const stamp = new Date().toISOString().replace(/[:.]/g,'-');
@@ -4000,28 +4365,51 @@ function buildFeatureCollections(){
       feed_id: o.kind==='f' ? o.fi+1 : -1,
       lat_id:  o.kind==='l' ? o.li+1 : -1,
       pop_loss: Math.round(o.popLoss),
+      placement_model: storm?.placementModel || (storm?.isLive ? 'live utility feed' : 'legacy'),
+      critical: o.critical ? 1 : 0,
+      tree_blocked: o.tree_blocked|0,
+      flood_zone: o.near_flood_zone ? 1 : 0,
+      callback_h: +(o.callback_lag_h||0).toFixed(3),
+      quick_switch: o.switch_restored ? 1 : 0,
+      underground: o.underground ? 1 : 0,
+      wind_mph: +(o.wind_mph||0).toFixed(2),
+      rain_in: +(o.rain_in||0).toFixed(3),
     },
   })) };
 
   // Layer 5: restoration plan (Point) — only if a plan has been computed
   const planFC = { type:"FeatureCollection", features: [] };
   if (plan) {
+    const outageByCoordinate=new Map((storm?.outages||[]).map((o,i)=>[`${o.lat.toFixed(6)},${o.lon.toFixed(6)}`,i]));
     plan.crews.forEach((c,ci)=>{
       c.jobs.forEach((j,order)=>{
+        const mappedIdx=Number.isInteger(j.outageIdx)?j.outageIdx:
+          outageByCoordinate.get(`${j.o.lat.toFixed(6)},${j.o.lon.toFixed(6)}`);
         planFC.features.push({
           type:"Feature",
           geometry:{ type:"Point", coordinates:[+j.o.lon.toFixed(6), +j.o.lat.toFixed(6)] },
           properties:{
             job_ord: order+1,
             crew_id: ci+1,
-            out_id:  j.outageIdx+1,
+            out_id:  Number.isInteger(mappedIdx)?mappedIdx+1:-1,
             eta_h: +j.etaFinish.toFixed(3),
             depot_lat: +c.depot.lat.toFixed(6),
             depot_lon: +c.depot.lon.toFixed(6),
+            restore_type: 'field_crew',
           },
         });
       });
     });
+    for (const j of plan.automaticJobs||[]){
+      planFC.features.push({
+        type:'Feature',
+        geometry:{type:'Point',coordinates:[+j.o.lon.toFixed(6),+j.o.lat.toFixed(6)]},
+        properties:{
+          job_ord:0,crew_id:0,out_id:j.outageIdx+1,eta_h:+j.etaFinish.toFixed(3),
+          depot_lat:null,depot_lon:null,restore_type:'automatic_switching',
+        },
+      });
+    }
   }
 
   const manifest = {
@@ -4036,6 +4424,8 @@ function buildFeatureCollections(){
       feeders_per_sub: +fS.value,
       storm_outages: +oS.value,
       repair_crews: +cS.value,
+      placement_model: storm?.placementModel || null,
+      placement_config: storm?.modelConfig || null,
     },
     counts: {
       substations: substations.length,
@@ -4044,6 +4434,8 @@ function buildFeatureCollections(){
       outages: outFC.features.length,
       restoration_jobs: planFC.features.length,
     },
+    restoration_metadata: storm?.restorationMetadata || null,
+    restoration_contract: plan?.restorationContract || null,
   };
 
   return { subsFC, feedsFC, latsFC, outFC, planFC, manifest, stamp };
@@ -4131,6 +4523,10 @@ document.getElementById('stormTrackSelect').addEventListener('change', function(
   const el = document.getElementById('soilSaturation');
   if (el) el.checked = s.soil_wetness > 0.35;
 });
+document.getElementById('stormTrackSelect').addEventListener('change', function() {
+  markOutageModelStale('Storm weather event changed. Generate a new outage scenario.');
+  updateOutageModelAvailability();
+});
 
 // Real-storm calibration presets -- (storm_outages, crews) tuned so this
 // scheduler's own simulated total customers lands close to each storm's
@@ -4163,16 +4559,20 @@ const REAL_STORM_PRESETS = {
   sep2021_ida:               {outages: 1250,  crews: 300,  realH: 51,  label: "Sep 2021 Ida Flooding"},
   dec2025_windstorm:         {outages: 2950,  crews: 700,  realH: 72,  label: "Dec 2025 Windstorm"},
 };
-document.getElementById('stormTrackSelect').addEventListener('change', function(){
-  const preset = REAL_STORM_PRESETS[this.value];
-  if (!preset) return;
+document.getElementById('applyHistoricalPreset').addEventListener('click', function(){
+  const stormId=document.getElementById('stormTrackSelect').value;
+  const preset = REAL_STORM_PRESETS[stormId];
+  if (!preset){
+    status.textContent='No historical restoration calibration preset is available for this event.';
+    return;
+  }
   oS.value = String(preset.outages);
   oS.dispatchEvent(new Event('input'));
   cS.value = String(preset.crews);
   cS.dispatchEvent(new Event('input'));
-  status.textContent = `Loaded real-storm preset: ${preset.label} `
+  status.textContent = `Applied historical restoration preset: ${preset.label} `
     + `(${preset.outages} outages, ${preset.crews} crews -- real restoration took ${preset.realH}h). `
-    + `Click "Generate distribution grid" then "Simulate storm" to run it.`;
+    + `The storm dropdown by itself does not change these values.`;
 });
 
 // --- DOE OE-417 Events Panel ---
@@ -4203,7 +4603,7 @@ function generateSimulationReport(){
   try {
     console.log('generateSimulationReport called. substations:', substations?.length, 'storm:', !!storm, 'plan:', !!plan);
     if (!substations.length){ status.textContent="Generate the grid first."; console.warn('No substations'); return; }
-    if (!storm || !storm.outages){ status.textContent="Simulate a storm first (click 'Simulate storm')."; console.warn('No storm or plan'); return; }
+    if (!storm || !storm.outages){ status.textContent="Generate an outage scenario first."; console.warn('No storm or plan'); return; }
     if (!plan){ status.textContent="Plan restoration first (click 'Plan restoration')."; console.warn('No plan'); return; }
     status.textContent="Generating report...";
     _generateSimulationReport();
@@ -4242,13 +4642,43 @@ function _generateSimulationReport(){
   r += '-'.repeat(80) + '\n';
   r += `Outage Locations:   ${N.toLocaleString()}\n`;
   r += `Customers Affected: ${Math.round(totalCust).toLocaleString()} (${(100*totalCust/TOTAL_POP).toFixed(1)}% of county)\n`;
-  r += `Avg per Outage:     ${(totalCust/N).toFixed(0)} customers\n\n`;
+  r += `Avg per Outage:     ${(totalCust/N).toFixed(0)} customers\n`;
+  if (storm.placementModel){
+    const cfg=storm.modelConfig||{};
+    const meta=storm.restorationMetadata||{};
+    const research=!!currentOutageModelResult?.surfaces;
+    r += `Placement Model:    ${storm.placementModel}\n`;
+    r += `Weather Event:      ${cfg.stormId||'basic/no weather field'}\n`;
+    r += `Placement Formula:  ${research?'weather severity × relative customer exposure, Gaussian-smoothed':'network length × susceptibility (explicit basic fallback)'}\n`;
+    if (research){
+      r += `Gaussian Bandwidth: ${cfg.gaussianBandwidthKm} km\n`;
+      r += `Wind Parameters:    threshold ${cfg.windThresholdMph} mph; scale ${cfg.windExcessScaleMph} mph; exponent ${cfg.windExponent}\n`;
+      r += `Rain / Exposure:    coefficient ${cfg.rainCoefficient}; cap ${cfg.rainScoreCap}; exposure exponent ${cfg.exposureExponent}\n`;
+    }
+    r += `Initial Contract:   ${N.toLocaleString()} × 50 = ${Math.round(totalCust).toLocaleString()} customers (verified)\n`;
+    r += `Restoration Tags:   ${meta.critical||0} critical; ${meta.treeBlocked||0} tree-blocked; ${meta.nearFloodZone||0} flood-zone; ${meta.callbackDelayed||0} callback-delayed\n`;
+    r += `                    ${meta.switchRestored||0} automatic switch; ${meta.underground||0} underground\n`;
+  }
+  r += '\n';
 
   r += 'RESTORATION PLAN\n';
   r += '-'.repeat(80) + '\n';
   r += `Crews Deployed:     ${M.toLocaleString()}\n`;
-  const totalJobs = plan.crews.reduce((s,c)=>s+(c.jobs?.length||0),0);
+  const automaticJobs=plan.automaticJobs||[];
+  const allPlanJobs=[...automaticJobs,...plan.crews.flatMap(c=>c.jobs||[])].sort((a,b)=>a.etaFinish-b.etaFinish);
+  const outageByCoordinate=new Map(storm.outages.map(o=>[`${o.lat.toFixed(6)},${o.lon.toFixed(6)}`,o]));
+  function outageForPlanJob(job){
+    if (Number.isInteger(job.outageIdx)&&storm.outages[job.outageIdx]) return storm.outages[job.outageIdx];
+    return job.o?outageByCoordinate.get(`${job.o.lat.toFixed(6)},${job.o.lon.toFixed(6)}`):null;
+  }
+  const totalJobs = allPlanJobs.length;
   r += `Total Jobs:         ${totalJobs.toLocaleString()}\n`;
+  r += `Automatic Switching:${String(automaticJobs.length.toLocaleString()).padStart(7)} jobs restored in 5 minutes\n`;
+  r += `Planner:            ${plan.source==='server'?`server (${plan.backend||'unknown backend'})`:'in-browser restoration scheduler'}\n`;
+  const contract=plan.restorationContract;
+  if (contract){
+    r += `Customer Accounting:${String(Math.round(contract.inputCustomers).toLocaleString()).padStart(7)} initial; ${Math.round(contract.restoredCustomers).toLocaleString()} restored; ${Math.round(contract.remainingCustomers).toLocaleString()} remaining\n`;
+  }
   r += `Restoration Time:   ${Math.floor(totalTime/24)} days ${Math.round(totalTime%24)} hours (${totalTime.toFixed(1)} hours)\n`;
   r += `Est. Completion:    ${new Date(Date.now() + totalTime*3600000).toISOString()}\n\n`;
 
@@ -4262,7 +4692,8 @@ function _generateSimulationReport(){
   r += 'CREW PERFORMANCE\n';
   r += '-'.repeat(80) + '\n';
   const crewsWithJobs = plan.crews.filter(c => c.jobs?.length > 0).length;
-  const avgJobsPerCrew = totalJobs > 0 ? (totalJobs / crewsWithJobs).toFixed(1) : 0;
+  const fieldJobs=totalJobs-automaticJobs.length;
+  const avgJobsPerCrew = fieldJobs > 0&&crewsWithJobs>0 ? (fieldJobs / crewsWithJobs).toFixed(1) : 0;
   const totalCrewHours = plan.crews.reduce((s,c) => {
     if (!c.jobs?.length) return s;
     const lastJob = c.jobs[c.jobs.length - 1];
@@ -4271,14 +4702,14 @@ function _generateSimulationReport(){
   r += `Active Crews:         ${crewsWithJobs} of ${M}\n`;
   r += `Avg Jobs per Crew:    ${avgJobsPerCrew}\n`;
   r += `Total Crew-Hours:     ${Math.round(totalCrewHours)}\n`;
-  r += `Avg Hours per Job:    ${totalJobs > 0 ? (totalCrewHours / totalJobs).toFixed(1) : '—'}\n\n`;
+  r += `Avg Hours per Field Job: ${fieldJobs > 0 ? (totalCrewHours / fieldJobs).toFixed(1) : '—'}\n\n`;
 
   // TOP SUBSTATIONS
   r += 'TOP AFFECTED SUBSTATIONS\n';
   r += '-'.repeat(80) + '\n';
   const subOutages = {};
   storm.outages?.forEach(o => {
-    const subId = o.sub_id || 0;
+    const subId = Number.isInteger(o.sub_id)&&o.sub_id>=0?o.sub_id:0;
     if (!subOutages[subId]) subOutages[subId] = 0;
     subOutages[subId]++;
   });
@@ -4314,15 +4745,9 @@ function _generateSimulationReport(){
     const targetCust = totalCust * (pct / 100);
     let cumCust = 0;
     let timeToReach = totalTime;
-    for (const c of plan.crews) {
-      for (const j of c.jobs || []) {
-        cumCust += (storm.outages?.[j.outageIdx]?.popLoss || 0);
-        if (cumCust >= targetCust) {
-          timeToReach = j.etaFinish;
-          break;
-        }
-      }
-      if (cumCust >= targetCust) break;
+    for (const j of allPlanJobs) {
+      cumCust += outageForPlanJob(j)?.popLoss||0;
+      if (cumCust >= targetCust) { timeToReach=j.etaFinish; break; }
     }
     const days = Math.floor(timeToReach / 24);
     const hours = Math.round(timeToReach % 24);
@@ -4339,13 +4764,8 @@ function _generateSimulationReport(){
     r += 'No critical facility outages flagged in this scenario.\n\n';
   } else {
     const critFinish = [];
-    for (const c of plan.crews) {
-      for (const j of c.jobs || []) {
-        if (j.outageIdx !== undefined) {
-          const o = storm.outages?.[j.outageIdx];
-          if (o?.critical) critFinish.push(j.etaFinish);
-        }
-      }
+    for (const j of allPlanJobs) {
+      if (outageForPlanJob(j)?.critical) critFinish.push(j.etaFinish);
     }
     critFinish.sort((a, b) => a - b);
     const nPlanned = critFinish.length;
@@ -4359,8 +4779,6 @@ function _generateSimulationReport(){
         const idx = Math.min(nPlanned-1, Math.ceil(nPlanned * pct / 100) - 1);
         r += `  ${pct}% of critical facilities: ${fh(critFinish[idx])}\n`;
       });
-    } else {
-      r += '(Critical facility index unavailable — server-routed plan lacks outageIdx)\n';
     }
     r += '\n';
   }
@@ -4380,7 +4798,7 @@ function _generateSimulationReport(){
   r += `Active Crew-Hours:    ${Math.round(activeCH)} h (arrival → last job finish)\n`;
   r += `Idle Crew-Hours:      ${Math.round(idleCH)} h (wave staging delays + gaps)\n`;
   r += `Avg Span per Crew:    ${avgCrewSpan} h\n`;
-  r += `Jobs per Crew-Day:    ${(totalJobs / crewsWithJobs / (totalTime/24)).toFixed(1)}\n\n`;
+  r += `Field Jobs per Crew-Day: ${fieldJobs>0&&crewsWithJobs>0&&totalTime>0?(fieldJobs/crewsWithJobs/(totalTime/24)).toFixed(1):'—'}\n\n`;
 
   // DOE OE-417 COMPARISON
   const doeEvents = window.HARTFORD_DOE_OE417 || [];
@@ -4454,172 +4872,7 @@ function _generateSimulationReport(){
 }
 document.getElementById('exportReport').onclick = generateSimulationReport;
 
-// --- Recommendation: smallest crew count that's within tolerance of the time floor ---
-// Pure scheduler — same algorithm as planRestoration() but no DOM rendering,
-// no PALETTE color tagging, no plan-state mutation. Returns just totalTime.
-function scheduleOnly(M, outages){
-  const N = outages.length;
-  if (N === 0 || M === 0) return 0;
-  // Mirror the realism modeled by planRestoration so the recommendation tracks
-  // what the user will actually see when they click Plan restoration.
-  const seed = +seedI.value | 0;
-  const realistic = document.getElementById('realisticMode').checked;
-  const TRAVEL_MPH       = realistic ? 25   : 30;
-  const ASSESSMENT_DELAY = realistic ? 12   : 0;
-  const WORKDAY_HOURS    = realistic ? 14   : 24;
-  const ROAD_MULTIPLIER  = realistic ? 1.5  : 1.0;
-  function clampToWorkday(t){
-    if (!realistic) return t;
-    const dayN = Math.floor(t/24);
-    const inDay = t - dayN*24;
-    return inDay > WORKDAY_HOURS ? (dayN+1)*24 : t;
-  }
-
-  // Stochastic repair durations — same generator settings as planRestoration,
-  // re-seeded each call so the binary search compares apples to apples.
-  const rndRepair = mulberry32(seed*1117 + 23);
-  let _bmHave=false, _bmZ=0;
-  function nextNormal(){
-    if (_bmHave){ _bmHave=false; return _bmZ; }
-    const u1 = Math.max(1e-10, rndRepair());
-    const u2 = rndRepair();
-    const mag = Math.sqrt(-2*Math.log(u1));
-    _bmHave=true; _bmZ = mag*Math.sin(2*Math.PI*u2);
-    return mag*Math.cos(2*Math.PI*u2);
-  }
-  function sampleRepair(){
-    if (!realistic) return 1.5;
-    return Math.max(0.25, Math.min(12, Math.exp(Math.log(2) + 0.857*nextNormal())));
-  }
-
-  const oLat = new Float64Array(N), oLon = new Float64Array(N);
-  const discTime = new Float64Array(N);
-  for (let i=0;i<N;i++){oLat[i]=outages[i].lat; oLon[i]=outages[i].lon;}
-  if (realistic){
-    const discMaxTail = Math.max(3, 36 * Math.sqrt(N / 20000));
-    const rndDisc = mulberry32(seed*991 + 7);
-    for (let i=0;i<N;i++){
-      const u = rndDisc();
-      if (u < 0.30){
-        discTime[i] = ASSESSMENT_DELAY + u * (1.0/0.30);
-      } else {
-        const v = (u - 0.30) / 0.70;
-        const tAfter = -Math.log(Math.max(1e-9, 1 - 0.99*v)) / 0.1;
-        discTime[i] = ASSESSMENT_DELAY + 1 + Math.min(discMaxTail, tAfter);
-      }
-    }
-  }
-
-  let depots;
-  if (M <= 200) {
-    const rnd = mulberry32(seed*31 + 99);
-    const pts = outages.map(o=>({lat:o.lat,lon:o.lon,w:1}));
-    depots = kmeans(pts, Math.min(M, pts.length), countyGeo, rnd, 8);
-  } else {
-    depots = [];
-    for (let i=0;i<M;i++){const s=outages[i%N]; depots.push({lat:s.lat,lon:s.lon});}
-  }
-
-  // Mutual-aid waves (item 4)
-  let crewArrivals;
-  if (realistic && M >= 6){
-    const nInit = Math.ceil(M * 0.5);
-    const nW1   = Math.ceil(M * 0.3);
-    const nW2   = M - nInit - nW1;
-    crewArrivals = [];
-    for (let i=0;i<nInit;i++) crewArrivals.push(ASSESSMENT_DELAY);
-    for (let i=0;i<nW1;i++)   crewArrivals.push(ASSESSMENT_DELAY + 24);
-    for (let i=0;i<nW2;i++)   crewArrivals.push(ASSESSMENT_DELAY + 48);
-  } else {
-    crewArrivals = new Array(M).fill(ASSESSMENT_DELAY);
-  }
-
-  const crews = depots.map((d,i)=>({time:crewArrivals[i], curLat:d.lat, curLon:d.lon}));
-  const done = new Uint8Array(N);
-  let criticalCount = 0;
-  if (realistic){
-    for (let i=0;i<N;i++){
-      if (outages[i].critical) criticalCount++;
-      else done[i]=1;
-    }
-  }
-  let remaining = realistic ? criticalCount : N;
-  let inCriticalPhase = realistic && criticalCount > 0;
-  function hPush(h,it){h.push(it);let i=h.length-1;while (i>0){const p=(i-1)>>1;if (h[p][0]<=h[i][0]) break;const t=h[i];h[i]=h[p];h[p]=t;i=p;}}
-  function hPop(h){const top=h[0];const last=h.pop();if (h.length>0){h[0]=last;let i=0;const L=h.length;while (true){const l=2*i+1,r=2*i+2;let s=i;if (l<L&&h[l][0]<h[s][0]) s=l;if (r<L&&h[r][0]<h[s][0]) s=r;if (s===i) break;const t=h[i];h[i]=h[s];h[s]=t;i=s;}}return top;}
-  const nnGrid=buildNNGrid(oLat,oLon,N);
-  const heap=[];
-  for (let c=0;c<crews.length;c++) hPush(heap,[crewArrivals[c],c]);
-  // Same O(log N) optimization as planRestoration — sorted-index nextDiscoveryAfter.
-  let discOrder = null;
-  const discSortedTimes = realistic ? new Float64Array(N) : null;
-  let firstUndoneDisc = 0;
-  if (realistic){
-    discOrder = new Array(N);
-    for (let i=0;i<N;i++) discOrder[i] = i;
-    discOrder.sort((a,b) => discTime[a] - discTime[b]);
-    for (let i=0;i<N;i++) discSortedTimes[i] = discTime[discOrder[i]];
-  }
-  function nextDiscoveryAfter(t){
-    if (!realistic) return Infinity;
-    while (firstUndoneDisc < N && done[discOrder[firstUndoneDisc]]) firstUndoneDisc++;
-    if (firstUndoneDisc >= N) return Infinity;
-    let lo = firstUndoneDisc, hi = N;
-    while (lo < hi){
-      const mid = (lo + hi) >> 1;
-      if (discSortedTimes[mid] > t) hi = mid;
-      else lo = mid + 1;
-    }
-    for (let i = lo; i < N; i++){
-      if (!done[discOrder[i]]) return discSortedTimes[i];
-    }
-    return Infinity;
-  }
-  while (remaining>0){
-    const top=hPop(heap);
-    const cTime=top[0], ci=top[1];
-    const crew=crews[ci];
-    const cLat=crew.curLat, cLon=crew.curLon;
-    const bestI = realistic
-      ? nnGridFindVisible(nnGrid, cLat, cLon, done, oLat, oLon, discTime, cTime)
-      : nnGridFind(nnGrid, cLat, cLon, done, oLat, oLon);
-    if (bestI===-1){
-      if (inCriticalPhase){
-        for (let i=0;i<N;i++) if (!outages[i].critical) done[i]=0;
-        remaining = N - criticalCount;
-        inCriticalPhase = false;
-        firstUndoneDisc = 0;
-        hPush(heap,[cTime,ci]);
-        continue;
-      }
-      if (realistic){
-        const nextT = nextDiscoveryAfter(cTime);
-        if (!isFinite(nextT)) break;
-        crew.time = nextT;
-        hPush(heap,[nextT,ci]);
-        continue;
-      }
-      break;
-    }
-    done[bestI]=1; remaining--;
-    if (remaining===0 && inCriticalPhase){
-      for (let i=0;i<N;i++) if (!outages[i].critical) done[i]=0;
-      remaining = N - criticalCount;
-      inCriticalPhase = false;
-      firstUndoneDisc = 0;
-    }
-    const o=outages[bestI];
-    const miles = dist({lat:cLat,lon:cLon}, o) * ROAD_MULTIPLIER;
-    const repairH = sampleRepair();
-    let eta = cTime + miles/TRAVEL_MPH + repairH;
-    eta = clampToWorkday(eta);
-    crew.time=eta; crew.curLat=o.lat; crew.curLon=o.lon;
-    hPush(heap,[eta,ci]);
-  }
-  let t=0; for (const c of crews) if (c.time>t) t=c.time;
-  return t;
-}
-
+// --- Recommendation: smallest crew count within tolerance of the time floor ---
 function yieldToBrowser(){ return new Promise(r => setTimeout(r, 0)); }
 
 // Server-backed optimal-crew search. Each scheduler call inside the binary
@@ -4629,6 +4882,12 @@ async function recommendCrewCountServer(){
   if (!storm || !storm.outages.length) return false;
   // Live mode: force the in-browser search (server has no live-mode semantics).
   if (storm.isLive) return false;
+  // Keep recommendation semantics aligned with the actual plan. The current
+  // backend does not implement these post-placement browser behaviors.
+  const meta=storm.restorationMetadata||{};
+  if (meta.switchRestored||meta.underground
+      ||(document.getElementById('floodZoneClosures').checked&&meta.nearFloodZone)
+      ||(document.getElementById('customerCallbackLag').checked&&meta.callbackDelayed)) return false;
   const useServer = document.getElementById('useServerToggle').checked;
   if (!(useServer && _serverHealthy)) return false;
   const N = storm.outages.length;
@@ -4717,8 +4976,8 @@ async function recommendCrewCountServer(){
 
 async function recommendCrewCount(){
   if (!storm || !storm.outages.length){
-    status.textContent="Simulate a storm first.";
-    document.getElementById('recCrewDetail').textContent='— simulate a storm first';
+    status.textContent="Generate an outage scenario first.";
+    document.getElementById('recCrewDetail').textContent='— generate an outage scenario first';
     return;
   }
   // Prefer server (Numba) when available; falls back to in-browser if the
@@ -4734,8 +4993,7 @@ async function recommendCrewCount(){
   status.textContent = `Preparing search over ${N.toLocaleString()} jobs…`;
   await yieldToBrowser();
 
-  // --- Precompute everything that doesn't depend on M ONCE, instead of
-  // rebuilding it inside every scheduleOnly call. At N=25K this brings the
+  // --- Precompute everything that doesn't depend on M ONCE. At N=25K this brings the
   // shared O(N log N) setup cost from "~10x repeated" down to "1x" across
   // the whole binary search.
   const TRAVEL_MPH       = realistic ? 25   : 30;
@@ -4775,16 +5033,20 @@ async function recommendCrewCount(){
   const discTime = new Float64Array(N);
   for (let i=0;i<N;i++){ oLat[i]=outages[i].lat; oLon[i]=outages[i].lon; }
   if (realistic && !isLive){
-    const discMaxTail = Math.max(3, 36 * Math.sqrt(N / 20000));
-    const rndDisc = mulberry32(seed*991 + 7);
-    for (let i=0;i<N;i++){
-      const u = rndDisc();
-      if (u < 0.30){
-        discTime[i] = ASSESSMENT_DELAY + u * (1.0/0.30);
-      } else {
-        const v = (u - 0.30) / 0.70;
-        const tAfter = -Math.log(Math.max(1e-9, 1 - 0.99*v)) / 0.1;
-        discTime[i] = ASSESSMENT_DELAY + 1 + Math.min(discMaxTail, tAfter);
+    if (storm.restorationMetadata){
+      discTime.fill(ASSESSMENT_DELAY);
+    } else {
+      const discMaxTail = Math.max(3, 36 * Math.sqrt(N / 20000));
+      const rndDisc = mulberry32(seed*991 + 7);
+      for (let i=0;i<N;i++){
+        const u = rndDisc();
+        if (u < 0.30){
+          discTime[i] = ASSESSMENT_DELAY + u * (1.0/0.30);
+        } else {
+          const v = (u - 0.30) / 0.70;
+          const tAfter = -Math.log(Math.max(1e-9, 1 - 0.99*v)) / 0.1;
+          discTime[i] = ASSESSMENT_DELAY + 1 + Math.min(discMaxTail, tAfter);
+        }
       }
     }
   }
@@ -4798,8 +5060,12 @@ async function recommendCrewCount(){
   }
   const nnGrid = buildNNGrid(oLat,oLon,N);
   let criticalCount = 0;
+  let switchRestoredCount=0;
   if (realistic){
-    for (let i=0;i<N;i++) if (outages[i].critical) criticalCount++;
+    for (let i=0;i<N;i++){
+      if (outages[i].switch_restored) switchRestoredCount++;
+      else if (outages[i].critical) criticalCount++;
+    }
   }
   await yieldToBrowser();
 
@@ -4842,12 +5108,13 @@ async function recommendCrewCount(){
     }
     const crews = depots.map((d,i)=>({time:crewArrivals[i], curLat:d.lat, curLon:d.lon}));
     const done = new Uint8Array(N);
+    for (let i=0;i<N;i++) if (outages[i].switch_restored) done[i]=1;
     // Same zero-critical guard as planRestoration: only run the critical-
     // first phase when there IS a critical outage (live mode has none).
     if (realistic && criticalCount > 0){
       for (let i=0;i<N;i++) if (!outages[i].critical) done[i]=1;
     }
-    let remaining = (realistic && criticalCount > 0) ? criticalCount : N;
+    let remaining = (realistic && criticalCount > 0) ? criticalCount : (N-switchRestoredCount);
     let inCriticalPhase = realistic && criticalCount > 0;
     let firstUndoneDisc = 0;
     function nextDiscoveryAfter(t){
@@ -4874,21 +5141,18 @@ async function recommendCrewCount(){
       const cTime=top[0], ci=top[1];
       const crew=crews[ci];
       const cLat=crew.curLat, cLon=crew.curLon;
-      const bestI = realistic
-        ? nnGridFindVisible(nnGrid, cLat, cLon, done, oLat, oLon, discTime, cTime)
-        : nnGridFind(nnGrid, cLat, cLon, done, oLat, oLon);
+      const bestI = N<=5000
+        ? linearFindVisible(cLat,cLon,done,oLat,oLon,realistic?discTime:null,cTime)
+        : realistic
+          ? nnGridFindVisible(nnGrid, cLat, cLon, done, oLat, oLon, discTime, cTime)
+          : nnGridFind(nnGrid, cLat, cLon, done, oLat, oLon);
       if (bestI===-1){
-        if (inCriticalPhase){
-          for (let i=0;i<N;i++) if (!outages[i].critical) done[i]=0;
-          remaining = N - criticalCount;
-          inCriticalPhase = false;
-          firstUndoneDisc = 0;
-          hPush(heap,[cTime,ci]);
-          continue;
-        }
         if (realistic){
           const nextT = nextDiscoveryAfter(cTime);
-          if (!isFinite(nextT)) break;
+          if (!isFinite(nextT)) throw new Error(`Recommendation scheduler lost track of ${remaining} unfinished outages.`);
+          for (const entry of heap){
+            if (entry[0]<nextT){entry[0]=nextT;crews[entry[1]].time=nextT;}
+          }
           crew.time = nextT;
           hPush(heap,[nextT,ci]);
           continue;
@@ -4897,14 +5161,16 @@ async function recommendCrewCount(){
       }
       done[bestI]=1; remaining--;
       if (remaining===0 && inCriticalPhase){
-        for (let i=0;i<N;i++) if (!outages[i].critical) done[i]=0;
-        remaining = N - criticalCount;
+        for (let i=0;i<N;i++){
+          if (!outages[i].critical&&!outages[i].switch_restored) done[i]=0;
+        }
+        remaining = N - criticalCount - switchRestoredCount;
         inCriticalPhase = false;
         firstUndoneDisc = 0;
       }
       const o=outages[bestI];
       const miles = dist({lat:cLat,lon:cLon}, o) * ROAD_MULTIPLIER;
-      const repairH = sampleRepair();
+      const repairH = sampleRepair()*(o.underground?(o.underground_repair_multiplier||1.35):1);
       let eta = cTime + miles/TRAVEL_MPH + repairH;
       eta = clampToWorkday(eta);
       crew.time=eta; crew.curLat=o.lat; crew.curLon=o.lon;
@@ -4920,7 +5186,7 @@ async function recommendCrewCount(){
         await new Promise(r => setTimeout(r, 0));
       }
     }
-    let t=0; for (const c of crews) if (c.time>t) t=c.time;
+    let t=switchRestoredCount?5/60:0; for (const c of crews) if (c.time>t) t=c.time;
     return t;
   }
 
@@ -4982,6 +5248,7 @@ document.getElementById('recommendCrews').onclick = recommendCrewCount;
   let geo;
   try {
     geo=await loadBoundary();
+    stateBoundaryGeo=geo;
     // Grid generation (feeders/laterals/depots/demand-points) is constrained
     // by countyGeo + the inside-bitmap, which should be the LAND-only shape
     // so nothing gets placed out in Long Island Sound -- but the red outline
@@ -5043,7 +5310,8 @@ document.getElementById('recommendCrews').onclick = recommendCrewCount;
     status.textContent="Boundary load failed: "+e.message;
     return;
   }
-  status.textContent="Ready. Click \"Generate distribution grid\" to start.";
+  initializeOutageModelUI();
+  status.textContent="Ready. Generate or review the distribution grid, then create an outage scenario.";
   // Auto-generate for first view
   generateGrid().catch(e => console.error('Initial grid generation failed:', e));
   renderCriticalFacilities();

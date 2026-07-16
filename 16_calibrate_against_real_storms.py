@@ -133,7 +133,7 @@ const _CHECKED_BY_DEFAULT = new Set([
   'crewStickiness','stormDrag','soilSaturation','preStormStaging','weatherWindow',
   'crewTimeSeriesRamp','crewFatigueOT','floodZoneClosures','equipmentShortage',
   'customerCallbackLag','undergroundLines','switchingBackfeed','amiCoverage',
-  'mutualAidTravel','roadClosure','windFieldWeighting','useServerToggle',
+  'mutualAidTravel','roadClosure','useServerToggle',
   'showCriticalFacilities','useCensusTracts',
 ]);
 const _VALUE_DEFAULTS = {

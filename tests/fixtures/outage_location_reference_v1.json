@@ -1,0 +1,1141 @@
+{
+  "equations": {
+    "rain_amplification": "1 + rain_coefficient * min(rain_in_per_hour / rain_reference_in, rain_score_cap)",
+    "raw_impact": "weather_severity * relative_exposure ** exposure_exponent",
+    "relative_exposure": "smoothed_customer_accounts / mean_in_state_exposure",
+    "segment_weight": "smoothed_impact_at_midpoint * segment_length_km * susceptibility",
+    "smoothed_impact": "boundary_aware_gaussian(raw_impact, gaussian_bandwidth_km)",
+    "weather_severity": "wind_damage * rain_amplification",
+    "wind_damage": "max(0, (wind_mph - wind_threshold_mph) / wind_excess_scale_mph) ** wind_exponent"
+  },
+  "full_isaias_reference": {
+    "config": {
+      "customer_smoothing_km": 6.0,
+      "customers_per_outage": 50,
+      "exposure_exponent": 1.0,
+      "feeder_susceptibility": 1.0,
+      "gaussian_bandwidth_km": 10.0,
+      "lateral_susceptibility": 1.25,
+      "n_outages": 2000,
+      "rain_coefficient": 0.5,
+      "rain_reference_in": 1.0,
+      "rain_score_cap": 2.0,
+      "rural_baseline_fraction": 0.02,
+      "seed": 42,
+      "storm_id": "isaias_2020",
+      "wind_excess_scale_mph": 25.0,
+      "wind_exponent": 2.0,
+      "wind_threshold_mph": 35.0
+    },
+    "expected": {
+      "candidate_feeder_segments": 29603,
+      "candidate_lateral_segments": 81186,
+      "census_tracts": 883,
+      "feeder_outages": 777,
+      "feeder_sampling_weight_share": 0.3891588381803497,
+      "grid_shape": [
+        41,
+        65
+      ],
+      "lateral_outages": 1223,
+      "maximum_weather_severity": 0.8991539199999999,
+      "network_feeders": 2772,
+      "network_laterals": 16546,
+      "network_substations": 299,
+      "positive_weather_severity_cells": 1232,
+      "positive_weight_atomic_segments": 110789,
+      "python_reference_core_outages_sha256": "ddbe34c97eea18844fb4816f64341f76663ffccec505d9cc2e5d61318063f992",
+      "raw_customer_total": 1633000.0000000002,
+      "raw_impact_positive_cells": 1232,
+      "raw_impact_total": 378.88342686647,
+      "represented_customers": 100000,
+      "sampled_outages": 2000,
+      "sampling_probability_total": 1.0,
+      "smoothed_customer_total": 1633000.0000000002,
+      "smoothed_impact_positive_cells": 1576,
+      "smoothed_impact_total": 378.88342686647,
+      "total_customer_accounts": 1633000.0,
+      "unique_sampled_segments": 2000,
+      "valid_connecticut_cells": 1576
+    },
+    "input_sha256": {
+      "boundary": "2b44fb0fcd9cbb8443e7cc8e9019732c2c303c0c0e81cb4a6cfd2dce73938f29",
+      "census_tracts": "8fac0179659998639eee3d85ca3cb71d9b7d3eea297f15fff11604f8a701ffba",
+      "network": "3606e61bbb334715f6631d7652a798fa219ccc3fbdf83e58a1d16e36e03958c8",
+      "weather": "5e0a14c384c05ddbe3fc986c6a7be2ddd705818242de61f6bfbb49506c417697"
+    },
+    "parity_policy": {
+      "archival_only_not_required_to_match": [
+        "python_reference_core_outages_sha256 because the browser uses Mulberry32",
+        "individual sampled coordinates across different PRNG algorithms"
+      ],
+      "must_match_with_numeric_tolerance": [
+        "surface checkpoints",
+        "component totals and maxima",
+        "mask and positive-support counts",
+        "network candidate counts and relationships",
+        "sample count, uniqueness, geography, and customer totals"
+      ]
+    },
+    "storm": {
+      "date": "2020-08-04",
+      "name": "Tropical Storm Isaias",
+      "precipitation_type": "rain",
+      "storm_id": "isaias_2020"
+    },
+    "surface_checkpoints": [
+      {
+        "column": 0,
+        "in_connecticut": false,
+        "latitude": 40.9,
+        "longitude": -73.8,
+        "rain_amplification": 0.0,
+        "rain_in_per_hour": 0.0,
+        "raw_customer_accounts": 0.0,
+        "raw_impact": 0.0,
+        "relative_customer_exposure": 0.0,
+        "row": 0,
+        "sampling_probability": 0.0,
+        "smoothed_customer_accounts": 0.0,
+        "smoothed_impact": 0.0,
+        "weather_severity": 0.0,
+        "wind_damage_score": 0.0,
+        "wind_mph": 0.0
+      },
+      {
+        "column": 8,
+        "in_connecticut": true,
+        "latitude": 41.05,
+        "longitude": -73.5375,
+        "rain_amplification": 1.125,
+        "rain_in_per_hour": 0.25,
+        "raw_customer_accounts": 17964.648963148185,
+        "raw_impact": 1.6875197084038331,
+        "relative_customer_exposure": 3.243982522883185,
+        "row": 5,
+        "sampling_probability": 0.002626675245800877,
+        "smoothed_customer_accounts": 3361.3093019468542,
+        "smoothed_impact": 0.9952037183943636,
+        "weather_severity": 0.5202000000000001,
+        "wind_damage_score": 0.4624000000000001,
+        "wind_mph": 52.0
+      },
+      {
+        "column": 27,
+        "in_connecticut": true,
+        "latitude": 41.32,
+        "longitude": -72.9140625,
+        "rain_amplification": 1.025,
+        "rain_in_per_hour": 0.05,
+        "raw_customer_accounts": 13815.458916970252,
+        "raw_impact": 1.5729445049967696,
+        "relative_customer_exposure": 3.8419824669396374,
+        "row": 14,
+        "sampling_probability": 0.00209833286120548,
+        "smoothed_customer_accounts": 3980.9374165688005,
+        "smoothed_impact": 0.7950235451600571,
+        "weather_severity": 0.4094095999999999,
+        "wind_damage_score": 0.3994239999999999,
+        "wind_mph": 50.8
+      },
+      {
+        "column": 32,
+        "in_connecticut": true,
+        "latitude": 41.5,
+        "longitude": -72.75,
+        "rain_amplification": 1.045,
+        "rain_in_per_hour": 0.09,
+        "raw_customer_accounts": 602.4016759697951,
+        "raw_impact": 0.19602181500574242,
+        "relative_customer_exposure": 1.5489222834590217,
+        "row": 20,
+        "sampling_probability": 0.00042134764067761505,
+        "smoothed_customer_accounts": 1604.9429498024003,
+        "smoothed_impact": 0.15964163800203685,
+        "weather_severity": 0.12655368000000006,
+        "wind_damage_score": 0.12110400000000006,
+        "wind_mph": 43.7
+      },
+      {
+        "column": 34,
+        "in_connecticut": true,
+        "latitude": 41.77,
+        "longitude": -72.684375,
+        "rain_amplification": 1.015,
+        "rain_in_per_hour": 0.03,
+        "raw_customer_accounts": 13631.952499732104,
+        "raw_impact": 0.0,
+        "relative_customer_exposure": 4.144627250082818,
+        "row": 29,
+        "sampling_probability": 5.43124439494508e-05,
+        "smoothed_customer_accounts": 4294.528108746982,
+        "smoothed_impact": 0.020578084885060993,
+        "weather_severity": 0.0,
+        "wind_damage_score": 0.0,
+        "wind_mph": 34.1
+      },
+      {
+        "column": 53,
+        "in_connecticut": true,
+        "latitude": 41.89,
+        "longitude": -72.06093750000001,
+        "rain_amplification": 1.0,
+        "rain_in_per_hour": 0.0,
+        "raw_customer_accounts": 8.255241696856976,
+        "raw_impact": 0.0,
+        "relative_customer_exposure": 0.18989633662908792,
+        "row": 33,
+        "sampling_probability": 1.0483579008585754e-07,
+        "smoothed_customer_accounts": 196.7644147939725,
+        "smoothed_impact": 3.972054340598361e-05,
+        "weather_severity": 0.0,
+        "wind_damage_score": 0.0,
+        "wind_mph": 32.7
+      },
+      {
+        "column": 64,
+        "in_connecticut": false,
+        "latitude": 42.1,
+        "longitude": -71.7,
+        "rain_amplification": 0.0,
+        "rain_in_per_hour": 0.0,
+        "raw_customer_accounts": 0.0,
+        "raw_impact": 0.0,
+        "relative_customer_exposure": 0.0,
+        "row": 40,
+        "sampling_probability": 0.0,
+        "smoothed_customer_accounts": 0.0,
+        "smoothed_impact": 0.0,
+        "weather_severity": 0.0,
+        "wind_damage_score": 0.0,
+        "wind_mph": 0.0
+      }
+    ]
+  },
+  "purpose": "Temporary Python reference for JavaScript migration parity; not a browser runtime input",
+  "schema": "outage_location_web_migration_reference_v1",
+  "schema_version": 1,
+  "small_deterministic_reference": {
+    "expected": {
+      "customer_surface": {
+        "connecticut_mask": [
+          [
+            true,
+            true,
+            true
+          ],
+          [
+            true,
+            true,
+            true
+          ],
+          [
+            true,
+            true,
+            true
+          ]
+        ],
+        "grid": {
+          "latitude_cell_km": 11.119500000000157,
+          "latitudes": [
+            41.0,
+            41.1,
+            41.2
+          ],
+          "longitude_cell_km": 8.37924814069818,
+          "longitudes": [
+            -72.8,
+            -72.7,
+            -72.6
+          ],
+          "shape": [
+            3,
+            3
+          ]
+        },
+        "parameters": {
+          "population_to_customer_ratio": 0.45286338334705145,
+          "rural_baseline_fraction": 0.02,
+          "smoothing_km": 6.0
+        },
+        "raw_customer_accounts": [
+          [
+            366.81934051115513,
+            40.75770450120085,
+            0.0
+          ],
+          [
+            40.75770450122981,
+            912.519717444306,
+            20.378852250626483
+          ],
+          [
+            0.0,
+            20.378852250624874,
+            183.40967025553704
+          ]
+        ],
+        "schema": "connecticut_customer_exposure_v1",
+        "schema_version": 1,
+        "smoothed_customer_accounts": [
+          [
+            255.12895603564644,
+            157.64403133296864,
+            52.84717159925293
+          ],
+          [
+            224.2963747875186,
+            382.9995322041499,
+            198.99865482937585
+          ],
+          [
+            48.60309464496524,
+            117.91464922785397,
+            146.58937705294872
+          ]
+        ],
+        "summary": {
+          "raw_total": 1585.0218417146802,
+          "smoothed_total": 1585.0218417146802,
+          "total_customer_accounts": 1585.0218417146802,
+          "valid_cell_count": 9
+        }
+      },
+      "impact_surface": {
+        "connecticut_mask": [
+          [
+            true,
+            true,
+            true
+          ],
+          [
+            true,
+            true,
+            true
+          ],
+          [
+            true,
+            true,
+            true
+          ]
+        ],
+        "grid": {
+          "latitudes": [
+            41.0,
+            41.1,
+            41.2
+          ],
+          "longitudes": [
+            -72.8,
+            -72.7,
+            -72.6
+          ],
+          "shape": [
+            3,
+            3
+          ]
+        },
+        "parameters": {
+          "exposure_exponent": 1.0,
+          "gaussian_bandwidth_km": 10.0,
+          "mean_customer_accounts_per_valid_cell": 176.1135379682978
+        },
+        "raw_impact": [
+          [
+            0.0,
+            0.04475636375022634,
+            0.16204019857197813
+          ],
+          [
+            0.0,
+            3.2620961734903107,
+            4.429385360889033
+          ],
+          [
+            0.044156146273061,
+            0.4927797308082172,
+            2.0975402256692353
+          ]
+        ],
+        "relative_customer_exposure": [
+          [
+            1.4486618063488805,
+            0.8951272750045266,
+            0.30007444179995946
+          ],
+          [
+            1.2735896250513927,
+            2.174730782326874,
+            1.1299452451247536
+          ],
+          [
+            0.2759759142066312,
+            0.6695376777285559,
+            0.8323572324084266
+          ]
+        ],
+        "sampling_probability": [
+          [
+            0.054028256818445114,
+            0.08356052915595027,
+            0.11031540802004651
+          ],
+          [
+            0.08373147399341144,
+            0.13076976076361602,
+            0.17456608787685612
+          ],
+          [
+            0.07497779951146968,
+            0.12097729194829669,
+            0.1670733919119081
+          ]
+        ],
+        "schema": "connecticut_combined_impact_v1",
+        "schema_version": 1,
+        "smoothed_impact": [
+          [
+            0.5690663488935523,
+            0.8801225143757717,
+            1.1619250770874126
+          ],
+          [
+            0.8819230343304155,
+            1.3773657468443181,
+            1.8386616951668742
+          ],
+          [
+            0.7897227326701072,
+            1.2742240798067601,
+            1.7597429702768503
+          ]
+        ],
+        "storm_id": "small_test_storm",
+        "summary": {
+          "probability_total": 1.0,
+          "raw_positive_cells": 7,
+          "raw_total": 10.53275419945206,
+          "smoothed_positive_cells": 9,
+          "smoothed_total": 10.532754199452063
+        },
+        "units": {
+          "raw_impact": "dimensionless",
+          "relative_customer_exposure": "multiple of mean in-state grid-cell exposure",
+          "sampling_probability": "probability mass",
+          "smoothed_impact": "dimensionless",
+          "weather_severity": "dimensionless"
+        },
+        "weather_severity": [
+          [
+            0.0,
+            0.05000000000000001,
+            0.54
+          ],
+          [
+            0.0,
+            1.5,
+            3.9199999999999995
+          ],
+          [
+            0.16000000000000003,
+            0.7360000000000001,
+            2.52
+          ]
+        ]
+      },
+      "python_sample_reference": {
+        "config": {
+          "customer_smoothing_km": 6.0,
+          "customers_per_outage": 50,
+          "exposure_exponent": 1.0,
+          "feeder_susceptibility": 1.0,
+          "gaussian_bandwidth_km": 10.0,
+          "lateral_susceptibility": 1.25,
+          "n_outages": 3,
+          "rain_coefficient": 0.5,
+          "rain_reference_in": 1.0,
+          "rain_score_cap": 2.0,
+          "rural_baseline_fraction": 0.02,
+          "seed": 17,
+          "storm_id": "small_test_storm",
+          "wind_excess_scale_mph": 25.0,
+          "wind_exponent": 2.0,
+          "wind_threshold_mph": 35.0
+        },
+        "inputs": {
+          "fixture": "small"
+        },
+        "outages": [
+          {
+            "critical": false,
+            "customer_exposure": 193.4534127161141,
+            "customers": 50,
+            "feeder_id": 1,
+            "is_feeder": 1,
+            "lat": 41.19730632212095,
+            "lateral_id": null,
+            "local_rain_in": 0.374999999999984,
+            "local_weather_severity": 0.5989999999999893,
+            "local_wind_mph": 48.750000000000085,
+            "lon": -72.79730632212095,
+            "network_kind": "feeder",
+            "network_segment_id": "feeder:1:0",
+            "priority": 0,
+            "raw_impact": 0.9497580126428489,
+            "relative_customer_exposure": 1.098458499828319,
+            "sampling_weight": 0.14547756437709666,
+            "segment_length_km": 13.91935269467519,
+            "smoothed_impact": 1.0808088984128967,
+            "sub_id": 0,
+            "tree_blocked": -1
+          },
+          {
+            "critical": false,
+            "customer_exposure": 211.625553328582,
+            "customers": 50,
+            "feeder_id": 0,
+            "is_feeder": 1,
+            "lat": 41.138417110454434,
+            "lateral_id": null,
+            "local_rain_in": 1.1999999999999005,
+            "local_weather_severity": 2.168999999999812,
+            "local_wind_mph": 62.49999999999911,
+            "lon": -72.66158288954557,
+            "network_kind": "feeder",
+            "network_segment_id": "feeder:0:1",
+            "priority": 0,
+            "raw_impact": 2.57045037271401,
+            "relative_customer_exposure": 1.2016427343971516,
+            "sampling_weight": 0.2103133073329146,
+            "segment_length_km": 13.919352694675831,
+            "smoothed_impact": 1.5624986230236637,
+            "sub_id": 0,
+            "tree_blocked": -1
+          },
+          {
+            "critical": false,
+            "customer_exposure": 301.6894043419324,
+            "customers": 50,
+            "feeder_id": 0,
+            "is_feeder": 0,
+            "lat": 41.12985580784665,
+            "lateral_id": 0,
+            "local_rain_in": 1.0679999999999223,
+            "local_weather_severity": 1.8057599999998444,
+            "local_wind_mph": 60.99999999999929,
+            "lon": -72.67014419215334,
+            "network_kind": "lateral",
+            "network_segment_id": "lateral:0:0",
+            "priority": 0,
+            "raw_impact": 2.959189574731981,
+            "relative_customer_exposure": 1.7130392576420759,
+            "sampling_weight": 0.0975993080059726,
+            "segment_length_km": 5.568663557882838,
+            "smoothed_impact": 1.44996552078719,
+            "sub_id": 0,
+            "tree_blocked": -1
+          }
+        ],
+        "scenario_id": "small_test_storm_seed17",
+        "schema": "connecticut_outage_scenario_v1",
+        "schema_version": 1,
+        "total_customers": 150
+      },
+      "weather_surface": {
+        "connecticut_mask": [
+          [
+            true,
+            true,
+            true
+          ],
+          [
+            true,
+            true,
+            true
+          ],
+          [
+            true,
+            true,
+            true
+          ]
+        ],
+        "grid": {
+          "latitudes": [
+            41.0,
+            41.1,
+            41.2
+          ],
+          "longitudes": [
+            -72.8,
+            -72.7,
+            -72.6
+          ],
+          "shape": [
+            3,
+            3
+          ]
+        },
+        "parameters": {
+          "rain_coefficient": 0.5,
+          "rain_reference_in": 1.0,
+          "rain_score_cap": 2.0,
+          "wind_excess_scale_mph": 25.0,
+          "wind_exponent": 2.0,
+          "wind_threshold_mph": 35.0
+        },
+        "rain_amplification": [
+          [
+            1.0,
+            1.25,
+            1.5
+          ],
+          [
+            1.1,
+            1.5,
+            2.0
+          ],
+          [
+            1.0,
+            1.15,
+            1.75
+          ]
+        ],
+        "rain_in_per_hour": [
+          [
+            0.0,
+            0.5,
+            1.0
+          ],
+          [
+            0.2,
+            1.0,
+            2.0
+          ],
+          [
+            0.0,
+            0.3,
+            1.5
+          ]
+        ],
+        "schema": "connecticut_weather_severity_v1",
+        "schema_version": 1,
+        "storm": {
+          "date": "2020-01-01",
+          "name": "Small deterministic storm",
+          "precipitation_type": "rain",
+          "storm_id": "small_test_storm"
+        },
+        "summary": {
+          "maximum_severity": 3.9199999999999995,
+          "positive_severity_cells": 7
+        },
+        "units": {
+          "rain_amplification": "dimensionless multiplier",
+          "rain_in_per_hour": "inches accumulated over one hour",
+          "weather_severity": "dimensionless",
+          "wind_damage_score": "dimensionless",
+          "wind_mph": "miles per hour (HRRR peak surface gust)"
+        },
+        "weather_severity": [
+          [
+            0.0,
+            0.05000000000000001,
+            0.54
+          ],
+          [
+            0.0,
+            1.5,
+            3.9199999999999995
+          ],
+          [
+            0.16000000000000003,
+            0.7360000000000001,
+            2.52
+          ]
+        ],
+        "wind_damage_score": [
+          [
+            0.0,
+            0.04000000000000001,
+            0.36
+          ],
+          [
+            0.0,
+            1.0,
+            1.9599999999999997
+          ],
+          [
+            0.16000000000000003,
+            0.6400000000000001,
+            1.44
+          ]
+        ],
+        "wind_mph": [
+          [
+            30.0,
+            40.0,
+            50.0
+          ],
+          [
+            35.0,
+            60.0,
+            70.0
+          ],
+          [
+            45.0,
+            55.0,
+            65.0
+          ]
+        ]
+      },
+      "weighted_segments": [
+        {
+          "customer_exposure": 255.01722359006743,
+          "end": [
+            -72.7,
+            41.1
+          ],
+          "feeder_id": 0,
+          "lateral_id": null,
+          "length_km": 13.927030601991754,
+          "local_rain_in": 0.42499999999998755,
+          "local_weather_severity": 0.38749999999997425,
+          "local_wind_mph": 41.24999999999956,
+          "midpoint": [
+            -72.75,
+            41.05
+          ],
+          "network_kind": "feeder",
+          "raw_impact": 0.8267131343100771,
+          "relative_customer_exposure": 1.448027372182899,
+          "segment_id": "feeder:0:0",
+          "smoothed_impact": 0.927119411111,
+          "start": [
+            -72.8,
+            41.0
+          ],
+          "sub_id": 0,
+          "susceptibility": 1.0,
+          "weight": 12.912020410243471
+        },
+        {
+          "customer_exposure": 211.625553328582,
+          "end": [
+            -72.6,
+            41.2
+          ],
+          "feeder_id": 0,
+          "lateral_id": null,
+          "length_km": 13.919352694675831,
+          "local_rain_in": 1.1999999999999005,
+          "local_weather_severity": 2.168999999999812,
+          "local_wind_mph": 62.49999999999911,
+          "midpoint": [
+            -72.65,
+            41.150000000000006
+          ],
+          "network_kind": "feeder",
+          "raw_impact": 2.57045037271401,
+          "relative_customer_exposure": 1.2016427343971516,
+          "segment_id": "feeder:0:1",
+          "smoothed_impact": 1.5624986230236637,
+          "start": [
+            -72.7,
+            41.1
+          ],
+          "sub_id": 0,
+          "susceptibility": 1.0,
+          "weight": 21.74896941881171
+        },
+        {
+          "customer_exposure": 193.4534127161141,
+          "end": [
+            -72.7,
+            41.1
+          ],
+          "feeder_id": 1,
+          "lateral_id": null,
+          "length_km": 13.91935269467519,
+          "local_rain_in": 0.374999999999984,
+          "local_weather_severity": 0.5989999999999893,
+          "local_wind_mph": 48.750000000000085,
+          "midpoint": [
+            -72.75,
+            41.150000000000006
+          ],
+          "network_kind": "feeder",
+          "raw_impact": 0.9497580126428489,
+          "relative_customer_exposure": 1.098458499828319,
+          "segment_id": "feeder:1:0",
+          "smoothed_impact": 1.0808088984128967,
+          "start": [
+            -72.8,
+            41.2
+          ],
+          "sub_id": 0,
+          "susceptibility": 1.0,
+          "weight": 15.044160252552478
+        },
+        {
+          "customer_exposure": 198.12234749144048,
+          "end": [
+            -72.6,
+            41.0
+          ],
+          "feeder_id": 1,
+          "lateral_id": null,
+          "length_km": 13.927030601992396,
+          "local_rain_in": 1.12499999999992,
+          "local_weather_severity": 1.5024999999998105,
+          "local_wind_mph": 54.99999999999858,
+          "midpoint": [
+            -72.65,
+            41.05
+          ],
+          "network_kind": "feeder",
+          "raw_impact": 1.9745695241752086,
+          "relative_customer_exposure": 1.124969436064049,
+          "segment_id": "feeder:1:1",
+          "smoothed_impact": 1.314518758368547,
+          "start": [
+            -72.7,
+            41.1
+          ],
+          "sub_id": 0,
+          "susceptibility": 1.0,
+          "weight": 18.3073429746918
+        },
+        {
+          "customer_exposure": 301.6894043419324,
+          "end": [
+            -72.66,
+            41.14
+          ],
+          "feeder_id": 0,
+          "lateral_id": 0,
+          "length_km": 5.568663557882838,
+          "local_rain_in": 1.0679999999999223,
+          "local_weather_severity": 1.8057599999998444,
+          "local_wind_mph": 60.99999999999929,
+          "midpoint": [
+            -72.68,
+            41.120000000000005
+          ],
+          "network_kind": "lateral",
+          "raw_impact": 2.959189574731981,
+          "relative_customer_exposure": 1.7130392576420759,
+          "segment_id": "lateral:0:0",
+          "smoothed_impact": 1.44996552078719,
+          "start": [
+            -72.7,
+            41.1
+          ],
+          "sub_id": 0,
+          "susceptibility": 1.25,
+          "weight": 10.092962694742793
+        },
+        {
+          "customer_exposure": 190.1112938654701,
+          "end": [
+            -72.62,
+            41.18
+          ],
+          "feeder_id": 0,
+          "lateral_id": 0,
+          "length_km": 5.567434588092196,
+          "local_rain_in": 1.2520000000000011,
+          "local_weather_severity": 2.264640000000007,
+          "local_wind_mph": 63.0,
+          "midpoint": [
+            -72.64,
+            41.16
+          ],
+          "network_kind": "lateral",
+          "raw_impact": 2.4583694910068163,
+          "relative_customer_exposure": 1.079481430324181,
+          "segment_id": "lateral:0:1",
+          "smoothed_impact": 1.6009785747884206,
+          "start": [
+            -72.66,
+            41.14
+          ],
+          "sub_id": 0,
+          "susceptibility": 1.25,
+          "weight": 11.141679365089502
+        },
+        {
+          "customer_exposure": 316.43532383135783,
+          "end": [
+            -72.74,
+            41.06
+          ],
+          "feeder_id": 1,
+          "lateral_id": 1,
+          "length_km": 5.569892022767182,
+          "local_rain_in": 0.7520000000000086,
+          "local_weather_severity": 0.9680000000000016,
+          "local_wind_mph": 51.60000000000014,
+          "midpoint": [
+            -72.72,
+            41.08
+          ],
+          "network_kind": "lateral",
+          "raw_impact": 2.0949025692338368,
+          "relative_customer_exposure": 1.796768876952091,
+          "segment_id": "lateral:1:0",
+          "smoothed_impact": 1.1862040197290955,
+          "start": [
+            -72.7,
+            41.1
+          ],
+          "sub_id": 0,
+          "susceptibility": 1.25,
+          "weight": 8.258785383579317
+        },
+        {
+          "customer_exposure": 244.79204679441813,
+          "end": [
+            -72.78,
+            41.02
+          ],
+          "feeder_id": 1,
+          "lateral_id": 1,
+          "length_km": 5.571119980689636,
+          "local_rain_in": 0.328000000000071,
+          "local_weather_severity": 0.2520000000000867,
+          "local_wind_mph": 38.40000000000199,
+          "midpoint": [
+            -72.75999999999999,
+            41.040000000000006
+          ],
+          "network_kind": "lateral",
+          "raw_impact": 0.5326769150586909,
+          "relative_customer_exposure": 1.389967231471343,
+          "segment_id": "lateral:1:1",
+          "smoothed_impact": 0.8481333367863095,
+          "start": [
+            -72.74,
+            41.06
+          ],
+          "sub_id": 0,
+          "susceptibility": 1.25,
+          "weight": 5.906315723573976
+        }
+      ]
+    },
+    "input": {
+      "boundary": {
+        "coordinates": [
+          [
+            [
+              -72.9,
+              40.9
+            ],
+            [
+              -72.5,
+              40.9
+            ],
+            [
+              -72.5,
+              41.3
+            ],
+            [
+              -72.9,
+              41.3
+            ],
+            [
+              -72.9,
+              40.9
+            ]
+          ]
+        ],
+        "type": "Polygon"
+      },
+      "census_tracts": [
+        {
+          "county": "Test",
+          "geoid": "A",
+          "lat": 41.01,
+          "lon": -72.79,
+          "name": "Southwest",
+          "pop": 1000
+        },
+        {
+          "county": "Test",
+          "geoid": "B",
+          "lat": 41.1,
+          "lon": -72.7,
+          "name": "Center",
+          "pop": 2000
+        },
+        {
+          "county": "Test",
+          "geoid": "C",
+          "lat": 41.19,
+          "lon": -72.61,
+          "name": "Northeast",
+          "pop": 500
+        }
+      ],
+      "config": {
+        "customer_smoothing_km": 6.0,
+        "customers_per_outage": 50,
+        "exposure_exponent": 1.0,
+        "feeder_susceptibility": 1.0,
+        "gaussian_bandwidth_km": 10.0,
+        "lateral_susceptibility": 1.25,
+        "n_outages": 3,
+        "rain_coefficient": 0.5,
+        "rain_reference_in": 1.0,
+        "rain_score_cap": 2.0,
+        "rural_baseline_fraction": 0.02,
+        "seed": 17,
+        "storm_id": "small_test_storm",
+        "wind_excess_scale_mph": 25.0,
+        "wind_exponent": 2.0,
+        "wind_threshold_mph": 35.0
+      },
+      "network": {
+        "feeders": [
+          {
+            "coordinates": [
+              [
+                -72.8,
+                41.0
+              ],
+              [
+                -72.7,
+                41.1
+              ],
+              [
+                -72.6,
+                41.2
+              ]
+            ],
+            "feeder_id": 0,
+            "sub_id": 0
+          },
+          {
+            "coordinates": [
+              [
+                -72.8,
+                41.2
+              ],
+              [
+                -72.7,
+                41.1
+              ],
+              [
+                -72.6,
+                41.0
+              ]
+            ],
+            "feeder_id": 1,
+            "sub_id": 0
+          }
+        ],
+        "laterals": [
+          {
+            "coordinates": [
+              [
+                -72.7,
+                41.1
+              ],
+              [
+                -72.66,
+                41.14
+              ],
+              [
+                -72.62,
+                41.18
+              ]
+            ],
+            "feeder_id": 0,
+            "lateral_id": 0
+          },
+          {
+            "coordinates": [
+              [
+                -72.7,
+                41.1
+              ],
+              [
+                -72.74,
+                41.06
+              ],
+              [
+                -72.78,
+                41.02
+              ]
+            ],
+            "feeder_id": 1,
+            "lateral_id": 1
+          }
+        ],
+        "substations": [
+          {
+            "customers_served": 3500.0,
+            "lat": 41.1,
+            "lon": -72.7,
+            "name": "Test Substation",
+            "sub_id": 0
+          }
+        ]
+      },
+      "weather": {
+        "grid": {
+          "lats": [
+            41.0,
+            41.1,
+            41.2
+          ],
+          "lons": [
+            -72.8,
+            -72.7,
+            -72.6
+          ]
+        },
+        "storm": {
+          "date": "2020-01-01",
+          "name": "Small deterministic storm",
+          "peak_rain_in": [
+            [
+              0.0,
+              0.5,
+              1.0
+            ],
+            [
+              0.2,
+              1.0,
+              2.0
+            ],
+            [
+              0.0,
+              0.3,
+              1.5
+            ]
+          ],
+          "peak_wind_mph": [
+            [
+              30.0,
+              40.0,
+              50.0
+            ],
+            [
+              35.0,
+              60.0,
+              70.0
+            ],
+            [
+              45.0,
+              55.0,
+              65.0
+            ]
+          ],
+          "precipitation_type": "rain",
+          "storm_id": "small_test_storm"
+        }
+      }
+    }
+  }
+}
