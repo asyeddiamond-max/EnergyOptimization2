@@ -13,6 +13,14 @@ fragmented and reliable ring-stitching across all towns is fiddly — for
 visualization purposes the line geometry is identical, and L.geoJSON renders
 it the same way.
 
+Connecticut's town boundaries are LEGAL boundaries, which extend well out into
+Long Island Sound -- coastal towns own rectangular blocks of open water (~20-23%
+of Greenwich's and Stamford's legal area). Drawn raw, that puts green town lines
+across the middle of the Sound. clip_to_land() intersects each town with the
+land-only shape so the outlines hug the real coastline instead. This is a
+RENDERING concern only: connecticut_towns.geojson is consumed solely by the map
+layer in 03_grid_simulation.html, never by the grid/scheduler logic.
+
 Writes both:
   - data/connecticut_towns.geojson   (GeoJSON FeatureCollection)
   - data/connecticut_towns.js        (same content wrapped as a JS global so the
@@ -21,6 +29,8 @@ Writes both:
 
 Usage:
     python 02_fetch_town_boundaries.py
+    python 02_fetch_town_boundaries.py --clip-only   # re-clip existing data,
+                                                     # no Overpass round-trip
 """
 from __future__ import annotations
 import json
@@ -132,8 +142,73 @@ def build_feature_collection(raw: dict) -> dict:
     return {"type": "FeatureCollection", "features": features}
 
 
+LAND_FILE = Path(__file__).parent / "data" / "connecticut_land_boundary.json"
+
+
+def clip_to_land(fc: dict) -> dict:
+    """Trim each town outline to the land-only shape.
+
+    OSM gives each town as a MultiLineString of boundary ways (see the module
+    docstring for why lines, not polygons). To make a coastal town's outline
+    follow the SHORELINE rather than just losing its seaward edge, we rebuild
+    the closed ring (polygonize), intersect that AREA with the land shape, and
+    take the boundary of the result -- so the clipped edge traces the coast.
+
+    167/170 towns polygonize cleanly. The three that don't (their OSM ways
+    don't close into a ring) fall back to intersecting the raw lines with the
+    land shape: their seaward stubs still get cut, they just don't gain a
+    coast-following edge. Better than dropping them.
+    """
+    from shapely.geometry import shape, mapping
+    from shapely.ops import polygonize, unary_union
+
+    land = shape(json.loads(LAND_FILE.read_text(encoding="utf-8"))[0]["geojson"])
+    # Tiny outward buffer (~30m) so boundary ways that run exactly along the
+    # shoreline aren't dropped by floating-point edge cases.
+    land_buf = land.buffer(0.0003)
+
+    out, dropped, fallback = [], 0, []
+    for f in fc["features"]:
+        name = (f.get("properties") or {}).get("name")
+        try:
+            geom = shape(f["geometry"])
+            rings = list(polygonize(geom))
+            if rings:
+                clipped = unary_union(rings).intersection(land).boundary
+            else:
+                fallback.append(name)
+                clipped = geom.intersection(land_buf)
+            if clipped.is_empty:
+                dropped += 1
+                continue
+            out.append({**f, "geometry": mapping(clipped)})
+        except Exception as e:                       # never let one town break the set
+            print(f"  clip failed for {name!r} ({e}); keeping unclipped")
+            out.append(f)
+    if fallback:
+        print(f"  line-clip fallback (no closed ring): {', '.join(str(x) for x in fallback)}")
+    if dropped:
+        print(f"  dropped {dropped} town(s) with no land area")
+    print(f"  clipped {len(out)}/{len(fc['features'])} town outlines to land")
+    return {"type": "FeatureCollection", "features": out}
+
+
+def _write(fc: dict) -> None:
+    text = json.dumps(fc, separators=(",", ":"))
+    OUT_GEOJSON.write_text(text)
+    OUT_JS.write_text("window.CONNECTICUT_TOWNS_GEOJSON = " + text + ";")
+    print(f"Wrote {OUT_GEOJSON}  ({OUT_GEOJSON.stat().st_size} bytes)")
+    print(f"Wrote {OUT_JS}  ({OUT_JS.stat().st_size} bytes)")
+
+
 def main() -> None:
     OUT_GEOJSON.parent.mkdir(parents=True, exist_ok=True)
+    if "--clip-only" in sys.argv:
+        # Re-clip what's already on disk; no Overpass round-trip.
+        fc = json.loads(OUT_GEOJSON.read_text(encoding="utf-8"))
+        print(f"Re-clipping {len(fc['features'])} existing town outlines to land...")
+        _write(clip_to_land(fc))
+        return
     raw = fetch_overpass()
     fc = build_feature_collection(raw)
     # Connecticut has 169 towns; OSM coverage can occasionally miss a couple
@@ -141,11 +216,7 @@ def main() -> None:
     # generous floor rather than requiring the exact number.
     if len(fc["features"]) < 140:
         sys.exit(f"Too few towns matched ({len(fc['features'])}); check the Overpass response.")
-    text = json.dumps(fc, separators=(",", ":"))
-    OUT_GEOJSON.write_text(text)
-    OUT_JS.write_text("window.CONNECTICUT_TOWNS_GEOJSON = " + text + ";")
-    print(f"Wrote {OUT_GEOJSON}  ({OUT_GEOJSON.stat().st_size} bytes)")
-    print(f"Wrote {OUT_JS}  ({OUT_JS.stat().st_size} bytes)")
+    _write(clip_to_land(fc))
 
 
 if __name__ == "__main__":
