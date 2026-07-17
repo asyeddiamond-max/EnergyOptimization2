@@ -890,21 +890,51 @@
     };
   }
 
+  // A segment can only ever yield an outage if SOME point along it is inside the
+  // boundary. Checked at the same fixed fractions the fallback below uses, so a
+  // segment that survives this can never fail there.
+  function segmentCanPlace(segment, boundaryRings) {
+    if (!boundaryRings) return true;
+    for (const f of [0.5, 0, 1, 0.25, 0.75]) {
+      const lon = segment.start[0] + (segment.end[0] - segment.start[0]) * f;
+      const lat = segment.start[1] + (segment.end[1] - segment.start[1]) * f;
+      if (pointInBoundary(boundaryRings, lat, lon)) return true;
+    }
+    return false;
+  }
+
   function sampleOutageScenario(weightedSegments, configInput = {}, inputs = {}, boundary = null) {
     const config = validateConfig(configInput);
-    if (!Array.isArray(weightedSegments) || weightedSegments.length < config.nOutages) {
-      throw new InputValidationError(`only ${weightedSegments?.length || 0} positive-weight network segments are available for ${config.nOutages} unique outages`);
+    if (!Array.isArray(weightedSegments)) {
+      throw new InputValidationError("weightedSegments must be an array");
     }
-    const totalWeight = weightedSegments.reduce((sum, segment) => sum + finiteNumber(segment.weight, "segment.weight"), 0);
-    if (totalWeight <= 0) throw new InputValidationError("network sampling weight must be positive");
     const boundaryRings = boundary ? extractBoundaryRings(boundary) : null;
+
+    // Drop un-placeable segments BEFORE sampling instead of throwing after.
+    // The live grid generator constrains the network with a coarse 256x256
+    // inside-bitmap (~480m x 360m cells), so a handful of segments end up just
+    // outside the exact polygon -- measured: 6 of 43,539 laterals for Isaias.
+    // Previously ONE such segment being drawn aborted the whole 20,450-outage
+    // run ("has no sampled position inside the boundary"). They are candidates
+    // that cannot produce a valid point, so the correct place to handle them is
+    // the candidate pool, which also keeps the exactly-nOutages contract.
+    const placeable = boundaryRings
+      ? weightedSegments.filter((segment) => segmentCanPlace(segment, boundaryRings))
+      : weightedSegments;
+    const rejected = weightedSegments.length - placeable.length;
+    if (placeable.length < config.nOutages) {
+      throw new InputValidationError(`only ${placeable.length} placeable positive-weight network segments are available for ${config.nOutages} unique outages`
+        + (rejected ? ` (${rejected} dropped as outside the boundary)` : ""));
+    }
+    const totalWeight = placeable.reduce((sum, segment) => sum + finiteNumber(segment.weight, "segment.weight"), 0);
+    if (totalWeight <= 0) throw new InputValidationError("network sampling weight must be positive");
     const random = mulberry32(config.seed);
-    const selected = weightedSegments.map((segment, index) => ({
+    const selected = placeable.map((segment, index) => ({
       key: Math.log(Math.max(random(), Number.MIN_VALUE)) / segment.weight,
       index,
     })).sort((a, b) => b.key - a.key || b.index - a.index).slice(0, config.nOutages);
     const outages = selected.map(({ index }) => {
-      const segment = weightedSegments[index];
+      const segment = placeable[index];
       let position=random(),lon,lat,inside=!boundaryRings;
       for (let attempt=0;attempt<32;attempt++){
         lon=segment.start[0]+(segment.end[0]-segment.start[0])*position;
@@ -921,6 +951,8 @@
         }
       }
       if (!inside){
+        // Unreachable: segmentCanPlace() already proved one of these exact
+        // fallback fractions is inside. Kept as a genuine invariant check.
         throw new InputValidationError(`selected network segment ${segment.segmentId} has no sampled position inside the boundary`);
       }
       const isFeeder = segment.networkKind === "feeder" ? 1 : 0;

@@ -1990,7 +1990,14 @@ function resetOutageModelDefaults(markStale=true){
 
 function readOutageModelConfig(){
   const config={
-    stormId:document.getElementById('stormTrackSelect').value,
+    // An empty stormTrackSelect is this project's long-standing "uniform
+    // placement, no storm track" convention (Sandy, Irene, Snowtober, March
+    // 2023, Dec 2022, Oct 2019, Ida, Dec 2025 -- 8 of the 17 calibration
+    // storms). outage_location_model.js requires a non-empty stormId, so those
+    // storms threw "stormId must not be empty" and could not run at all.
+    // stormId is only a label in basic mode -- it is only matched against
+    // weather.stormId on the research path -- so a sentinel keeps them working.
+    stormId:document.getElementById('stormTrackSelect').value || 'uniform_no_track',
     seed:Number(seedI.value),
     nOutages:Number(oS.value),
     customersPerOutage:50,
@@ -3487,10 +3494,60 @@ async function planRestoration(){
     }
 
     if (bestI===-1){
+      // RESTORED 2026-07-17. This block existed in the pre-merge scheduler and
+      // was dropped in the outage-location refactor (master had 25
+      // inCriticalPhase references, the branch 16; the other two schedulers in
+      // this file -- lines ~974 and ~4406 -- still have it).
+      //
+      // Without it, a crew that can see no CRITICAL work has no way to leave the
+      // critical phase: every non-critical outage is masked done[]=1, so
+      // nextDiscoveryAfter() returns Infinity and the new guard below throws
+      // "lost track of N unfinished outages" -- which is exactly what July 2026
+      // did (357 outages). The remaining===0 reset at the bottom of this loop
+      // only fires when the criticals are all FIXED, not when they are merely
+      // not yet visible, so it cannot cover this case.
+      //
+      // Mirrors that reset's own idiom (switch_restored skipped, same
+      // remaining/firstUndoneDisc bookkeeping) rather than master's older form.
+      if (inCriticalPhase){
+        // Unlike the remaining===0 reset below (which fires only once EVERY
+        // critical is fixed), this fires when a crew simply can't SEE any
+        // critical work yet -- so some criticals may still be unfixed (done=0).
+        // We therefore un-mask the non-criticals and then count the ACTUAL
+        // undone, non-switch outages, rather than assuming all criticals are
+        // done (N - criticalCount - switchSkipped). Assuming undercounts
+        // `remaining`, the while(remaining>0) loop exits early, and the still-
+        // undone outages are stranded -> "plan violated the initial contract".
+        let undone = 0;
+        for (let i=0;i<N;i++){
+          if (storm.outages[i].switch_restored) continue;
+          if (!storm.outages[i].critical) done[i]=0;
+          if (!done[i]) undone++;
+        }
+        remaining = undone;
+        inCriticalPhase = false;
+        firstUndoneDisc = 0;
+        hPush(heap,[cTime,ci]);
+        continue;
+      }
       if (realistic){
         // No visible work yet — fast-forward this crew to the next discovery time.
         const nextT = nextDiscoveryAfter(cTime);
         if (!isFinite(nextT)){
+          // KNOWN OPEN BUG (2026-07-17), fires on the 5 LARGEST storms only
+          // (Isaias/Sandy/Irene/Snowtober/July 2026, ~15k-26k outages; strands
+          // 190-902 each). remaining>0 but nextDiscoveryAfter() returns Infinity,
+          // i.e. some outages ARE discovered (discTime<=now) yet no crew can SEE
+          // them through the spatial-grid + feeder-stickiness visibility search
+          // -- so they are neither visible nor "future discoveries". This is a
+          // visibility/discovery mismatch in the outage-location refactor's
+          // scheduler that the pre-merge scheduler did not have; it was latent
+          // until the stormId/boundary/critical-phase fixes let these large
+          // storms reach the restoration stage at all. Left as a LOUD throw on
+          // purpose -- turning it into a silent `break` would hide incomplete
+          // restorations and corrupt the calibration ratios. Needs a global
+          // "find any undone discovered outage" fallback in the visibility
+          // search; deferred as separate, careful work.
           throw new Error(`Restoration scheduler lost track of ${remaining} unfinished outages.`);
         }
         // Every other idle crew whose clock is also before nextT has no work
