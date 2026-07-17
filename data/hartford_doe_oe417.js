@@ -11,6 +11,32 @@
 //
 // daily_crews: total crews deployed each day (line + tree + support).
 //   Sources: Eversource press releases, PURA filings, CT Mirror reporting.
+//
+// *** CREW-DEFINITION WARNING (added 2026-07-17) -- READ BEFORE USING daily_crews
+// *** FOR ANY CREW COMPARISON. daily_crews counts TOTAL DEPLOYED PERSONNEL/CREWS
+// *** (line + tree + support), which is NOT the same quantity as the two-man
+// *** RESTORATION crews that actually clear outages.
+//
+// Wanik, He, Layton, Anagnostou & Hartman (2017), "Estimated Time of Restoration
+// (ETR) Guidance for Electric Distribution Networks" (J. Homeland Security &
+// Emergency Management) studied THIS utility and THESE storms with Eversource's
+// internal records, and defines:
+//   - an "outage" as a location needing a two-man restoration crew, recorded at
+//     the nearest upstream isolating device  (== this project's outage concept), and
+//   - "crews" as the DAILY MAXIMUM number of those two-man restoration crews.
+// For the October 2011 Nor'easter it reports 26,132 actual outages and
+// 1,068 crews actually working. This file carried 4,800 for the same storm --
+// a 4.5x gap that is a UNIT MISMATCH, not an error in either number: 4,800
+// line+tree+support personnel is plausibly ~1,068 restoration crews plus tree
+// crews, damage assessors, logistics and support.
+//
+// Consequence: comparing a model's implied REPAIR crews against daily_crews is
+// apples-to-oranges. Where a real restoration-crew count exists it is recorded
+// separately as `restoration_crews_peak` (with `restoration_crews_source`), and
+// 21_crew_backout.py uses THAT, never daily_crews.
+// Only Snowtober has one so far -- Irene's and Sandy's real crew curves exist in
+// Wanik et al. 2017 Figure 2b but are not machine-readable from the paper text.
+// TODO: get the underlying values (Prof. Wanik is the paper's first author).
 
 window.HARTFORD_DOE_OE417 = [
   {
@@ -98,7 +124,25 @@ window.HARTFORD_DOE_OE417 = [
       "having a higher single-moment peak) -- per PURA Docket No. 13-03-23 " +
       "(Decision dated March 12, 2014), p. 1.",
     daily_pct_out: [1.0, 0.94, 0.83, 0.70, 0.55, 0.38, 0.22, 0.12, 0.05, 0.02, 0.0],
+    // Total deployed personnel (line + tree + support) -- see the CREW-DEFINITION
+    // WARNING at the top of this file. NOT the two-man restoration-crew count.
     daily_crews: [400, 800, 1800, 3000, 4000, 4800, 4500, 3500, 2000, 800, 200],
+    // The only REAL two-man restoration-crew figure in this file, and the only
+    // one directly comparable to a model's implied repair crews. Wanik et al.
+    // (2017) had Eversource's internal daily crew records for this storm.
+    // Their companion figures for the same event: 26,132 actual outages
+    // (this file's calibrated n_out is 26,050 -- 0.3% off, an independent
+    // check that the outage calibration is sound) and 831,000 peak customers
+    // (vs the 807,228 PURA concurrent-peak figure used here; the difference is
+    // likely CL&P-only vs all-utility accounting).
+    restoration_crews_peak: 1068,
+    restoration_crews_source:
+      "Wanik, He, Layton, Anagnostou & Hartman (2017), 'Estimated Time of " +
+      "Restoration (ETR) Guidance for Electric Distribution Networks', J. " +
+      "Homeland Security & Emergency Management -- daily maximum two-man " +
+      "restoration crews from Eversource internal records. The paper also " +
+      "reports that 1,345 crews would have been needed for a 7-day " +
+      "restoration at the P75 fix rate, vs the 1,068 that actually worked.",
   },
   {
     date: "2018-05-15",
