@@ -146,49 +146,42 @@ LAND_FILE = Path(__file__).parent / "data" / "connecticut_land_boundary.json"
 
 
 def clip_to_land(fc: dict) -> dict:
-    """Trim each town outline to the land-only shape.
+    """Trim each town's boundary LINES to the land-only shape.
 
-    OSM gives each town as a MultiLineString of boundary ways (see the module
-    docstring for why lines, not polygons). To make a coastal town's outline
-    follow the SHORELINE rather than just losing its seaward edge, we rebuild
-    the closed ring (polygonize), intersect that AREA with the land shape, and
-    take the boundary of the result -- so the clipped edge traces the coast.
+    Direct line intersection: geom.intersection(land) keeps the parts of a
+    town's boundary ways that lie on land and drops the parts over open water.
+    That is all this needs to do -- a coastal town's outline should simply END
+    at the shoreline (an open seaward edge is correct; there is no border over
+    the Sound). Every land-side border segment, including every shared
+    town-to-town border, is preserved bit-for-bit.
 
-    167/170 towns polygonize cleanly. The three that don't (their OSM ways
-    don't close into a ring) fall back to intersecting the raw lines with the
-    land shape: their seaward stubs still get cut, they just don't gain a
-    coast-following edge. Better than dropping them.
+    (An earlier version polygonized each town into an AREA and took its
+    boundary, trying to make the clipped edge trace the coast. That was lossy:
+    collapsing the rich multi-way border into a single outer ring dropped
+    interior detail and left the statewide mesh visibly sparse -- 1,454 line
+    pieces down to 310. Do NOT reintroduce the polygonize approach.)
     """
     from shapely.geometry import shape, mapping
-    from shapely.ops import polygonize, unary_union
 
     land = shape(json.loads(LAND_FILE.read_text(encoding="utf-8"))[0]["geojson"])
     # Tiny outward buffer (~30m) so boundary ways that run exactly along the
-    # shoreline aren't dropped by floating-point edge cases.
+    # shoreline or a state line aren't dropped by floating-point edge cases.
     land_buf = land.buffer(0.0003)
 
-    out, dropped, fallback = [], 0, []
+    out, dropped = [], 0
     for f in fc["features"]:
         name = (f.get("properties") or {}).get("name")
         try:
-            geom = shape(f["geometry"])
-            rings = list(polygonize(geom))
-            if rings:
-                clipped = unary_union(rings).intersection(land).boundary
-            else:
-                fallback.append(name)
-                clipped = geom.intersection(land_buf)
-            if clipped.is_empty:
+            clipped = shape(f["geometry"]).intersection(land_buf)
+            if clipped.is_empty or clipped.length == 0:
                 dropped += 1
                 continue
             out.append({**f, "geometry": mapping(clipped)})
         except Exception as e:                       # never let one town break the set
             print(f"  clip failed for {name!r} ({e}); keeping unclipped")
             out.append(f)
-    if fallback:
-        print(f"  line-clip fallback (no closed ring): {', '.join(str(x) for x in fallback)}")
     if dropped:
-        print(f"  dropped {dropped} town(s) with no land area")
+        print(f"  dropped {dropped} town(s) with no land border")
     print(f"  clipped {len(out)}/{len(fc['features'])} town outlines to land")
     return {"type": "FeatureCollection", "features": out}
 
