@@ -1,17 +1,14 @@
 """
 15_fetch_storm_events.py — Real per-report storm-damage locations for CT storms
-that have no HURDAT2 track (not a hurricane) and no HRRR wind grid (too recent,
-or otherwise outside the 5 storms 12_fetch_hrrr_storm_wind.py already covers).
+that need point-report reference data for visualization or later validation.
 
 Source: NOAA/NCEI Storm Events Database bulk CSV export
 (https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/), one gzipped
 CSV per year, no login required. Each row is a single NWS-verified storm
 report (Thunderstorm Wind, Tornado, Hail, etc.) with its own lat/lon and,
-for wind/tornado reports, a magnitude -- exactly the shape the simulator's
-existing wind-field-weighted outage placement wants (see simulateStorm() in
-03_grid_simulation.html, which already does Gaussian track-decay placement
-around HURDAT2 points; this script produces the same {lat, lon, wind_kt}
-point shape from real severe-thunderstorm reports instead).
+for wind/tornado reports, a magnitude. The production outage-location model
+uses complete gridded HRRR wind/rain fields; these point reports do not alter
+placement and are retained for visualization and future validation.
 
 IMPORTANT CAVEAT: NCEI receives final Storm Data ~75-90 days after the end of
 a data month (documented at https://www.ncei.noaa.gov/stormevents/faq.jsp).
@@ -38,7 +35,7 @@ NCEI_INDEX_URL = "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/"
 NCEI_FILE_URL = "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/{name}"
 UA = {"User-Agent": "Mozilla/5.0"}
 
-# Wind-relevant event types the simulator's Gaussian track-decay placement can use.
+# Wind-relevant event types retained for visualization and validation.
 WIND_EVENT_TYPES = {"Thunderstorm Wind", "High Wind", "Tornado", "Marine Thunderstorm Wind"}
 
 # Approximate Enhanced Fujita midpoint wind speeds (mph), converted to knots

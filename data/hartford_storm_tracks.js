@@ -92,11 +92,10 @@ window.HARTFORD_STORM_TRACKS = {
   // (data/connecticut_towns_population.json); wind_kt (~65 mph gust) is an
   // estimate from typical severe-thunderstorm damaging-wind reports, NOT a
   // measured per-town value -- Eversource/NWS never published per-town wind
-  // speeds for this event. The simulator's existing Gaussian track-decay
-  // placement (sigma=30mi) treats each town as an independent damage hot
-  // spot rather than points along one path.
+  // speeds for this event. These points are visualization/reference data only;
+  // the production outage model uses the complete HRRR wind/rain field.
   // Meant to be replaced by a real NWS Storm Events Database pull once that
-  // fetch script exists -- see 15_fetch_storm_events.py (planned).
+  // final NWS report set once it becomes available; see 15_fetch_storm_events.py.
   "ct_july2026_severe_tstorm": {
     name: "July 4, 2026 Severe Thunderstorm Complex",
     date: "2026-07-04",

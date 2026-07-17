@@ -16,3 +16,7 @@ pydantic>=2.5
 numpy>=1.26
 scipy>=1.11
 numba>=0.59
+
+# 12_fetch_hrrr_storm_wind.py — offline NOAA HRRR acquisition/regridding.
+# The generated browser data is committed, so reviewers do not need this.
+herbie-data>=2024.3

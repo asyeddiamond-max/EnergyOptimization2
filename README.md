@@ -22,11 +22,13 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
 | Capability | How |
 |---|---|
 | Real statewide Connecticut distribution grid | 299 HIFLD substations across all 8 counties, branching feeders + laterals, census-tract-weighted demand (883 tracts) |
+| Weather/customer-weighted outage locations | Browser Worker combines HRRR wind and rain, census customer exposure, Gaussian smoothing, and the live network; default is 2,000 unique points × 50 customers |
 | Realistic-mode scheduler with seven factors | assessment delay, log-normal repair, discovery ramp, mutual-aid waves, road proxy, workday clamp, critical priority |
 | Real critical facilities (HIFLD/EPA) | 1,143 hospitals, fire stations, EMS, water plants statewide — outages near real facilities get priority-1 restoration |
 | NLCD tree canopy per substation | USGS 30m canopy cover (live-computed 1km buffer mean per substation) replaces the distance-based urban/suburban/rural heuristic |
 | NOAA HURDAT2 storm tracks | Sandy, Isaias, Irene, Henri track overlays on the map with wind-speed markers |
-| Statewide HRRR wind/temp grid | 41×65 grid (~3km resolution) for 5 storms (Isaias, Henri, May 2018, Jan 2024, Dec 2023); sourced live via the NOAA AWS archive |
+| Statewide HRRR wind/rain grid | 41×65 grid (~3km resolution) for 8 cached events; sourced from the NOAA AWS archive |
+| Curated hourly storm playback | 24 hourly Isaias HRRR frames drive both the animated Wind/Rain/Impact overlay and timestamped outage placement |
 | DOE OE-417 disturbance database | 8 real CT outage events for calibrating simulated vs. actual restoration timelines |
 | Census tract population | 883 tracts (2020 Census P.L. 94-171) for much finer demand placement than the 169-town model |
 | Customer-impact-weighted dispatch | scheduler can favor outages serving more customers, not just nearest |
@@ -47,9 +49,9 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
 | Crew time-series ramp | Logistic mobilization curve calibrated to Isaias 2020 PURA daily crew counts (16% day 1 → 100% day 7) |
 | Crew fatigue & overtime | Progressive productivity decline (+5%/day after day 2); behavioral overtime incentive model (IBEW double-time) |
 | Customers-without-power curve | High→low restoration graph with real DOE event overlay for comparison |
-| Wind-field weighted outage placement | HURDAT2 track proximity × wind speed Gaussian weighting (σ=30mi); segments near the storm path get 3–5× more outages |
-| Underground line model | Urban substations (<25% canopy) have ~40% underground laterals with 90% storm immunity |
-| Switching / back-feed (FLISR) | ~20% of feeder outages auto-restored via normally-open tie switches in ~30 min, no crew needed |
+| Scientific outage placement | Wind damage × rain amplification × relative customer exposure, boundary-aware Gaussian-smoothed at 10 km, then sampled on live feeder/lateral segments |
+| Underground line model | Eligible urban lateral failures remain in the initial scenario and receive a 1.35× local repair-time modifier |
+| Switching / back-feed (FLISR) | Eligible feeder failures remain in the initial total and become explicit five-minute automatic restoration events |
 | AMI smart meter coverage | Spatially-varying outage detection: urban 70% AMI (instant), suburban 50%, rural 30% (callback delays) |
 | Mutual-aid travel time | Out-of-state crews (MA/RI +2h, NY +4h, PA/OH +6h) based on IBEW mutual-aid protocols |
 | Deepened crew stickiness | Crews complete entire feeder circuits before moving to a new one, matching real utility dispatch |
@@ -64,12 +66,21 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
                        │ Browser (GitHub Pages)         │
                        │ 03_grid_simulation.html        │
                        │  - Leaflet map + UI            │
+                       │  - Outage model controls       │
+                       │  - Diagnostic map surfaces     │
                        │  - In-browser scheduler        │
                        │    (JS, fallback)              │
                        │  - Auto-detects + warm-pings   │
                        │    the server backend          │
                        └─────────┬──────────────────────┘
-                                 │  HTTPS, gzip
+                                 │
+                                 ├── Web Worker ────────────────┐
+                                 │   outage_location_worker.js  │
+                                 │                              ▼
+                                 │                    outage_location_model.js
+                                 │                    (one scientific generator)
+                                 │
+                                 │  HTTPS, gzip (optional restoration)
                                  ▼
                        ┌────────────────────────────────┐
                        │ Render free-tier service       │
@@ -92,6 +103,41 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
                        └────────────────────────────────┘
 ```
 
+## Weather-weighted outage-location workflow
+
+No Python, backend, JSON import, or downloaded handoff file is required:
+
+1. Open `03_grid_simulation.html` through GitHub Pages or any static web server.
+2. Choose a curated storm (currently Isaias), seed, outage count, and optional scientific parameters.
+3. Click **Generate outage scenario**.
+4. Inspect outage points and the customer, weather, raw-impact, or
+   Gaussian-smoothed diagnostic surface.
+5. Set the crew count and click **Plan restoration**.
+
+The browser sends the live in-memory feeder/lateral network to
+`outage_location_worker.js`, which calls the same pure
+`outage_location_model.js` used by the automated tests. The default generates
+2,000 unique Connecticut network locations with exactly 50 customers each,
+so the restoration curve begins at exactly 100,000 customers without power.
+`outage_restoration_adapter.js` then attaches deterministic critical-facility,
+tree, flood, callback, switching, underground, feeder, and substation metadata
+without moving a point or changing its initial customer count.
+
+The version-one model is:
+
+```text
+wind_damage = max(0, (wind_mph - 35) / 25) ^ 2
+rain_amplification = 1 + 0.5 * min(rain_in_per_hour, 2)
+weather_severity = wind_damage * rain_amplification
+raw_impact = weather_severity * relative_customer_exposure
+smoothed_impact = boundary_aware_gaussian(raw_impact, 10 km)
+segment_weight = smoothed_impact_at_midpoint * segment_length_km * susceptibility
+```
+
+The NOAA storm-track layer is visualization only and does not alter placement.
+Events without complete HRRR wind/rain data require the explicitly labeled
+basic network-placement mode; the page never silently changes algorithms.
+
 ---
 
 ## Repository layout
@@ -100,18 +146,24 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
 .
 ├── 01_fetch_county_boundary.py    # cache the Connecticut state polygon from OSM
 ├── 02_fetch_town_boundaries.py    # cache all 169 CT town polygons from OSM
-├── 03_grid_simulation.html        # the main interactive (~4k LOC, runs in any browser)
+├── 03_grid_simulation.html        # main browser UI, map, and restoration orchestration
+├── outage_location_model.js      # sole weather/customer outage-location generator
+├── outage_location_worker.js     # off-main-thread generation and progress protocol
+├── outage_restoration_adapter.js # deterministic restoration metadata handoff
 ├── 04_geojson_to_shapefile.py     # offline GeoJSON → shapefile converter (optional)
 ├── 05_generate_artifacts.py       # offline matplotlib PNG generator for output/
 ├── 07_server.py                   # FastAPI backend (~780 LOC), disk-backed result cache
+├── STORM_TIMELINE_IMPLEMENTATION_PLAN.md # phased curated-storm integration plan
 ├── 08_fetch_substations.py        # cache 299 real HIFLD substations statewide
 ├── 09_fetch_critical_facilities.py # cache 1,143 real HIFLD/EPA critical facilities statewide
 ├── 10_fetch_tree_canopy.py        # live-compute NLCD tree canopy per substation (1km buffer)
 ├── 11_fetch_census_tracts.py      # cache 883 real census tracts + 169 town populations (keyless)
-├── 12_fetch_hrrr_storm_wind.py    # statewide HRRR wind/temp grid (41x65) for 5 storms
+├── 12_fetch_hrrr_storm_wind.py    # builds curated hourly HRRR weather + offline legacy cache
 ├── 13_fetch_flood_corridors.py    # 12 real USGS NHD river corridors for the other 7 counties
 ├── scheduler_fast.py              # NumPy-vectorized fallback scheduler
 ├── scheduler_numba.py             # Numba-JIT production scheduler (~730 LOC)
+├── tests/                          # dependency-free Node model/Worker/adapter acceptance tests
+├── package.json                    # npm test command for browser-model tests
 ├── build_docx.py                  # regenerates the two .docx deliverables
 ├── data/                          # real-data inputs (HIFLD, EPA, NLCD, Census, NOAA, DOE, USGS)
 │   ├── connecticut_substations.json    #   299 real HIFLD substations statewide
@@ -119,7 +171,8 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
 │   ├── connecticut_census_tracts.js    #   883 real census tract centroids + populations
 │   ├── connecticut_towns_population.js #   169 real town populations + centroids
 │   ├── connecticut_tree_canopy.js      #   live-computed NLCD canopy per substation
-│   ├── connecticut_storm_wind.js       #   statewide HRRR wind/temp grid (41x65)
+│   ├── connecticut_storm_wind.js       #   legacy peak-hour cache for offline regression only
+│   ├── connecticut_storm_timelines.js  #   24 hourly Isaias wind/rain frames
 │   ├── connecticut_flood_corridors.js  #   12 USGS-traced river corridors (7 counties)
 │   ├── hartford_storm_tracks.js   #   NOAA HURDAT2 tracks (Sandy, Isaias, Irene, Henri)
 │   ├── hartford_doe_oe417.js      #   DOE OE-417 disturbance events for CT
@@ -133,8 +186,7 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
 ├── requirements.txt
 ├── JOURNAL.html                   # development journal (14 chapters, colored, browser-viewable)
 ├── Hartford_Grid_Dev_Journal.docx # same content as Word doc (drag into Google Drive)
-├── Hartford_Grid_Research_Context.docx # 19 cited papers + niche analysis + open questions
-└── PROGRESS_REPORT.md             # period progress report for academic review
+└── Hartford_Grid_Research_Context.docx # 19 cited papers + niche analysis + open questions
 ```
 
 ---
@@ -151,6 +203,12 @@ python -m http.server 8080
 
 The page works entirely client-side. The server backend is optional; the page auto-detects whether it's reachable and falls back to in-browser compute.
 
+For the curated Isaias workflow, the animated map and outage generator consume
+the same 24 hourly weather frames. Clicking **Plan restoration** stops playback,
+shows the final accumulated 2,000 locations, and hands all 100,000 represented
+customers to the existing scheduler. Restoration time starts after the final
+storm frame; the result card verifies that zero customers remain.
+
 ### With the FastAPI backend locally
 
 ```bash
@@ -166,6 +224,42 @@ Then open the interactive and either leave the default Server URL (`https://hart
 docker build -t hartford-grid-server .
 docker run -p 8000:8000 hartford-grid-server
 ```
+
+---
+
+## Testing
+
+The outage-location production code and its tests are JavaScript-only:
+
+```bash
+npm test
+```
+
+The dependency-free suite covers frozen Python-to-JavaScript component parity,
+scientific controls, determinism, every complete HRRR event, exact customer
+totals, Connecticut geography, network membership, Worker cancellation and
+responsiveness, 24-frame Isaias timeline generation, timestamped storm-path
+movement, restoration metadata, and zero-endpoint accounting. The
+100,000-segment performance fixture is built deterministically in JavaScript;
+there is no exported production-network file or second generator to maintain.
+
+## Current limitations
+
+- Isaias is currently the only curated hourly storm. The eight older
+  representative-hour caches remain for offline compatibility and regression
+  comparison, but the website does not load them or present them as equivalent
+  full-storm timelines.
+- Feeder and lateral topology is synthetic around 299 real HIFLD substations;
+  it is not utility GIS topology.
+- The model creates plausible outage locations, but it has not yet been
+  validated against restricted EAGLE-I or utility outage-point data.
+- July 2026 has complete cached HRRR arrays but a 27.6 mph in-state maximum,
+  below the default 35 mph damage threshold. The UI asks the reviewer to lower
+  the threshold explicitly or choose basic placement.
+- Monte Carlo outage placement and exponential-kernel comparison are deferred;
+  the normal review flow intentionally produces one reproducible scenario.
+- The optional FastAPI scheduler does not implement every browser-only
+  restoration modifier. The page explains when it routes planning locally.
 
 ---
 
@@ -214,8 +308,9 @@ Three documents in the repo capture the project's full development arc and resea
 **Phase 1** hierarchical restoration (laterals can't energize until their feeder is back),
 **Phase 2** tiered priority (make-safe → critical → general load),
 **Phase 3** weather window (no work during the storm itself).
-Revert point for all of it: `git tag before-realism-fix`.
-**Phase 4** (switching / back-feed) is deferred.
+Revert point for the original realism work: `git tag before-realism-fix`.
+Switching/back-feed and underground interactions are now explicit restoration
+metadata: they never remove an outage or change the initial 50-customer value.
 
 **Advisor feedback & next priorities:** detailed advisor feedback reshaped the
 roadmap — see **[`ROADMAP.md`](ROADMAP.md)** for the full plan. Headline next steps:
@@ -223,8 +318,9 @@ flip the restoration curve to "customers without power" (high→zero); add **cre
 stickiness** (a crew stays on its assigned circuit until done rather than greedily
 bouncing — the advisor's main critique); model **crews as a time series** (David Wanik
 CT crews-over-time paper); integrate **real ISO New England substation data**; and
-build toward multi-storm / multi-state storytelling. Crew stickiness and the temporal
-crew model now rank ahead of Phase 4.
+build toward multi-storm / multi-state storytelling. Outage-location validation
+against observed utility data remains the next scientific priority when access
+becomes available.
 
 **Research side:** calibration against one real Eversource event (Isaias 2020 PURA
 filing, May 2018 tornado, etc.) using the built `/api/calibrate` framework. Data
