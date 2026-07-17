@@ -41,7 +41,21 @@ def _extract_script() -> str:
     # Drop the real Leaflet map-init block (tiles, panes, legend) -- replaced
     # by a permissive Proxy stand-in below.
     i = script.index("// --- Map ---")
-    j = script.index("legend.addTo(map);") + len("legend.addTo(map);")
+    if "const mapLayerVisibility={" in script:
+        # Newer layout: the bottom-left `legend` control became the top-right
+        # `layerPicker`, and a plain `mapLayerVisibility` object sits between
+        # the map init and that control. Cut ONLY the real Leaflet init and
+        # stop short of mapLayerVisibility -- generateGrid() reaches it through
+        # syncMapLayerVisibility(), and both it and the layerPicker control are
+        # safe against the L/map Proxy stand-ins below.
+        j = script.index("const mapLayerVisibility={")
+    elif "legend.addTo(map);" in script:
+        j = script.index("legend.addTo(map);") + len("legend.addTo(map);")
+    else:
+        raise SystemExit(
+            "16_: could not find the end of the '// --- Map ---' block. The map "
+            "init markup changed; update the anchor list above."
+        )
     script = script[:i] + script[j:]
 
     # Drop PointCloudLayer/PolylineCloudLayer (real Leaflet canvas renderers,
@@ -77,7 +91,21 @@ def _load_data_inject() -> str:
     wind_js = (DATA / "connecticut_storm_wind.js").read_text(encoding="utf-8")
     events_js = (DATA / "connecticut_storm_events.js").read_text(encoding="utf-8")
 
+    # The outage-location model + restoration adapter are loaded by the page via
+    # <script src="./...">, which this harness never fetches -- so without
+    # injecting them here window.OutageLocationModel / OutageRestorationAdapter
+    # are undefined and the page's own guards silently fall back to a degraded
+    # placement path that no real user ever sees. Inject them so the headless
+    # run exercises the SAME model the browser does. Both are dependency-free
+    # and attach themselves to globalThis (=== window in the shim).
+    modules_js = ""
+    for _mod in ("outage_location_model.js", "outage_restoration_adapter.js"):
+        _p = HERE / _mod
+        if _p.exists():
+            modules_js += _p.read_text(encoding="utf-8") + "\n"
+
     return f"""
+{modules_js}
 window.CONNECTICUT_SUBSTATIONS = {json.dumps(subs)};
 window.CONNECTICUT_CRITICAL_FACILITIES = {json.dumps(crit)};
 window.CONNECTICUT_CENSUS_TRACTS = {json.dumps(tracts)};
@@ -96,6 +124,13 @@ _SHIM_TEMPLATE = r"""
 var window = this;
 window.addEventListener = function(){};
 window._mask = null;
+// initializeOutageModelWorker() refuses to start the Worker under file://, so
+// present an http origin. Value is never fetched -- only the protocol is read.
+window.location = { protocol: 'http:', href: 'http://localhost:8765/03_grid_simulation.html' };
+// Placement mode ('research' = HRRR wind+rain, 'basic' = network-only). Set per
+// storm from run_storm() via the page's own stormHasResearchWeather(), because
+// selecting 'research' for a storm with no HRRR grid makes simulateStorm() bail.
+window.__placementMode = 'basic';
 var __log = [];
 console.log = function(...a){ __log.push(a.map(String).join(' ')); };
 console.warn = console.log; console.error = console.log;
@@ -105,6 +140,13 @@ function setInterval(fn, ms){ return 0; }
 function clearInterval(id){}
 function clearTimeout(id){}
 
+// outage_location_worker.js's generate() opens with `performance.now()`, which
+// V8 doesn't provide. That throw lands OUTSIDE generate()'s own try block, and
+// the dispatcher fires it as `void generate(message)` -- so the rejection was
+// unhandled and the worker silently never replied, leaving storm null with no
+// error anywhere. Only elapsed timings use it, which this harness ignores.
+var performance = { now: function(){ return Date.now(); } };
+
 function _fakeElement(id){
   return {
     id, value: '', checked: false, textContent: '', innerHTML: '', className: '',
@@ -113,6 +155,12 @@ function _fakeElement(id){
     getContext(){ return _fakeCtx(); },
     querySelectorAll(){ return []; }, querySelector(){ return _fakeElement('nested'); },
     closest(){ return _fakeElement('closest'); },
+    // The storm-timeline/animation UI drives playback buttons through the
+    // attribute API (disabled/aria-*), which the older page never used.
+    setAttribute(){}, getAttribute(){ return null; }, removeAttribute(){},
+    hasAttribute(){ return false; },
+    getBoundingClientRect(){ return {top:0,left:0,right:0,bottom:0,width:0,height:0}; },
+    focus(){}, blur(){}, remove(){},
   };
 }
 function _fakeCtx(){
@@ -139,6 +187,16 @@ const _CHECKED_BY_DEFAULT = new Set([
 const _VALUE_DEFAULTS = {
   stormDurationH: '18', seedInput: '42',
   oSlider: '%(n_out)s', cSlider: '%(m_crew)s', stormTrackSelect: '%(track)s', fSlider: '5',
+  // Outage-location model parameters. getElementById() below hands back a FRESH
+  // fake element every call, so resetOutageModelDefaults() can't persist
+  // anything -- readOutageModelConfig() would read '' and produce NaN, failing
+  // validateConfig(). These mirror OutageLocationModel.DEFAULT_CONFIG so the
+  // headless run uses the same parameters the page ships with.
+  modelWindThreshold: '35', modelWindScale: '25', modelWindExponent: '2',
+  modelRainCoefficient: '0.5', modelRainCap: '2', modelExposureExponent: '1',
+  modelCustomerSmoothing: '6', modelRuralBaseline: '0.02',
+  modelGaussianBandwidth: '10', modelFeederSusceptibility: '1',
+  modelLateralSusceptibility: '1.25',
 };
 
 const document = {
@@ -147,10 +205,15 @@ const document = {
     const el = _fakeElement(id);
     if (_CHECKED_BY_DEFAULT.has(id)) el.checked = true;
     if (_VALUE_DEFAULTS[id] !== undefined) el.value = _VALUE_DEFAULTS[id];
+    // Mutable so run_storm() can pick research-vs-basic after the page loads.
+    if (id === 'outagePlacementModel') el.value = window.__placementMode;
     return el;
   },
   createElement(tag){ return _fakeElement('created-'+tag); },
   querySelector(){ return _fakeElement('qs'); },
+  // The layer-picker/model UI queries checkbox groups off `document` directly;
+  // an empty NodeList is the right headless answer (nothing to sync).
+  querySelectorAll(){ return []; },
   addEventListener(){},
 };
 
@@ -170,23 +233,106 @@ function ImageData(data, w, h){ this.data = data; this.width = w; this.height = 
 """
 
 
+def _worker_shim_js() -> str:
+    """A SYNCHRONOUS stand-in for the browser Worker API.
+
+    The page moved outage placement into outage_location_worker.js and made
+    simulateStorm() fire-and-forget: it posts to the Worker and returns, with
+    results arriving via onmessage. V8 (py_mini_racer) has no Worker API, so
+    outageModelWorkerReady stayed false, simulateStorm() bailed at its guard,
+    and no outages were ever placed -- the whole calibration was dead.
+
+    This routes postMessage synchronously in both directions. It is honest to
+    do so: the worker script's own "browser worker" branch only needs
+    importScripts + self, its handleMessage() dispatch is synchronous, and its
+    async generate() path resolves through the shim's already-synchronous
+    setTimeout. The model math is untouched -- we only replace transport.
+
+    Returns "" when the worker file is absent (i.e. on master), so this harness
+    keeps behaving exactly as before there.
+    """
+    wpath = HERE / "outage_location_worker.js"
+    if not wpath.exists():
+        return ""
+    src = wpath.read_text(encoding="utf-8")
+    return """
+var __OUTAGE_WORKER_SRC = %s;
+function Worker(url){
+  const outer = this;
+  const handlers = [];
+  const workerSelf = {
+    // importScripts("outage_location_model.js") is a no-op here because the
+    // model is already injected as a global by _load_data_inject().
+    OutageLocationModel: globalThis.OutageLocationModel,
+    postMessage: function(message, transfer){
+      if (typeof outer.onmessage === 'function') outer.onmessage({ data: message });
+    },
+    addEventListener: function(type, fn){ if (type === 'message') handlers.push(fn); },
+  };
+  const importScriptsShim = function(){};
+  (new Function('self', 'importScripts', __OUTAGE_WORKER_SRC))(workerSelf, importScriptsShim);
+  this.onmessage = null; this.onerror = null; this.onmessageerror = null;
+  this.postMessage = function(message){
+    for (const fn of handlers.slice()) fn({ data: message });
+  };
+  this.terminate = function(){ handlers.length = 0; };
+}
+""" % json.dumps(src)
+
+
 def run_storm(script: str, data_inject: str, land_geo: dict,
-              track: str, n_out: int, m_crew: int) -> tuple[float | None, float | None, str]:
+              track: str, n_out: int, m_crew: int,
+              state_geo: dict | None = None) -> tuple[float | None, float | None, str]:
     """Returns (simulated_total_time_h, simulated_total_customers, last-5-log-lines)."""
     shim = _SHIM_TEMPLATE % {"n_out": n_out, "m_crew": m_crew, "track": track}
-    full = shim + "\n" + data_inject + "\n" + script
+    full = shim + "\n" + data_inject + "\n" + _worker_shim_js() + "\n" + script
 
     ctx = py_mini_racer.MiniRacer()
     ctx.eval(full)
+    # Let the page itself decide whether this storm has the HRRR wind+rain the
+    # 'research' model needs; 'research' on a storm without a grid makes
+    # simulateStorm() bail at its own guard.
+    if ctx.eval("typeof stormHasResearchWeather === 'function'"):
+        ctx.eval(
+            f"window.__placementMode = stormHasResearchWeather({json.dumps(track)})"
+            " ? 'research' : 'basic';"
+        )
+    # Mirror the // --- Boot --- block (which _extract_script() strips), and note
+    # it uses TWO DIFFERENT shapes:
+    #   countyGeo        = LAND-only shape -> grid placement + inside-bitmap, so
+    #                      nothing lands in Long Island Sound.
+    #   stateBoundaryGeo = full LEGAL state boundary -> handed to the outage
+    #                      model as `boundary` (makeWorkerRequestInput).
+    # Leaving stateBoundaryGeo null killed the research path ("boundary must
+    # contain a Polygon or MultiPolygon"); setting it to the LAND shape instead
+    # is subtly wrong in the other direction -- it is tighter than the legal
+    # outline, so coastal laterals fail the model's inside-boundary check
+    # ("selected network segment ... has no sampled position inside the
+    # boundary"). Pass each shape exactly where Boot passes it.
     ctx.eval(f"countyGeo = {json.dumps(land_geo)}; buildInsideBitmap(countyGeo);")
+    if ctx.eval("typeof stateBoundaryGeo !== 'undefined'"):
+        ctx.eval(f"stateBoundaryGeo = {json.dumps(state_geo if state_geo else land_geo)};")
+    # initializeOutageModelWorker() normally runs from the // --- Boot --- block,
+    # which _extract_script() strips, so start the (shimmed) Worker by hand.
+    if ctx.eval("typeof initializeOutageModelWorker === 'function'"):
+        ctx.eval("try{ initializeOutageModelWorker(); }"
+                 "catch(e){ __log.push('WORKER INIT ERROR: '+e); }")
     ctx.eval(
         "var __gridDone=false; generateGrid().then(()=>{__gridDone=true;})"
         ".catch(e=>{__log.push('GRID ERROR: '+e);__gridDone=true;});",
         timeout=60_000,
     )
+    # simulateStorm() is a promise on master but fire-and-forget (Worker-driven)
+    # on the outage-location-simulator branch, so handle both rather than
+    # assuming .then exists.
     ctx.eval(
-        "var __stormDone=false; simulateStorm().then(()=>{__stormDone=true;})"
-        ".catch(e=>{__log.push('STORM ERROR: '+e);__stormDone=true;});",
+        "var __stormDone=false;"
+        "try{"
+        "  var _r = simulateStorm();"
+        "  if (_r && typeof _r.then === 'function'){"
+        "    _r.then(()=>{__stormDone=true;}).catch(e=>{__log.push('STORM ERROR: '+e);__stormDone=true;});"
+        "  } else { __stormDone = true; }"
+        "}catch(e){ __log.push('STORM ERROR: '+e); __stormDone=true; }",
         timeout=30_000,
     )
     ctx.eval(
@@ -344,10 +490,15 @@ def main() -> None:
     data_inject = _load_data_inject()
     land_boundary = json.loads((DATA / "connecticut_land_boundary.json").read_text(encoding="utf-8"))
     land_geo = land_boundary[0]["geojson"]
+    # Full legal state outline, the shape Boot hands the outage model (see
+    # run_storm). Distinct from the land-only shape used for grid placement.
+    _sb = DATA / "connecticut_boundary.json"
+    state_geo = json.loads(_sb.read_text(encoding="utf-8"))[0]["geojson"] if _sb.exists() else None
 
     print(f"{'Storm':<16} {'N':>7} {'M':>6} {'RealH':>7} {'SimH':>8} {'Ratio':>7}")
     for track, n_out, m_crew, real_h, label in STORMS:
-        sim_h, total_cust, log_tail = run_storm(script, data_inject, land_geo, track, n_out, m_crew)
+        sim_h, total_cust, log_tail = run_storm(script, data_inject, land_geo, track, n_out, m_crew,
+                                                state_geo=state_geo)
         if sim_h is None:
             print(f"{label:<16} {n_out:>7} {m_crew:>6} {real_h:>7}    ERROR")
             print("  log:", log_tail)
