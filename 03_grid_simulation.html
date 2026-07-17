@@ -3485,9 +3485,22 @@ async function planRestoration(){
       if (N<=5000){
         bestI=linearFindVisible(cLat,cLon,done,oLat,oLon,realistic?discTime:null,cTime);
       } else if (realistic){
-        bestI = anyDiscoveredUndone(cTime)
-          ? nnGridFindVisible(nnGrid, cLat, cLon, done, oLat, oLon, discTime, cTime)
-          : -1;
+        if (anyDiscoveredUndone(cTime)){
+          bestI = nnGridFindVisible(nnGrid, cLat, cLon, done, oLat, oLon, discTime, cTime);
+          // nnGridFindVisible is an APPROXIMATE spatial search: it expands at
+          // most 100 grid rings out from the crew and gives up, so on the long
+          // tail of a large storm the nearest discovered-undone outage can sit
+          // beyond that ring cap and it returns -1 -- a FALSE NEGATIVE. That
+          // stranded 190-902 outages on the 5 biggest storms (they were
+          // discovered and undone, just spatially far from every idle crew),
+          // and since no future discovery exists either, the loop threw
+          // "lost track". anyDiscoveredUndone() has PROVEN an eligible outage
+          // exists, so fall back to the exhaustive scan, which cannot miss it.
+          // O(N) but only on the rare rounds the grid search fails.
+          if (bestI === -1) bestI = linearFindVisible(cLat,cLon,done,oLat,oLon,discTime,cTime);
+        } else {
+          bestI = -1;
+        }
       } else {
         bestI = nnGridFind(nnGrid, cLat, cLon, done, oLat, oLon);
       }
