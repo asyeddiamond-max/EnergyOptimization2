@@ -11,7 +11,7 @@ window.HARTFORD_STORM_TRACKS = {
     date: "2012-10-29",
     category_at_landfall: "Post-tropical",
     ct_peak_wind_mph: 69,
-    ct_customers_lost: 625000,
+    ct_customers_lost: 496769, // CORRECTED 2026-07 to the PURA Docket 13-03-23 figure (was a stale 625,000 news estimate; matches data/hartford_doe_oe417.js)
     track: [
       {lat:39.0,lon:-74.5,wind_kt:70,pres_mb:946,time:"2012-10-29T12:00Z"},
       {lat:39.4,lon:-74.2,wind_kt:65,pres_mb:950,time:"2012-10-29T15:00Z"},
@@ -49,7 +49,7 @@ window.HARTFORD_STORM_TRACKS = {
     date: "2011-08-28",
     category_at_landfall: "Category 1 (NJ/NY), TS at CT",
     ct_peak_wind_mph: 65,
-    ct_customers_lost: 670000,
+    ct_customers_lost: 671789, // CORRECTED 2026-07 to the PURA Docket 13-03-23 figure (was a stale 670,000 news estimate; matches data/hartford_doe_oe417.js)
     track: [
       {lat:39.0,lon:-74.5,wind_kt:65,pres_mb:960,time:"2011-08-28T06:00Z"},
       {lat:39.5,lon:-74.2,wind_kt:60,pres_mb:965,time:"2011-08-28T09:00Z"},

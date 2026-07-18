@@ -384,7 +384,7 @@ animates those exact arrays with hourly playback and cumulative outage markers.
 |---|---|
 | **What** | Fault Location, Isolation, and Service Restoration — automated distribution switches that can reroute power through alternate feeders without a crew visit. |
 | **Source** | Eversource distribution automation deployment reports; IEEE 1366 reliability metrics for automated switching. |
-| **Parameters** | 20% of feeder-level outages eligible for automatic switching. Restoration time ~30 minutes (remote operation). |
+| **Parameters** | 42% of feeder-level outages eligible for automatic switching (Eversource's disclosed `restoredUnder5min` rate). Restoration time ~5 minutes (remote FLISR operation) — matches `outage_restoration_adapter.js` `switchingRate: 0.42`, `switchingRestoreHours: 5/60`. (This doc previously said "20% / ~30 minutes", which was stale relative to the code and the Eversource smart-switch figure.) |
 | **Used by** | Switching/back-feed toggle in storm simulation. Switch-restored outages are pre-marked as done and excluded from crew dispatch. |
 | **Coverage note** | The 20% rate is a conservative estimate. Eversource's actual FLISR coverage may be higher in areas with newer automation infrastructure. Real FLISR eligibility depends on switch placement topology, load transfer capacity, and fault type — none of which are modeled here. |
 

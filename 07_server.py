@@ -229,7 +229,7 @@ class ScheduleRequest(BaseModel):
     # crews into tree (20%) and line (80%). The two subsystems run
     # independently — total restoration time = max(tree_time, line_time).
     crew_specialization: bool = False
-    tree_blocked_rate: float = Field(default=0.30, ge=0.0, le=1.0,
+    tree_blocked_rate: float = Field(default=0.90, ge=0.0, le=1.0,
         description="Fraction of outages requiring tree clearing")
     tree_crew_share: float = Field(default=0.20, ge=0.05, le=0.5,
         description="Fraction of total crews that are tree crews")
@@ -308,7 +308,7 @@ class RecommendRequest(BaseModel):
     # Full scheduler flags — same as ScheduleRequest so results match the simulation
     customer_weight: float = 0.0
     crew_specialization: bool = False
-    tree_blocked_rate: float = 0.30
+    tree_blocked_rate: float = 0.90
     tree_crew_share: float = 0.20
     hierarchical: bool = False
     tiered_priority: bool = False
@@ -344,7 +344,7 @@ class BatchScenario(BaseModel):
     realistic: bool = True
     customer_weight: float = 0.0
     crew_specialization: bool = False
-    tree_blocked_rate: float = 0.30
+    tree_blocked_rate: float = 0.90
     tree_crew_share: float = 0.20
 
 
@@ -418,7 +418,7 @@ class MonteCarloRequest(BaseModel):
     # Realistic sub-flags — same as ScheduleRequest so results match the simulation
     customer_weight: float = 0.0
     crew_specialization: bool = False
-    tree_blocked_rate: float = 0.30
+    tree_blocked_rate: float = 0.90
     tree_crew_share: float = 0.20
     hierarchical: bool = False
     tiered_priority: bool = False
@@ -671,7 +671,7 @@ def _scaled_assessment(base: float, total_customers: float) -> float:
 def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
                    realistic: bool, customer_weight: float = 0.0,
                    crew_specialization: bool = False,
-                   tree_blocked_rate: float = 0.30,
+                   tree_blocked_rate: float = 0.90,
                    tree_crew_share: float = 0.20,
                    hierarchical: bool = False,
                    tiered_priority: bool = False,
