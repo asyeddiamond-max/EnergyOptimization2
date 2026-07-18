@@ -47,21 +47,30 @@ window.HARTFORD_DOE_OE417 = [
     state: "CT",
     customers_affected: 632632,
     demand_loss_mw: null,
-    duration_h: 264,
-    restoration_complete: "2020-08-14",
-    notes: "11-day restoration; 504 line crews + 235 tree crews day 1, peaked " +
-      "at 4500+. VALIDATED 2026-07-13 against ORNL's EAGLE-I dataset " +
-      "(doi:10.6084/m9.figshare.24237376): EAGLE-I's measured CT peak was " +
-      "725,700 customers (ALL CT utilities) at 2020-08-05 14:30 UTC -- " +
-      "consistent with this entry's 632,632 Eversource-only figure plus " +
-      "UI's ~93,000 share. One nuance: EAGLE-I shows statewide return to " +
-      "<=2x blue-sky baseline at 199h (~8.3 days), while this entry's 264h " +
-      "(~11 days) reflects the PURA-docket/news last-customer tail -- the " +
-      "difference is individual service repairs and re-reported stragglers " +
-      "that the outage-map feed (EAGLE-I's source) counts differently than " +
-      "the regulatory record. Both are kept: 264h remains the value here " +
-      "since this dataset's duration convention is the full regulatory " +
-      "restoration timeline.",
+    // duration_h CORRECTED 2026-07-17: 264 -> 199, to use the SAME EAGLE-I
+    // measure (19_validate_against_eaglei.py "full_h": return to <=2x pre-storm
+    // baseline) that every other EAGLE-I-validated storm in this file uses
+    // (Dec 2023 83h, Henri 34h, Ida 51h, Aug 2020 66h, ...). Isaias was the
+    // lone storm still on the old DOE/PURA "regulatory last-customer" date
+    // (264h / 11 days) -- an inconsistent measure that also happened to hide a
+    // real model bias: at the consistent 199h, the restoration model runs ~48%
+    // slow on Isaias (16_calibrate ratio ~0.67), which correctly flags that
+    // workloadSlowdownMult over-predicts at the largest storm's scale. Keeping
+    // 264h masked that. The 264h regulatory tail (199->264h) is individual
+    // service-drop repairs / re-reported stragglers that EAGLE-I counts as
+    // baseline and that the model does not simulate. (EAGLE-I return exactly to
+    // baseline is 224h; the 2x-baseline crossing used project-wide is 199h.)
+    duration_h: 199,
+    restoration_complete: "2020-08-12",
+    notes: "~8.3-day restoration (EAGLE-I-measured); 504 line crews + 235 tree " +
+      "crews day 1, peaked at 4500+. VALIDATED 2026-07-13 vs ORNL EAGLE-I " +
+      "(doi:10.6084/m9.figshare.24237376): measured CT peak 725,700 (ALL CT " +
+      "utilities) at 2020-08-05 14:30 UTC -- consistent with this entry's " +
+      "632,632 Eversource-only + UI's ~93,000 share. duration_h now the " +
+      "EAGLE-I <=2x-baseline crossing (199h), consistent with every other " +
+      "EAGLE-I storm here; the old 264h was the DOE/PURA regulatory " +
+      "last-customer date (~11 days), ~65h of which is the individual-service " +
+      "tail EAGLE-I counts as baseline.",
     daily_pct_out: [1.0, 0.92, 0.78, 0.60, 0.42, 0.28, 0.16, 0.08, 0.03, 0.01, 0.0],
     daily_crews: [739, 1200, 2100, 3280, 3800, 4500, 4200, 3500, 2000, 800, 200],
   },

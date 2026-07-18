@@ -353,7 +353,11 @@ def run_storm(script: str, data_inject: str, land_geo: dict,
 # Snowtober, which real accounts describe as genuinely diffuse/statewide
 # damage rather than a concentrated track).
 STORMS = [
-    ("isaias_2020", 20450, 4500, 264, "Isaias 2020"),
+    # real_h 264 -> 199 (2026-07-17): use EAGLE-I's <=2x-baseline restoration
+    # (199h), consistent with every other EAGLE-I storm below, instead of the
+    # old DOE 264h regulatory date. This drops Isaias's ratio ~0.89 -> ~0.67,
+    # honestly exposing that workloadSlowdownMult over-predicts at Isaias scale.
+    ("isaias_2020", 20450, 4500, 199, "Isaias 2020"),
     # n_out corrected 19950->15500 following an authoritative customer-count
     # fix: PURA Docket 13-03-23's official decision gives Sandy's real CT
     # peak as 496,769, not the ~625,000 news-sourced estimate previously
@@ -419,7 +423,7 @@ STORMS = [
     # estimated. That looks like a real repair-difficulty mechanism the model
     # lacks -- heavy WET SNOW on high-elevation Litchfield County trees plus
     # hard road access -- not a data error. Documented, not chased.
-    ("", 450, 300, 60, "March 2023 Nor'easter"),
+    ("", 450, 350, 60, "March 2023 Nor'easter"),   # crews 300->350: sync to the dataset daily_crews peak + 21_crew_backout
     # Second real tornado/derecho-type event (NWS-confirmed serial derecho,
     # 2020-10-07), placed via the real HRRR grid + real NCEI storm reports
     # like May 2018, NOT synthetic town-centroid decay. The wind-severity
