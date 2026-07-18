@@ -335,9 +335,14 @@
     </div>
 
     <div class="ctrl">
-      <div class="row"><span>Customers affected: <b id="customerScaleVal">100,000</b></span></div>
-      <input type="range" id="oSlider" min="50" max="100000" value="2000" step="10" />
-      <div class="small"><b id="oVal">2,000</b> modeled failure units × 50 customers each.</div>
+      <div class="row"><span>Customers affected (est.): <b id="customerScaleVal">70,000</b></span></div>
+      <!-- Max 30,000: the worst real CT storm on record (Oct 2011 Nor'easter)
+           had ~26,132 outages [Wanik et al. 2017]. 100k was ~4x any real storm
+           and, at 50 cust/outage, implied 5M customers -- 3x the entire state. -->
+      <input type="range" id="oSlider" min="50" max="30000" value="2000" step="10" />
+      <div class="small"><b id="oVal">2,000</b> modeled failure units. Customers
+        affected per outage are geography-derived (feeder/lateral population),
+        averaging ~35 [Wanik 2017 / PURA 13-03-23], not a flat constant.</div>
     </div>
 
     <div id="modelSummary" class="model-summary">
@@ -1404,10 +1409,16 @@ function setRecProgress(pct, visible){
   _recProgressLabel.textContent = v + "%";
 }
 fS.oninput=()=>{fV.textContent=fS.value; markOutageModelStale('Network density changed. Regenerate the grid and outage scenario.');};
+// Sourced average customers per outage for the pre-generation ESTIMATE. Real CT
+// storms: Irene 44.8, Oct 2011 Nor'easter 30.9, Sandy 31.0 (weighted ~34.6) from
+// Wanik et al. 2017 + PURA Docket 13-03-23. The ACTUAL per-outage count is
+// geography-derived at generation time (see applyOutageModelResult); this is
+// only the slider preview, replacing the old unsourced flat 50.
+const EST_CUST_PER_OUTAGE = 35;
 oS.oninput=()=>{
   const units=Number(oS.value);
   oV.textContent=units.toLocaleString();
-  customerScaleV.textContent=(units*50).toLocaleString();
+  customerScaleV.textContent=(units*EST_CUST_PER_OUTAGE).toLocaleString();
   updateEstimate();
   markOutageModelStale('Requested scenario size changed. Generate a new scenario.');
 };
@@ -2357,6 +2368,34 @@ function applyOutageModelResult(result){
     undergroundEnabled:document.getElementById('undergroundLines').checked,
   });
   const outages=enriched.outages;
+  // GEOGRAPHY-DERIVED CUSTOMERS (replaces Alex's model's unsourced flat 50).
+  // Each outage inherits the customers of the feeder/lateral SEGMENT it sits on:
+  // census population is split substation -> feeder (popServed/feedersPerSub) ->
+  // lateral (/lateralsPerFeeder) -> segment (/#segments) at grid-build time, then
+  // converted to electric customers via the real ratio (1,633,000 customers /
+  // 3,605,944 residents = POP_TO_CUSTOMER_RATIO). This is the same cascade the
+  // pre-merge model used (which matched EAGLE-I peaks to 2-4%); 50 was a hardcoded
+  // guess that overshot ~45% and, at the old 100k cap, implied 5M customers.
+  // Real CT storms show ~30-45 customers/outage (Wanik 2017 / PURA 13-03-23).
+  const _segPop = (o)=>{
+    if (o.kind==='f' && feeders[o.fi]){ const f=feeders[o.fi]; return f.popServed/Math.max(1,(f.pts?.length||2)-1); }
+    if (o.kind==='l' && laterals[o.li]){ const l=laterals[o.li]; return l.popServed/Math.max(1,(l.pts?.length||2)-1); }
+    return 50/POP_TO_CUSTOMER_RATIO;   // fallback (no grid segment) -> ~50 customers
+  };
+  for (const o of outages){
+    o.popLoss = Math.max(1, Math.round(_segPop(o)*POP_TO_CUSTOMER_RATIO));
+    o.customers = o.popLoss;
+  }
+  const geoSumCust = outages.reduce((s,o)=>s+o.popLoss,0);
+  const geoTotalCust = Math.min(1633000, geoSumCust);
+  // Re-issue the handoff contract on the geography-derived customer total, so the
+  // restoration-handoff integrity check (prepareTimelineForRestoration) validates
+  // against the geography numbers, not the model's stale flat-50 total.
+  const geoContract = Object.freeze({
+    outageCount: outages.length,
+    customersPerOutage: 'geography-derived',
+    representedCustomers: geoSumCust,
+  });
   const trackKey=document.getElementById('stormTrackSelect').value;
   const trackData=trackKey&&window.HARTFORD_STORM_TRACKS&&window.HARTFORD_STORM_TRACKS[trackKey];
   const localPlannerReasons=[];
@@ -2365,11 +2404,11 @@ function applyOutageModelResult(result){
   if (document.getElementById('floodZoneClosures').checked&&enriched.summary.nearFloodZone) localPlannerReasons.push('flood-zone travel penalties');
   if (document.getElementById('customerCallbackLag').checked&&enriched.summary.callbackDelayed) localPlannerReasons.push('callback discovery delays');
   storm={
-    outages,totalCust:expectedCustomers,switchRestoredCount:enriched.summary.switchRestored,
+    outages,totalCust:geoTotalCust,switchRestoredCount:enriched.summary.switchRestored,
     isLocalized:!!trackData?.is_localized_reports,
     placementModel:result.summary.placementModel||'weather_customer_exposure_v1',
     modelConfig:result.config,modelSummary:result.summary,
-    initialContract:enriched.contract,
+    initialContract:geoContract,
     restorationMetadata:{...enriched.summary,localPlannerReasons},
     timeline:result.surfaces?.mode==='timeline'?result.surfaces.timeline:null,
   };
