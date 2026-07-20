@@ -307,7 +307,7 @@
       </select>
       <div id="modelAvailability" class="model-availability warn">Preparing outage generator…</div>
       <button type="button" id="retryOutageEngine" class="engine-retry">Retry outage generator</button>
-      <div class="small"><b>50 customers per outage.</b> The default 2,000-point scenario represents exactly 100,000 customers without power.</div>
+      <div class="small">Customers per outage are geography-derived from each feeder/lateral's served population (avg ~35, per Wanik 2017 / PURA 13-03-23), not a flat constant.</div>
       <button type="button" id="applyHistoricalPreset" class="future-tool" style="margin-top:7px;width:100%;border:1px solid #93c5fd;background:#fff;color:#1d4ed8;border-radius:5px;padding:5px;font-size:10px;cursor:pointer;">Apply historical restoration preset</button>
       <details class="model-advanced" id="outageModelAdvanced">
         <summary>Expert scientific calibration</summary>
@@ -2421,8 +2421,8 @@ function applyOutageModelResult(result){
   const isTimeline=result.surfaces?.mode==='timeline';
   if (isTimeline) clearOutageResultLayers();
   else renderOutagePoints(outages);
-  affectedEl.textContent=expectedCustomers.toLocaleString();
-  affectedPctEl.textContent=`${outages.length.toLocaleString()} locations × 50 customers`;
+  affectedEl.textContent=Math.round(storm.totalCust).toLocaleString();
+  affectedPctEl.textContent=`${outages.length.toLocaleString()} locations · geography-derived customers (avg ${Math.round(storm.totalCust/Math.max(1,outages.length))}/outage)`;
   outageCountEl.textContent=outages.length.toLocaleString();
   clearRestorationResult();
   document.getElementById('modelSummaryOutages').textContent=outages.length.toLocaleString();
@@ -4940,7 +4940,7 @@ function buildFeatureCollections(){
         type:'Feature',
         geometry:{type:'Point',coordinates:[+j.o.lon.toFixed(6),+j.o.lat.toFixed(6)]},
         properties:{
-          job_ord:0,crew_id:0,out_id:j.outageIdx+1,eta_h:+j.etaFinish.toFixed(3),
+          job_ord:0,crew_id:0,out_id:Number.isInteger(j.outageIdx)?j.outageIdx+1:-1,eta_h:+j.etaFinish.toFixed(3),
           depot_lat:null,depot_lon:null,restore_type:'automatic_switching',
         },
       });
@@ -5197,7 +5197,7 @@ function _generateSimulationReport(){
       r += `Wind Parameters:    threshold ${cfg.windThresholdMph} mph; scale ${cfg.windExcessScaleMph} mph; exponent ${cfg.windExponent}\n`;
       r += `Rain / Exposure:    coefficient ${cfg.rainCoefficient}; cap ${cfg.rainScoreCap}; exposure exponent ${cfg.exposureExponent}\n`;
     }
-    r += `Initial Contract:   ${N.toLocaleString()} × 50 = ${Math.round(totalCust).toLocaleString()} customers (verified)\n`;
+    r += `Initial Contract:   ${N.toLocaleString()} outages -> ${Math.round(totalCust).toLocaleString()} customers (geography-derived, verified)\n`;
     r += `Restoration Tags:   ${meta.critical||0} critical; ${meta.treeBlocked||0} tree-blocked; ${meta.nearFloodZone||0} flood-zone; ${meta.callbackDelayed||0} callback-delayed\n`;
     r += `                    ${meta.switchRestored||0} automatic switch; ${meta.underground||0} underground\n`;
   }
