@@ -336,10 +336,12 @@
 
     <div class="ctrl">
       <div class="row"><span>Customers affected (est.): <b id="customerScaleVal">70,000</b></span></div>
-      <!-- Max 30,000: the worst real CT storm on record (Oct 2011 Nor'easter)
-           had ~26,132 outages [Wanik et al. 2017]. 100k was ~4x any real storm
-           and, at 50 cust/outage, implied 5M customers -- 3x the entire state. -->
-      <input type="range" id="oSlider" min="50" max="30000" value="2000" step="10" />
+      <!-- Max 26,000 = the worst real CT storm on record (Oct 2011 Nor'easter,
+           ~26,132 outages / 807k customers, per Wanik 2017 / PURA 13-03-23), so
+           the tool stays inside the range we have real calibration data for.
+           Above this the model extrapolates and its known large-storm bias
+           (workloadSlowdownMult over-predicts, see Isaias) inflates the time. -->
+      <input type="range" id="oSlider" min="50" max="26000" value="2000" step="10" />
       <div class="small"><b id="oVal">2,000</b> modeled failure units. Customers
         affected per outage are geography-derived (feeder/lateral population),
         averaging ~35 [Wanik 2017 / PURA 13-03-23], not a flat constant.</div>
@@ -2426,7 +2428,10 @@ function applyOutageModelResult(result){
   outageCountEl.textContent=outages.length.toLocaleString();
   clearRestorationResult();
   document.getElementById('modelSummaryOutages').textContent=outages.length.toLocaleString();
-  document.getElementById('modelSummaryCustomers').textContent=expectedCustomers.toLocaleString();
+  // storm.totalCust is the geography-derived total; expectedCustomers was the
+  // model's flat outages x 50 and leaked ~40% high into this panel (30,000
+  // outages showed 1,500,000 instead of the geography ~1,050,000).
+  document.getElementById('modelSummaryCustomers').textContent=Math.round(storm.totalCust).toLocaleString();
   document.getElementById('modelSummarySplit').textContent=
     `${result.summary.feederOutages.toLocaleString()} / ${result.summary.lateralOutages.toLocaleString()}`;
   document.getElementById('modelSummaryRuntime').textContent=`${result.summary.totalRuntimeMs.toFixed(0)} ms`;
