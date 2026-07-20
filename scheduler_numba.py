@@ -740,7 +740,11 @@ def plan_restoration_numba(outages, m_crews, realistic=True, seed=42,
     # Derived by comparing simulated vs. real restoration times across 8
     # real storms; real/simulated followed a ~sqrt(customers) relationship.
     tc = float(total_customers) if total_customers is not None else float(cust_arr.sum())
-    workload_mult = max(1.0, 0.00928 * (tc ** 0.473)) if tc > 0 else 1.0
+    # Saturation cap 4.6 (see 03_grid_simulation.html WORKLOAD_MULT_CAP): the
+    # power law over-predicts the 3 largest storms once Isaias's reference is the
+    # EAGLE-I-measured 199h; friction plateaus at mega-storm scale. Caps only
+    # storms >~475k customers, leaving all calibrated mid/small storms unchanged.
+    workload_mult = max(1.0, min(4.6, 0.00928 * (tc ** 0.473))) if tc > 0 else 1.0
 
     # Small-storm overnight operations — ported from the JS scheduler (see
     # OVERNIGHT_CUST_MAX in 03_grid_simulation.html:planRestoration() for

@@ -3168,8 +3168,22 @@ async function planRestoration(){
   // (sampleRepairHours' wind-severity scaling), not generic sprawling-
   // logistics friction -- so it correctly keeps getting the customer-count
   // mult here rather than being exempted.)
+  // SATURATION CAP (added 2026-07-17): the power law above was tuned when
+  // Isaias's reference duration was 264h; correcting it to the EAGLE-I-measured
+  // 199h exposed that the law keeps growing too fast for the very largest storms
+  // (Isaias/Snowtober/Irene all came out ~0.67-0.84 real/sim -- the model
+  // over-predicts). Physically, logistics friction SATURATES at mega-storm
+  // scale: utilities max out mutual-aid, staging, and contractor capacity, so
+  // past a point more customers don't add proportional friction. Capping the
+  // multiplier plateaus it beyond ~475k customers (only the 4 mega-storms),
+  // leaving every calibrated mid/small storm (<=475k) exactly as it was.
+  // 4.6 sits just above Sandy 2012's multiplier (~4.58 at 497k customers, which
+  // already calibrated well at ~1.06) so Sandy is left untouched, while the
+  // three that over-predicted -- Isaias (~5.15), Irene (~5.30), Snowtober
+  // (~5.76) -- are clipped down toward their real durations.
+  const WORKLOAD_MULT_CAP = 4.6;
   const workloadSlowdownMult = storm.isLocalized ? 1 :
-    Math.max(1, 0.00928 * Math.pow(storm.totalCust, 0.473));
+    Math.max(1, Math.min(WORKLOAD_MULT_CAP, 0.00928 * Math.pow(storm.totalCust, 0.473)));
 
   // Item 3: damage-assessment ramp — discovery time per outage.
   //  - 30% of outages are visible within the first hour after dispatch.

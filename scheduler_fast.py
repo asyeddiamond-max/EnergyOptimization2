@@ -69,7 +69,8 @@ def plan_restoration_fast(outages, m_crews, realistic=True, seed=42, total_custo
         return [], 0.0, []
 
     tc = float(total_customers) if total_customers is not None else 0.0
-    workload_mult = max(1.0, 0.00928 * (tc ** 0.473)) if tc > 0 else 1.0
+    # Saturation cap 4.6 -- see scheduler_numba.py / 03_grid_simulation.html.
+    workload_mult = max(1.0, min(4.6, 0.00928 * (tc ** 0.473))) if tc > 0 else 1.0
     if overnight_ops is None:
         overnight_ops = 0 < tc <= 70000
 
