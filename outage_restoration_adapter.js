@@ -257,9 +257,18 @@
   }
 
   function summarizeRestorationJobs(outages, crews, automaticJobs = []) {
+    // Map each coordinate to a QUEUE of outage indices at that coordinate.
+    // A single-value map collapsed the (rare) case of two outages sharing a
+    // lat/lon to 6 decimals, so on the server path -- where jobs carry no
+    // outageIdx and must be matched by coordinate -- both jobs resolved to the
+    // same index and threw "restored more than once". A queue assigns each job
+    // at a shared coordinate to a distinct outage.
     const byCoordinate = new Map();
     outages.forEach((outage, index) => {
-      byCoordinate.set(`${outage.lat.toFixed(6)},${outage.lon.toFixed(6)}`, index);
+      const key = `${outage.lat.toFixed(6)},${outage.lon.toFixed(6)}`;
+      let bucket = byCoordinate.get(key);
+      if (!bucket) { bucket = []; byCoordinate.set(key, bucket); }
+      bucket.push(index);
     });
     const jobs = [
       ...automaticJobs,
@@ -271,7 +280,13 @@
     for (const job of jobs) {
       let outageIndex = Number.isInteger(job.outageIdx) ? job.outageIdx : -1;
       if (outageIndex < 0 && job.o && Number.isFinite(job.o.lat) && Number.isFinite(job.o.lon)) {
-        outageIndex = byCoordinate.get(`${job.o.lat.toFixed(6)},${job.o.lon.toFixed(6)}`) ?? -1;
+        // Take the next not-yet-restored index at this coordinate (drop any
+        // already-seen indices off the front of the queue first).
+        const bucket = byCoordinate.get(`${job.o.lat.toFixed(6)},${job.o.lon.toFixed(6)}`);
+        if (bucket) {
+          while (bucket.length && seen.has(bucket[0])) bucket.shift();
+          if (bucket.length) outageIndex = bucket.shift();
+        }
       }
       if (outageIndex < 0 || !outages[outageIndex]) {
         throw new ContractError("a restoration job could not be mapped to its input outage");

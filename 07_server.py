@@ -280,6 +280,10 @@ class JobResult(BaseModel):
     lat: float
     lon: float
     eta: float
+    # Index into the request's outages array. Returned so the browser can map
+    # each job back to its exact outage instead of matching by (lat,lon), which
+    # collapsed when two outages shared a coordinate ("restored more than once").
+    outage_idx: int = -1
 
 
 class CrewResult(BaseModel):
@@ -770,7 +774,8 @@ def _run_scheduler(req_outages: list[Outage], crews: int, seed: int,
             depot_lon=c["depot"][1],
             finish_time_h=c["time"],
             n_jobs=len(c["jobs"]),
-            jobs=[JobResult(lat=j["lat"], lon=j["lon"], eta=j["eta"])
+            jobs=[JobResult(lat=j["lat"], lon=j["lon"], eta=j["eta"],
+                            outage_idx=int(j.get("outage_idx", -1)))
                   for j in c["jobs"]],
         )
         for c in crews_out

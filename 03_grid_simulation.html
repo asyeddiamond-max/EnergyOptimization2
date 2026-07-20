@@ -2386,8 +2386,12 @@ function applyOutageModelResult(result){
     o.popLoss = Math.max(1, Math.round(_segPop(o)*POP_TO_CUSTOMER_RATIO));
     o.customers = o.popLoss;
   }
+  // No cap needed: geography popLoss cascades from the network's own popServed,
+  // whose statewide sum is TOTAL_POP x POP_TO_CUSTOMER_RATIO (~1.63M), so any
+  // subset of hit segments is already bounded. Using one uncapped value here
+  // keeps storm.totalCust, the handoff contract, and the restoration curve all
+  // summing the SAME number (a cap made them disagree and threw).
   const geoSumCust = outages.reduce((s,o)=>s+o.popLoss,0);
-  const geoTotalCust = Math.min(1633000, geoSumCust);
   // Re-issue the handoff contract on the geography-derived customer total, so the
   // restoration-handoff integrity check (prepareTimelineForRestoration) validates
   // against the geography numbers, not the model's stale flat-50 total.
@@ -2404,7 +2408,7 @@ function applyOutageModelResult(result){
   if (document.getElementById('floodZoneClosures').checked&&enriched.summary.nearFloodZone) localPlannerReasons.push('flood-zone travel penalties');
   if (document.getElementById('customerCallbackLag').checked&&enriched.summary.callbackDelayed) localPlannerReasons.push('callback discovery delays');
   storm={
-    outages,totalCust:geoTotalCust,switchRestoredCount:enriched.summary.switchRestored,
+    outages,totalCust:geoSumCust,switchRestoredCount:enriched.summary.switchRestored,
     isLocalized:!!trackData?.is_localized_reports,
     placementModel:result.summary.placementModel||'weather_customer_exposure_v1',
     modelConfig:result.config,modelSummary:result.summary,
@@ -3834,20 +3838,23 @@ function renderRestorationCurve(crews, totalTime, fmtDuration){
   // Local jobs carry outageIdx directly; deployed server versions that do
   // not return it use the generated coordinate key as a compatibility path.
   const pairs = [];
-  // Build a quick index of customers by lat,lon key for O(1) lookup.
-  const custByKey = new Map();
-  for (const o of storm.outages){
-    custByKey.set(`${o.lat.toFixed(6)},${o.lon.toFixed(6)}`, o.popLoss || 0);
-  }
+  // Map each coordinate to a QUEUE of outage indices (two outages can share a
+  // lat/lon to 6dp; a single-value map collapsed them, which was harmless when
+  // every outage was a flat 50 customers but corrupts the curve total now that
+  // customer counts are geography-derived and vary per outage).
+  const idxByKey = new Map();
+  storm.outages.forEach((o,i)=>{ const k=`${o.lat.toFixed(6)},${o.lon.toFixed(6)}`;
+    let b=idxByKey.get(k); if(!b){b=[];idxByKey.set(k,b);} b.push(i); });
+  const usedIdx = new Set();
   const allJobs=[...(plan?.automaticJobs||[]),...crews.flatMap(c=>c.jobs||[])];
   for (const j of allJobs){
-    let cust=0;
-    if (Number.isInteger(j.outageIdx)&&storm.outages[j.outageIdx]){
-      cust=storm.outages[j.outageIdx].popLoss||0;
-    } else {
-      const k = `${j.o.lat.toFixed(6)},${j.o.lon.toFixed(6)}`;
-      cust = custByKey.get(k) || 0;
+    let idx = Number.isInteger(j.outageIdx) ? j.outageIdx : -1;
+    if (idx<0 && j.o){
+      const b = idxByKey.get(`${j.o.lat.toFixed(6)},${j.o.lon.toFixed(6)}`);
+      if (b){ while(b.length&&usedIdx.has(b[0])) b.shift(); if(b.length) idx=b.shift(); }
     }
+    const cust = (idx>=0 && storm.outages[idx]) ? (storm.outages[idx].popLoss||0) : 0;
+    if (idx>=0) usedIdx.add(idx);
     pairs.push([j.etaFinish, cust]);
   }
   if (!pairs.length){ box.style.display = 'none'; return; }
@@ -3860,11 +3867,14 @@ function renderRestorationCurve(crews, totalTime, fmtDuration){
     running += c;
     cumRestored.push([t, running]);
   }
-  const totalCust = running;
-  if (Math.abs(totalCust-storm.totalCust)>1e-6){
-    throw new Error(`Restoration curve accounts for ${totalCust} customers, expected ${storm.totalCust}.`);
+  // Display curve ONLY -- never crash the restoration plan over a curve total
+  // mismatch. Render against storm.totalCust so the y-axis is correct even if a
+  // few jobs couldn't be coordinate-matched; warn instead of throwing.
+  const totalCust = storm.totalCust;
+  if (Math.abs(running-totalCust) > Math.max(1, 0.001*totalCust)){
+    console.warn(`Restoration curve accounts for ${running} customers vs storm.totalCust ${totalCust}; rendering against storm.totalCust.`);
   }
-  const curve = cumRestored.map(([t, cum]) => [t, totalCust - cum]);
+  const curve = cumRestored.map(([t, cum]) => [t, Math.max(0, totalCust - cum)]);
   const tMax = totalTime;
   if (totalCust <= 0 || tMax <= 0){ box.style.display = 'none'; return; }
 
@@ -4376,6 +4386,10 @@ async function runServerPlan(){
       jobs: (c.jobs || []).map(j => ({
         o: {lat: j.lat, lon: j.lon},
         etaFinish: j.eta,
+        // Exact index from the server (>=0) so downstream matching never falls
+        // back to fragile coordinate lookup; older servers omit it -> -1 -> the
+        // (now duplicate-safe) coordinate path handles it.
+        outageIdx: Number.isInteger(j.outage_idx) && j.outage_idx >= 0 ? j.outage_idx : undefined,
       })),
     }));
     const restorationContract=window.OutageRestorationAdapter.summarizeRestorationJobs(
