@@ -335,7 +335,7 @@
     </div>
 
     <div class="ctrl">
-      <div class="row"><span>Customers affected (est.): <b id="customerScaleVal">70,000</b></span></div>
+      <div class="row"><span>Customers affected<span id="custAffEst"> (est.)</span>: <b id="customerScaleVal">70,000</b></span></div>
       <!-- Max 26,000 = the worst real CT storm on record (Oct 2011 Nor'easter,
            ~26,132 outages / 807k customers, per Wanik 2017 / PURA 13-03-23), so
            the tool stays inside the range we have real calibration data for.
@@ -1420,7 +1420,12 @@ const EST_CUST_PER_OUTAGE = 35;
 oS.oninput=()=>{
   const units=Number(oS.value);
   oV.textContent=units.toLocaleString();
+  // Pre-generation PREVIEW: flat ~35/outage. The actual generated total is
+  // geography-weighted (outages concentrate in denser areas, so it runs a bit
+  // higher); applyOutageModelResult overwrites this with the real number and
+  // drops the "(est.)" tag. Dragging the slider restores the estimate.
   customerScaleV.textContent=(units*EST_CUST_PER_OUTAGE).toLocaleString();
+  const estTag=document.getElementById('custAffEst'); if(estTag) estTag.textContent=' (est.)';
   updateEstimate();
   markOutageModelStale('Requested scenario size changed. Generate a new scenario.');
 };
@@ -2426,6 +2431,12 @@ function applyOutageModelResult(result){
   affectedEl.textContent=Math.round(storm.totalCust).toLocaleString();
   affectedPctEl.textContent=`${outages.length.toLocaleString()} locations · geography-derived customers (avg ${Math.round(storm.totalCust/Math.max(1,outages.length))}/outage)`;
   outageCountEl.textContent=outages.length.toLocaleString();
+  // Sync the top "Customers affected" preview to the ACTUAL geography total and
+  // drop the "(est.)" tag, so it matches the Generated-scenario panel exactly
+  // (the flat-35 estimate ran ~8% low because placement concentrates outages in
+  // denser areas). Dragging the slider reverts it to the estimate.
+  customerScaleV.textContent=Math.round(storm.totalCust).toLocaleString();
+  { const estTag=document.getElementById('custAffEst'); if(estTag) estTag.textContent=''; }
   clearRestorationResult();
   document.getElementById('modelSummaryOutages').textContent=outages.length.toLocaleString();
   // storm.totalCust is the geography-derived total; expectedCustomers was the
