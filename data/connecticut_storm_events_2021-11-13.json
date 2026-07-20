@@ -1,0 +1,209 @@
+[
+ {
+  "lat": 41.6347,
+  "lon": -72.4733,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "MARLBOROUGH",
+  "county": "HARTFORD",
+  "time": "13-NOV-21 16:23:00"
+ },
+ {
+  "lat": 41.93,
+  "lon": -72.68,
+  "wind_kt": 70.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "(BDL)BRADLY FLD WNDS",
+  "county": "HARTFORD",
+  "time": "13-NOV-21 16:04:00"
+ },
+ {
+  "lat": 41.7502,
+  "lon": -72.2739,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "PERKINS CORNER",
+  "county": "TOLLAND",
+  "time": "13-NOV-21 16:30:00"
+ },
+ {
+  "lat": 41.8021,
+  "lon": -72.2559,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "STORRS",
+  "county": "TOLLAND",
+  "time": "13-NOV-21 16:40:00"
+ },
+ {
+  "lat": 41.6781,
+  "lon": -72.1702,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "SOUTH WINDHAM",
+  "county": "WINDHAM",
+  "time": "13-NOV-21 16:38:00"
+ },
+ {
+  "lat": 41.6839,
+  "lon": -72.1082,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "SCOTLAND",
+  "county": "WINDHAM",
+  "time": "13-NOV-21 16:45:00"
+ },
+ {
+  "lat": 41.7881,
+  "lon": -71.885,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "DANIELSON",
+  "county": "WINDHAM",
+  "time": "13-NOV-21 16:58:00"
+ },
+ {
+  "lat": 41.8499,
+  "lon": -71.8254,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "EAST KILLINGLY",
+  "county": "WINDHAM",
+  "time": "13-NOV-21 17:00:00"
+ },
+ {
+  "lat": 41.6184,
+  "lon": -72.2703,
+  "wind_kt": 55.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "LEBANON",
+  "county": "NEW LONDON",
+  "time": "13-NOV-21 16:15:00"
+ },
+ {
+  "lat": 41.3091,
+  "lon": -72.2899,
+  "wind_kt": 55.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "SOUND VIEW",
+  "county": "NEW LONDON",
+  "time": "13-NOV-21 16:21:00"
+ },
+ {
+  "lat": 41.4398,
+  "lon": -71.8892,
+  "wind_kt": 60.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "NORTH STONINGTON",
+  "county": "NEW LONDON",
+  "time": "13-NOV-21 16:50:00"
+ },
+ {
+  "lat": 41.3509,
+  "lon": -71.8909,
+  "wind_kt": 60.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "WEQUETEQUOCK",
+  "county": "NEW LONDON",
+  "time": "13-NOV-21 16:47:00"
+ },
+ {
+  "lat": 41.63,
+  "lon": -71.9302,
+  "wind_kt": 55.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "HOPEVILLE",
+  "county": "NEW LONDON",
+  "time": "13-NOV-21 16:50:00"
+ },
+ {
+  "lat": 41.28,
+  "lon": -72.91,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "EAST HAVEN",
+  "county": "NEW HAVEN",
+  "time": "13-NOV-21 15:42:00"
+ },
+ {
+  "lat": 41.29,
+  "lon": -72.77,
+  "wind_kt": 61.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "DAMASCUS",
+  "county": "NEW HAVEN",
+  "time": "13-NOV-21 15:47:00"
+ },
+ {
+  "lat": 41.27,
+  "lon": -72.77,
+  "wind_kt": 61.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "PINE ORCHARD",
+  "county": "NEW HAVEN",
+  "time": "13-NOV-21 15:47:00"
+ },
+ {
+  "lat": 41.2635,
+  "lon": -72.8175,
+  "wind_kt": 61.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "BRANFORD",
+  "county": "NEW HAVEN",
+  "time": "13-NOV-21 15:45:00"
+ },
+ {
+  "lat": 41.47,
+  "lon": -72.53,
+  "wind_kt": 61.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "HADDAM",
+  "county": "MIDDLESEX",
+  "time": "13-NOV-21 15:54:00"
+ },
+ {
+  "lat": 41.4875,
+  "lon": -72.9355,
+  "wind_kt": 56.5,
+  "event_type": "Tornado",
+  "location": "WEST CHESHIRE",
+  "county": "NEW HAVEN",
+  "time": "13-NOV-21 15:30:00"
+ },
+ {
+  "lat": 41.3822,
+  "lon": -71.8364,
+  "wind_kt": 78.2,
+  "event_type": "Tornado",
+  "location": "PAWCATUCK",
+  "county": "NEW LONDON",
+  "time": "13-NOV-21 16:54:00"
+ },
+ {
+  "lat": 41.2776,
+  "lon": -72.7951,
+  "wind_kt": 56.5,
+  "event_type": "Tornado",
+  "location": "DAMASCUS",
+  "county": "NEW HAVEN",
+  "time": "13-NOV-21 15:44:00"
+ },
+ {
+  "lat": 41.7039,
+  "lon": -71.8663,
+  "wind_kt": 56.5,
+  "event_type": "Tornado",
+  "location": "ALMYVILLE",
+  "county": "WINDHAM",
+  "time": "13-NOV-21 16:48:00"
+ },
+ {
+  "lat": 41.7707,
+  "lon": -71.9794,
+  "wind_kt": 60.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "BROOKLYN",
+  "county": "WINDHAM",
+  "time": "13-NOV-21 17:00:00"
+ }
+]

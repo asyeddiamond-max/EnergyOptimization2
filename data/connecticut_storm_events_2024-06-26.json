@@ -1,0 +1,245 @@
+[
+ {
+  "lat": 41.65,
+  "lon": -72.91,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "FORESTVILLE",
+  "county": "HARTFORD",
+  "time": "26-JUN-24 20:50:00"
+ },
+ {
+  "lat": 41.78,
+  "lon": -72.95,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "BURLINGTON",
+  "county": "HARTFORD",
+  "time": "26-JUN-24 20:45:00"
+ },
+ {
+  "lat": 41.68,
+  "lon": -72.91,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "FORESTVILLE",
+  "county": "HARTFORD",
+  "time": "26-JUN-24 20:55:00"
+ },
+ {
+  "lat": 41.71,
+  "lon": -71.88,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "MOOSUP",
+  "county": "WINDHAM",
+  "time": "26-JUN-24 21:51:00"
+ },
+ {
+  "lat": 41.85,
+  "lon": -72.79,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "WEATOGUE",
+  "county": "HARTFORD",
+  "time": "26-JUN-24 21:02:00"
+ },
+ {
+  "lat": 41.77,
+  "lon": -72.75,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "HARTFORD",
+  "county": "HARTFORD",
+  "time": "26-JUN-24 21:03:00"
+ },
+ {
+  "lat": 41.7,
+  "lon": -72.67,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "WETHERSFIELD",
+  "county": "HARTFORD",
+  "time": "26-JUN-24 21:08:00"
+ },
+ {
+  "lat": 41.68,
+  "lon": -71.92,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "PLAINFIELD",
+  "county": "WINDHAM",
+  "time": "26-JUN-24 21:50:00"
+ },
+ {
+  "lat": 41.95,
+  "lon": -72.31,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "STAFFORD SPGS",
+  "county": "TOLLAND",
+  "time": "26-JUN-24 21:36:00"
+ },
+ {
+  "lat": 41.76,
+  "lon": -72.52,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "MANCHESTER",
+  "county": "HARTFORD",
+  "time": "26-JUN-24 21:17:00"
+ },
+ {
+  "lat": 41.71,
+  "lon": -72.21,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "WILLIMANTIC",
+  "county": "WINDHAM",
+  "time": "26-JUN-24 21:33:00"
+ },
+ {
+  "lat": 41.94,
+  "lon": -72.68,
+  "wind_kt": 67.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "(BDL)BRADLY FLD WNDS",
+  "county": "HARTFORD",
+  "time": "26-JUN-24 21:15:00"
+ },
+ {
+  "lat": 41.77,
+  "lon": -71.86,
+  "wind_kt": 65.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "SOUTH KILLINGLY",
+  "county": "WINDHAM",
+  "time": "26-JUN-24 21:55:00"
+ },
+ {
+  "lat": 41.72,
+  "lon": -73.48,
+  "wind_kt": 60.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "KENT",
+  "county": "LITCHFIELD",
+  "time": "26-JUN-24 20:22:00"
+ },
+ {
+  "lat": 41.77,
+  "lon": -73.42,
+  "wind_kt": 60.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "EAST KENT",
+  "county": "LITCHFIELD",
+  "time": "26-JUN-24 20:32:00"
+ },
+ {
+  "lat": 41.85,
+  "lon": -73.33,
+  "wind_kt": 60.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "CORNWALL",
+  "county": "LITCHFIELD",
+  "time": "26-JUN-24 20:40:00"
+ },
+ {
+  "lat": 41.56,
+  "lon": -73.38,
+  "wind_kt": 55.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "BRIDGE WATER",
+  "county": "LITCHFIELD",
+  "time": "26-JUN-24 20:25:00"
+ },
+ {
+  "lat": 41.796,
+  "lon": -73.1986,
+  "wind_kt": 60.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "GOSHEN",
+  "county": "LITCHFIELD",
+  "time": "26-JUN-24 20:41:00"
+ },
+ {
+  "lat": 41.8349,
+  "lon": -73.1993,
+  "wind_kt": 60.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "GOSHEN",
+  "county": "LITCHFIELD",
+  "time": "26-JUN-24 20:42:00"
+ },
+ {
+  "lat": 41.74,
+  "lon": -73.08,
+  "wind_kt": 60.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "HARWINTON",
+  "county": "LITCHFIELD",
+  "time": "26-JUN-24 20:44:00"
+ },
+ {
+  "lat": 41.74,
+  "lon": -73.09,
+  "wind_kt": 60.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "EAST LITCHFIELD",
+  "county": "LITCHFIELD",
+  "time": "26-JUN-24 20:44:00"
+ },
+ {
+  "lat": 41.48,
+  "lon": -73.44,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "CANDLE WOOD SHRS",
+  "county": "FAIRFIELD",
+  "time": "26-JUN-24 20:17:00"
+ },
+ {
+  "lat": 41.44,
+  "lon": -73.26,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "BERKSHIRE ESTATES",
+  "county": "NEW HAVEN",
+  "time": "26-JUN-24 20:22:00"
+ },
+ {
+  "lat": 41.4,
+  "lon": -73.06,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "PINE BRIDGE",
+  "county": "NEW HAVEN",
+  "time": "26-JUN-24 20:45:00"
+ },
+ {
+  "lat": 41.54,
+  "lon": -72.13,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "NORTHWICHTOWN",
+  "county": "NEW LONDON",
+  "time": "26-JUN-24 21:45:00"
+ },
+ {
+  "lat": 41.33,
+  "lon": -73.2,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "MONROE",
+  "county": "FAIRFIELD",
+  "time": "26-JUN-24 20:33:00"
+ },
+ {
+  "lat": 41.28,
+  "lon": -72.79,
+  "wind_kt": 50.0,
+  "event_type": "Thunderstorm Wind",
+  "location": "DAMASCUS",
+  "county": "NEW HAVEN",
+  "time": "26-JUN-24 20:59:00"
+ }
+]

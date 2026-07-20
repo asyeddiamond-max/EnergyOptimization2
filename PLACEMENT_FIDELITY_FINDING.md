@@ -1,72 +1,77 @@
-# Finding: when public storm-report data reproduces the county-level outage footprint
+# When can public storm-report data place power outages? A Connecticut storm census
 
-**One line.** Placing storm outages by proximity to public NCEI storm-event
-reports reproduces a storm's real county-level footprint *only when the report
-network densely samples the damage area* — which, because reports are filed
-where damage is observed, is population-biased. Rural-tracking storms are
-systematically mis-placed.
+**Scope.** Every Connecticut storm 2018–2024 with both usable NCEI point reports
+and a real EAGLE-I county signal (11 convective storms), plus CT's other
+major outage events. Placement is scored against ORNL EAGLE-I's independent
+county-resolution customers-out record (`24_validate_placement_vs_eaglei.py`,
+3000 outages × 30 Monte-Carlo seeds; Pearson r of the placement's per-county
+share vs EAGLE-I's, over CT's 8 counties).
 
-## What was tested
+## Result 1 (positive) — for convective storms, public reports locate outages well
 
-For each storm we compare three per-county distributions over Connecticut's 8
-counties:
+Placing outages by proximity to NCEI Thunderstorm-Wind/Tornado points reproduces
+the real county footprint for most convective storms: **median Pearson r rises
+0.51 (population-only baseline) → 0.80
+(concentrated)**, concentrated beats baseline in **8/11** storms,
+and r ≥ 0.5 in **10/11**.
 
-- **EAGLE-I actual** — ORNL's county-resolution customers-out record (the
-  utilities' own outage-map archive), peak during the storm window. Independent
-  ground truth; neither placement ever sees it.
-- **Baseline placement** — outages weighted by customer/population exposure only
-  (what the production model effectively does; spreads across the SW corridor).
-- **Concentrated placement** — outages weighted by population × proximity to real
-  NCEI wind/tornado reports (`23_concentrated_placement.py`).
+| Date | Event | Peak out | Pts | baseline r | concentrated r |
+|---|---|---:|---:|---:|---:|
+| 2024-08-03 | Aug 3 2024 thunderstorms | 21,978 | 8 | 0.74 | 0.97 |
+| 2021-11-13 | Nov 2021 tornado outbreak | 10,982 | 23 | 0.51 | 0.96 |
+| 2018-05-15 | May 2018 macroburst/tornadoes | 134,816 | 58 | 0.67 | 0.96 |
+| 2023-09-08 | Sep 2023 thunderstorms | 22,195 | 11 | 0.60 | 0.91 |
+| 2020-08-27 | Aug 2020 severe convective | 63,912 | 30 | 0.47 | 0.88 |
+| 2024-06-26 | Jun 26 2024 thunderstorms | 50,001 | 27 | 0.22 | 0.80 |
+| 2023-07-29 | Jul 2023 thunderstorms | 17,766 | 9 | 0.51 | 0.74 |
+| 2021-07-06 | Jul 2021 (Elsa remnants) | 22,373 | 17 | 0.20 | 0.70 |
+| 2020-11-15 | Nov 2020 windstorm | 43,020 | 31 | 0.70 | 0.64 |
+| 2024-06-23 | Jun 23 2024 thunderstorms | 16,764 | 22 | 0.64 | 0.54 |
+| 2020-10-07 | Oct 2020 serial derecho | 27,943 | 14 | -0.00 | -0.02 |
 
-Scored with Pearson r, Spearman ρ, total-variation distance, and top-3 capture
-(`24_validate_placement_vs_eaglei.py`, 3000 outages × 40 Monte-Carlo seeds).
+The lone clear failure is **2020-10-07**, a derecho that tracked rural, forested
+NE Connecticut: EAGLE-I shows Windham+Tolland took ~47% of outages, but only ~2
+of 14 reports were filed there (the report network is population-biased). A
+simple "did reports fall where the damage was" coverage metric predicts *which*
+convective storms fail only weakly (corr with r = +0.23),
+so failures like Oct 2020 are not cleanly forecastable from report geography
+alone — an honest limit on the method's reliability.
 
-## Result
+## Result 2 (the hard limit) — the method is blind to CT's biggest storms
 
-| Storm | NCEI reports | baseline r | concentrated r | top-3 capture (base→conc) |
-|---|---:|---:|---:|---:|
-| May 2018 macroburst/tornadoes (western CT) | 58 | 0.67 | **0.96** | 55% → 88% |
-| Oct 2020 serial derecho (rural NE CT) | 14 | -0.01 | -0.02 | 33% → 28% |
+NCEI Storm Events only geolocates *convective* damage. Tropical and synoptic
+high-wind events are county-**zone** records with no coordinates; winter storms
+produce no wind reports at all. So for CT's largest outage events the
+point-report method has essentially no data:
 
-**May 2018** hit the populated, well-surveyed southwest. 58 reports densely
-covered the damage; concentrated placement reproduced the footprint almost
-perfectly (r = 0.96) and moved outages off Hartford
-(baseline 25% → actual 3%) onto New Haven/Fairfield.
+| Date | Event | Peak customers out | Storm type | Usable points |
+|---|---|---:|---|---:|
+| 2020-08-04 | Isaias | 725,700 | tropical | 1 |
+| 2018-03-08 | Mar 2018 nor'easter (Riley/Quinn) | 170,041 | winter nor'easter | 0 |
+| 2019-11-01 | Halloween 2019 windstorm | 90,583 | synoptic high wind | 0 |
+| 2019-10-17 | Oct 2019 windstorm | 45,516 | synoptic high wind | 0 |
+| 2021-09-02 | Ida remnants | 36,822 | tropical | 0 |
+| 2021-08-22 | Henri | 32,279 | tropical | 0 |
 
-**Oct 2020** tracked the rural, forested northeast. EAGLE-I shows Windham +
-Tolland took ~47% of the state's outages, but only 2 of 14 NCEI reports were
-filed there. Every public covariate — population, tree canopy (near-uniform at
-county scale, 34–52%), NCEI proximity, and their product — scored r ≈ 0. The
-footprint was set by the storm's mesoscale track, which the population-biased
-report network fails to sample.
+**Isaias** (~726k customers, the largest CT outage event in the record) yields a
+single point report. The March 2018 nor'easters (170k) and the 2019 Halloween
+windstorm (91k) yield zero. These non-convective events cause CT's biggest
+outages and the method cannot touch them.
 
-## Why this matters (and why it is honest, not a win-claim)
+## Takeaway (honest, publishable framing)
 
-- It is **not** "our placement is better." On a broad rural storm the
-  concentrated placement is *no better than chance*, and slightly worse than the
-  naive baseline.
-- It **is** a characterized limit: public-report placement fidelity is governed
-  by report-network coverage of the damage, and that coverage is
-  population-biased. This is a testable, quantified refinement of ORNL's
-  qualitative "not possible from public data" statement.
-- **County resolution cannot validate localized storms.** A single tornado
-  (e.g. Sep 2019) is sub-county and produces no county-scale EAGLE-I signal at
-  all — so the storms where concentrated placement helps most are exactly the
-  ones county data can validate least. Sub-county validation needs
-  non-public (utility) outage data.
+Public-report outage placement is a **real but narrow** tool. It reconstructs
+the county-level footprint of *convective* storms well (median r ≈
+0.80, a clear gain over population-only placement), which is a
+genuine positive result. But it is **structurally blind to the tropical,
+synoptic, and winter storms that dominate CT's outage totals**, and even within
+convective storms it fails unpredictably when the population-biased report
+network misses rural-tracking damage. This quantifies, on real data, the limit
+ORNL stated qualitatively: general outage-footprint reconstruction requires data
+the public sources do not provide at the needed resolution — i.e.
+utility-internal, sub-county records.
 
-## Caveats / what a publishable version needs
-
-- Only 2 storms with both data sources locally; a real study needs N storms
-  across types (convective, tropical/coastal, winter, tornado) and ideally
-  several utilities/states.
-- County resolution (8 units) is coarse; the interesting fidelity question is
-  sub-county (feeder/town), which requires utility records.
-- NCEI report wind values are estimated/measured inconsistently; the kernel
-  bandwidth (σ = 12 km) was not tuned per storm.
-
-_Artifacts: `output/placement_fidelity_summary.png`,
-`output/county_validation_may2018.png`, `output/county_validation_oct2020.png`.
-Generated by `25_placement_fidelity_summary.py` over
-`24_validate_placement_vs_eaglei.py`._
+_Artifacts: `output/storm_applicability_census.png`,
+`output/placement_fidelity_summary.png`, per-storm `output/county_validation_*.png`.
+Generated by `26_storm_applicability_census.py`, reusing
+`24_validate_placement_vs_eaglei.py` + `23_concentrated_placement.py`._
