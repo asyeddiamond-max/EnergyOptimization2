@@ -50,3 +50,39 @@ DEVELOPMENT_JOURNAL*.md
 # Rust build output (regenerate with cargo build)
 wasm_scheduler/target/
 wasm_scheduler/Cargo.lock
+
+# --- Research / analysis artifacts: kept locally, NOT part of the runnable app ---
+# The deployable simulator is app + server + schedulers + the data the app loads.
+# Everything below is research, docs, or generated output -- present on disk, but
+# intentionally untracked so the repo stays to what builds/runs the code.
+# Analysis & validation scripts:
+/16_calibrate_against_real_storms.py
+/19_validate_against_eaglei.py
+/20_ensemble_vs_actual.py
+/21_crew_backout.py
+/22_infer_network_from_outages.py
+/23_concentrated_placement.py
+/24_validate_placement_vs_eaglei.py
+/25_placement_fidelity_summary.py
+/26_storm_applicability_census.py
+# Research/validation data (the browser app does not load these):
+/data/eaglei_ct_*.csv
+/data/connecticut_storm_events_*.json
+# Generated figures & exports (regenerate via the scripts above):
+/output/*.png
+/output/*.csv
+# Findings, journals, notebooks, office docs, reference text:
+/PLACEMENT_FIDELITY_FINDING.md
+/ROADMAP.md
+/STORM_TIMELINE_IMPLEMENTATION_PLAN.md
+/DESIGN_DECISIONS.md
+/JOURNAL.html
+/Hartford_Grid_Dev_Journal.docx
+/Hartford_Grid_Research_Context.docx
+/build_docx.py
+/_wanik_2015.txt
+/algorithm_methodology.ipynb
+/fetch_hrrr_storm_wind.ipynb
+# Professor-facing brief (never auto-publish):
+/research_brief_public_data_outages.pdf
+/make_research_brief.py
