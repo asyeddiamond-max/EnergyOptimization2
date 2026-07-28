@@ -433,6 +433,18 @@ class MonteCarloRequest(BaseModel):
     pre_storm_staging: bool = False
 
 
+class MonteCarloEnvelope(BaseModel):
+    """Per-time uncertainty band: customers still without power vs time,
+    percentiled across the N ensemble runs on a shared time grid. Lets the
+    frontend shade a 5th-95th band around the median restoration trajectory
+    instead of drawing a single deterministic curve."""
+    grid_h: list[float]        # shared time grid (hours), ascending
+    p05_out: list[float]       # 5th-pct customers still out at each grid time
+    p50_out: list[float]       # median
+    p95_out: list[float]       # 95th-pct
+    total_customers: float
+
+
 class MonteCarloResponse(BaseModel):
     n_runs: int
     mean_h: float
@@ -443,6 +455,10 @@ class MonteCarloResponse(BaseModel):
     min_h: float
     max_h: float
     individual_h: list[float]
+    # Per-time customers-out envelope across the runs. None on the fast
+    # process-pool path (which returns only totals, no per-run timelines);
+    # present for the app's normal runs (any sub-flag on -> serial path).
+    envelope: MonteCarloEnvelope | None = None
 
 
 # --- Helpers --------------------------------------------------------------
@@ -1214,6 +1230,35 @@ def _mc_worker(args):
         return total
 
 
+def _mc_envelope(run_events, total_customers, tmax, n_points=60):
+    """Percentile the per-run customers-out timelines onto a shared time grid.
+    run_events[k] is run k's sorted [(restore_eta_h, customers), ...]. Returns a
+    MonteCarloEnvelope of p05/p50/p95 customers-still-out at each grid time."""
+    if not run_events or tmax <= 0 or total_customers <= 0:
+        return None
+    grid = [tmax * i / (n_points - 1) for i in range(n_points)]
+    per_run: list[list[float]] = []
+    for ev in run_events:
+        outs, j, restored = [], 0, 0.0
+        for t in grid:
+            while j < len(ev) and ev[j][0] <= t:
+                restored += ev[j][1]
+                j += 1
+            outs.append(max(0.0, total_customers - restored))
+        per_run.append(outs)
+    m = len(per_run)
+    def col_pct(i: int, p: float) -> float:
+        vals = sorted(r[i] for r in per_run)
+        return vals[max(0, min(m - 1, int(p * (m - 1))))]
+    return MonteCarloEnvelope(
+        grid_h=[round(t, 4) for t in grid],
+        p05_out=[round(col_pct(i, 0.05), 1) for i in range(n_points)],
+        p50_out=[round(col_pct(i, 0.50), 1) for i in range(n_points)],
+        p95_out=[round(col_pct(i, 0.95), 1) for i in range(n_points)],
+        total_customers=total_customers,
+    )
+
+
 @app.post("/api/monte_carlo", response_model=MonteCarloResponse)
 def monte_carlo(req: MonteCarloRequest) -> MonteCarloResponse:
     """Run the scheduler N times with different seeds and return aggregate
@@ -1228,6 +1273,8 @@ def monte_carlo(req: MonteCarloRequest) -> MonteCarloResponse:
         eff_road  = 1.5 * (1.25 if req.soil_saturation else 1.0)
         tree_mult = 1.3 if req.soil_saturation else 1.0
         real_total = sum(o.customers for o in req.outages)
+        cust = [float(o.customers) for o in req.outages]     # fixed across seeds
+        run_events: list[list[tuple[float, float]]] = []     # per-run (eta, cust)
         # Small-event assessment scaling from the real customer sum (parity
         # with schedule() and the JS scheduler; see _scaled_assessment).
         eff_assess = _scaled_assessment(0.0 if req.pre_storm_staging else 12.0, real_total)
@@ -1254,7 +1301,7 @@ def monte_carlo(req: MonteCarloRequest) -> MonteCarloResponse:
             times = []
             for k in range(req.n_runs):
                 seed = (req.base_seed + k * 9973) & 0xFFFFFFFF
-                total, _ = _run_scheduler(
+                total, run_crews = _run_scheduler(
                     req.outages, req.crews, seed, req.realistic,
                     customer_weight=req.customer_weight,
                     crew_specialization=req.crew_specialization,
@@ -1270,11 +1317,17 @@ def monte_carlo(req: MonteCarloRequest) -> MonteCarloResponse:
                     is_localized=req.is_localized,
                 )
                 times.append(total)
+                ev = [(jb.eta, cust[jb.outage_idx] if 0 <= jb.outage_idx < len(cust) else 0.0)
+                      for c in run_crews for jb in c.jobs]
+                ev.sort()
+                run_events.append(ev)
         times_sorted = sorted(times)
         n = len(times_sorted)
         def pct(p: float) -> float:
             idx = max(0, min(n - 1, int(p * (n - 1))))
             return times_sorted[idx]
+        envelope = (_mc_envelope(run_events, real_total, max(times))
+                    if run_events and times else None)
         return MonteCarloResponse(
             n_runs=n,
             mean_h=statistics.mean(times),
@@ -1285,6 +1338,7 @@ def monte_carlo(req: MonteCarloRequest) -> MonteCarloResponse:
             min_h=min(times),
             max_h=max(times),
             individual_h=times,
+            envelope=envelope,
         )
 
     return cached_response("monte_carlo", req, MonteCarloResponse, _compute)

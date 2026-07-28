@@ -4652,6 +4652,39 @@ document.getElementById('batchRunBtn').onclick = async function(){
   }
 };
 
+// Draw the Monte Carlo uncertainty band (5th-95th pct customers-still-out) plus
+// the median trajectory on the restoration-curve SVG, replacing the single
+// deterministic curve with the ensemble view. Same coordinate mapping as
+// renderRestorationCurve (x = t/tMax*280, y = customers-out on 0..H). Fed by the
+// `envelope` returned from /api/monte_carlo.
+function renderRestorationEnvelope(env){
+  if (!env || !Array.isArray(env.grid_h) || env.grid_h.length < 2) return;
+  const box = document.getElementById('restoreCurveBox');
+  const svg = document.getElementById('restoreCurve');
+  const labelsRow = document.getElementById('restoreCurveLabels');
+  const total = env.total_customers, g = env.grid_h, tMax = g[g.length - 1];
+  if (!(total > 0) || !(tMax > 0)) return;
+  const W = 280, H = 80;
+  const X = t => (t / tMax) * W;
+  const Y = out => 4 + (1 - Math.max(0, Math.min(total, out)) / total) * (H - 8);
+  // Band: forward along p95 (upper edge = more still out / slower), then back
+  // along p05 (lower edge = fewer out / faster), closed into a filled ribbon.
+  let band = `M ${X(g[0]).toFixed(1)} ${Y(env.p95_out[0]).toFixed(1)}`;
+  for (let i = 1; i < g.length; i++) band += ` L ${X(g[i]).toFixed(1)} ${Y(env.p95_out[i]).toFixed(1)}`;
+  for (let i = g.length - 1; i >= 0; i--) band += ` L ${X(g[i]).toFixed(1)} ${Y(env.p05_out[i]).toFixed(1)}`;
+  band += ' Z';
+  let med = `M ${X(g[0]).toFixed(1)} ${Y(env.p50_out[0]).toFixed(1)}`;
+  for (let i = 1; i < g.length; i++) med += ` L ${X(g[i]).toFixed(1)} ${Y(env.p50_out[i]).toFixed(1)}`;
+  svg.innerHTML =
+    `<path d="${band}" fill="#6366f1" fill-opacity="0.20" stroke="none"></path>` +
+    `<path d="${med}" fill="none" stroke="#4338ca" stroke-width="1.6" vector-effect="non-scaling-stroke"></path>`;
+  box.style.display = 'block';
+  if (labelsRow) labelsRow.innerHTML =
+    `<span>0h</span>` +
+    `<span style="color:#4338ca;font-weight:600;">median · 5–95% band (${(window._mcResult && window._mcResult.n_runs) || ''} seeds)</span>` +
+    `<span>${Math.round(tMax)}h</span>`;
+}
+
 document.getElementById('monteCarloBtn').onclick = async function(){
   if (!_serverHealthy){
     showServerStatus('Monte Carlo requires the server backend.\nWaiting for it to come online — try again in ~30 sec.', true);
@@ -4672,13 +4705,15 @@ document.getElementById('monteCarloBtn').onclick = async function(){
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
     window._mcResult = d;
+    if (d.envelope) renderRestorationEnvelope(d.envelope);
     const elapsed = (performance.now() - t0).toFixed(0);
     showServerStatus(
       `Monte Carlo: ${d.n_runs} runs in ${elapsed} ms\n` +
       `mean ${d.mean_h.toFixed(2)} h   median ${d.median_h.toFixed(2)} h\n` +
       `stddev ${d.stddev_h.toFixed(2)} h\n` +
       `5th–95th pct: ${d.p05_h.toFixed(2)} – ${d.p95_h.toFixed(2)} h\n` +
-      `range: ${d.min_h.toFixed(2)} – ${d.max_h.toFixed(2)} h`
+      `range: ${d.min_h.toFixed(2)} – ${d.max_h.toFixed(2)} h` +
+      (d.envelope ? `\n→ uncertainty band drawn on the restoration curve` : ``)
     );
   } catch (e) {
     showServerStatus(`Error: ${e.message}\nIs the server running?`, true);
