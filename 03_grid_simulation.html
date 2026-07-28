@@ -3981,6 +3981,9 @@ function renderRestorationCurve(crews, totalTime, fmtDuration){
   const curve = cumRestored.map(([t, cum]) => [t, Math.max(0, totalCust - cum)]);
   const tMax = totalTime;
   if (totalCust <= 0 || tMax <= 0){ box.style.display = 'none'; return; }
+  // Remember this curve's axes so the Monte Carlo band can be drawn BEHIND it on
+  // the same scale (keeping the stepped curve + the real-Sandy overlay on top).
+  window._restoreCurveCtx = { tMax, totalCust };
 
   // Down-sample to at most ~140 points for the SVG path so we don't ship
   // thousands of polyline points for huge scenarios.
@@ -4662,7 +4665,14 @@ function renderRestorationEnvelope(env){
   const box = document.getElementById('restoreCurveBox');
   const svg = document.getElementById('restoreCurve');
   const labelsRow = document.getElementById('restoreCurveLabels');
-  const total = env.total_customers, g = env.grid_h, tMax = g[g.length - 1];
+  const g = env.grid_h;
+  // Align to the already-drawn stepped restoration curve when one exists, so the
+  // band sits BEHIND it (and behind the real-Sandy overlay) on the same axes.
+  // Otherwise fall back to the ensemble's own scale + a median line.
+  const ctx = window._restoreCurveCtx;
+  const overlay = !!(ctx && ctx.tMax > 0 && ctx.totalCust > 0 && /<path/.test(svg.innerHTML));
+  const total = overlay ? ctx.totalCust : env.total_customers;
+  const tMax  = overlay ? ctx.tMax      : g[g.length - 1];
   if (!(total > 0) || !(tMax > 0)) return;
   const W = 280, H = 80;
   const X = t => (t / tMax) * W;
@@ -4673,16 +4683,21 @@ function renderRestorationEnvelope(env){
   for (let i = 1; i < g.length; i++) band += ` L ${X(g[i]).toFixed(1)} ${Y(env.p95_out[i]).toFixed(1)}`;
   for (let i = g.length - 1; i >= 0; i--) band += ` L ${X(g[i]).toFixed(1)} ${Y(env.p05_out[i]).toFixed(1)}`;
   band += ' Z';
-  let med = `M ${X(g[0]).toFixed(1)} ${Y(env.p50_out[0]).toFixed(1)}`;
-  for (let i = 1; i < g.length; i++) med += ` L ${X(g[i]).toFixed(1)} ${Y(env.p50_out[i]).toFixed(1)}`;
-  svg.innerHTML =
-    `<path d="${band}" fill="#6366f1" fill-opacity="0.20" stroke="none"></path>` +
-    `<path d="${med}" fill="none" stroke="#4338ca" stroke-width="1.6" vector-effect="non-scaling-stroke"></path>`;
+  const bandEl = `<path d="${band}" fill="#6366f1" fill-opacity="0.18" stroke="none"></path>`;
   box.style.display = 'block';
-  if (labelsRow) labelsRow.innerHTML =
-    `<span>0h</span>` +
-    `<span style="color:#4338ca;font-weight:600;">median · 5–95% band (${(window._mcResult && window._mcResult.n_runs) || ''} seeds)</span>` +
-    `<span>${Math.round(tMax)}h</span>`;
+  if (overlay){
+    // Prepend so the band renders behind the stepped curve + the real-Sandy line.
+    svg.innerHTML = bandEl + svg.innerHTML;
+  } else {
+    let med = `M ${X(g[0]).toFixed(1)} ${Y(env.p50_out[0]).toFixed(1)}`;
+    for (let i = 1; i < g.length; i++) med += ` L ${X(g[i]).toFixed(1)} ${Y(env.p50_out[i]).toFixed(1)}`;
+    svg.innerHTML = bandEl +
+      `<path d="${med}" fill="none" stroke="#4338ca" stroke-width="1.6" vector-effect="non-scaling-stroke"></path>`;
+    if (labelsRow) labelsRow.innerHTML =
+      `<span>0h</span>` +
+      `<span style="color:#4338ca;font-weight:600;">median · 5–95% band (${(window._mcResult && window._mcResult.n_runs) || ''} seeds)</span>` +
+      `<span>${Math.round(tMax)}h</span>`;
+  }
 }
 
 document.getElementById('monteCarloBtn').onclick = async function(){
