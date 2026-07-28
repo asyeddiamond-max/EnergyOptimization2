@@ -68,11 +68,26 @@
   }
   .progress.active { display:block; }
   .progress > .bar {
-    height:100%; width:0%; transition: width 120ms ease-out;
+    height:100%; width:0%;
+    transition: width 320ms cubic-bezier(0.25, 1, 0.5, 1);
     background:linear-gradient(90deg, #34d399, #10b981);
+    position:relative; overflow:hidden;
   }
   .progress > .bar.orange {
     background:linear-gradient(90deg, #fb923c, #ea580c);
+  }
+  /* Moving sheen so an active bar looks alive between the worker's coarse
+     stage-boundary progress updates (which otherwise freeze, then jump). */
+  .progress.active > .bar::after {
+    content:""; position:absolute; inset:0;
+    background:linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+    transform:translateX(-100%);
+    animation: progShimmer 1.15s ease-in-out infinite;
+  }
+  @keyframes progShimmer { to { transform: translateX(100%); } }
+  @media (prefers-reduced-motion: reduce) {
+    .progress.active > .bar::after { animation: none; }
+    .progress > .bar { transition: width 120ms ease-out; }
   }
   .progress > .label {
     position:absolute; top:-18px; right:0;
