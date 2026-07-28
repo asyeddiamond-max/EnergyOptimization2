@@ -240,7 +240,7 @@
       <div id="realisticSubToggles" class="rf-panel">
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="customerPriority" checked /><span class="rf-name">Customer-impact priority</span></label><div class="rf-desc">Crews favour outages restoring more customers instead of pure nearest-neighbour. Server-routed only.</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="crewSpecialization" /><span class="rf-name">Crew specialization (line vs tree)</span></label><div class="rf-desc">80/20 line/tree crew split. This is an alternative to hierarchical restoration; the current server scheduler cannot safely combine both.</div></div>
-        <div class="rf-item"><label class="rf-label"><input type="checkbox" id="hierarchicalMode" checked /><span class="rf-name">Hierarchical restoration</span></label><div class="rf-desc">Top-down: laterals can't energize until parent feeder backbone is repaired. Server-routed only.</div></div>
+        <div class="rf-item"><label class="rf-label"><input type="checkbox" id="hierarchicalMode" checked /><span class="rf-name">Hierarchical restoration (recommended)</span></label><div class="rf-desc">Top-down: laterals can't energize until their parent feeder backbone is repaired — a hard grid-topology constraint, so this is the more physically accurate mode and the default. Server-routed only.</div></div>
         <div id="restorationCompatibilityNote" class="rf-compat">Hierarchical restoration is selected. Crew specialization is off because the two server modes cannot safely be combined.</div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="tieredPriority" checked /><span class="rf-name">Tiered priority dispatch</span></label><div class="rf-desc">Make-safe hazards first (~3%), then critical facilities (~2%), then general load. Server-routed only.</div></div>
         <div class="rf-item"><label class="rf-label"><input type="checkbox" id="crewStickiness" checked /><span class="rf-name">Crew territory stickiness</span></label><div class="rf-desc">Crews work their assigned substation territory only. Fleet split proportionally by customer count. Works in browser and server.</div></div>
@@ -582,7 +582,7 @@
       <div style="font-size:10px;color:#64748b;margin-top:3px;line-height:1.35;">Optional HIFLD facilities, Census, NOAA tracks, and DOE references. Enable only the layers needed for the current review.</div>
       <div id="realDataPanel" class="rf-panel">
         <div class="rf-item">
-          <label class="rf-label"><input type="checkbox" id="showCriticalFacilities" /><span class="rf-name">Critical facilities</span></label>
+          <label class="rf-label"><input type="checkbox" id="showCriticalFacilities" checked /><span class="rf-name">Critical facilities</span></label>
           <div class="rf-desc">Real HIFLD hospitals, fire stations, EMS, water plants shown on map. Outages near these are priority-1 for restoration. <span id="critFacilityCount"></span></div>
         </div>
         <div class="rf-item">
@@ -590,11 +590,11 @@
           <div class="rf-desc">883 tracts (2020 Census) for much finer customer-count placement than the 169-town model. <span id="censusTractCount"></span></div>
         </div>
         <div class="rf-item">
-          <label class="rf-label"><input type="checkbox" id="showStormTrack" /><span class="rf-name">NOAA storm track</span></label>
+          <label class="rf-label"><input type="checkbox" id="showStormTrack" checked /><span class="rf-name">NOAA storm track</span></label>
           <div class="rf-desc">HURDAT2 best-track visualization for the storm selected in the Storm outage model above. The track overlay does not alter outage placement.</div>
         </div>
         <div class="rf-item">
-          <label class="rf-label"><input type="checkbox" id="showDoePanel" /><span class="rf-name">DOE OE-417 events</span></label>
+          <label class="rf-label"><input type="checkbox" id="showDoePanel" checked /><span class="rf-name">DOE OE-417 events</span></label>
           <div class="rf-desc">Real CT disturbance events for calibrating simulated vs. actual restoration curves. <span id="doeEventCount"></span></div>
           <div id="doeEventsPanel" style="display:none;margin-top:6px;max-height:160px;overflow-y:auto;font-size:10px;font-family:ui-monospace,monospace;background:#fff;border:1px solid #fdba74;border-radius:4px;padding:6px;"></div>
         </div>
@@ -824,9 +824,9 @@ map.getPane('countyBoundary').style.zIndex = 650;
 map.getPane('countyBoundary').style.pointerEvents = 'none';
 
 const mapLayerVisibility={
-  towns:false,territories:false,gridLines:false,substations:false,
+  towns:true,territories:true,gridLines:true,substations:true,
   impactSurface:true,outages:true,restoration:true,depots:true,
-  criticalFacilities:false,stormTrack:false,
+  criticalFacilities:true,stormTrack:true,
 };
 const layerPicker=L.control({position:'topright'});
 layerPicker.onAdd=function(){
@@ -836,15 +836,15 @@ layerPicker.onAdd=function(){
     <div class="ml-title">Map layers</div>
     <label><input type="checkbox" data-map-layer="outages" checked> Outage locations <span class="layer-state"></span></label>
     <label><input type="checkbox" data-map-layer="impactSurface" checked> Weather / impact overlay <span class="layer-state"></span></label>
-    <label><input type="checkbox" data-map-layer="substations"> Substations <span class="layer-state"></span></label>
-    <label><input type="checkbox" data-map-layer="gridLines"> Grid lines <span class="layer-state"></span></label>
-    <label><input type="checkbox" data-map-layer="territories"> Service territories <span class="layer-state"></span></label>
-    <label><input type="checkbox" data-map-layer="towns"> Town boundaries <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="substations" checked> Substations <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="gridLines" checked> Grid lines <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="territories" checked> Service territories <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="towns" checked> Town boundaries <span class="layer-state"></span></label>
     <div class="layer-group-title">Restoration and review</div>
     <label><input type="checkbox" data-map-layer="restoration" checked> Repair assignments <span class="layer-state"></span></label>
     <label><input type="checkbox" data-map-layer="depots" checked> Crew depots <span class="layer-state"></span></label>
-    <label><input type="checkbox" data-map-layer="criticalFacilities"> Critical facilities <span class="layer-state"></span></label>
-    <label><input type="checkbox" data-map-layer="stormTrack"> Storm track <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="criticalFacilities" checked> Critical facilities <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="stormTrack" checked> Storm track <span class="layer-state"></span></label>
   `;
   L.DomEvent.disableClickPropagation(div);
   L.DomEvent.disableScrollPropagation(div);
