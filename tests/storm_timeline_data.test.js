@@ -36,6 +36,10 @@ test("curated Isaias timeline has a complete hourly Connecticut weather cube", (
   assert.equal(storm.interval_minutes, 60);
   assert.equal(storm.antecedent_rain_hours, 6);
   assert.equal(storm.frames.length, 24);
+  assert.ok(data.grid.lats.every((value, index, values) =>
+    Number.isFinite(value) && (index === 0 || value > values[index - 1])));
+  assert.ok(data.grid.lons.every((value, index, values) =>
+    Number.isFinite(value) && (index === 0 || value > values[index - 1])));
 
   storm.frames.forEach((frame, index) => {
     assert.equal(frame.wind_gust_mph.length, cellCount);
@@ -49,6 +53,18 @@ test("curated Isaias timeline has a complete hourly Connecticut weather cube", (
       assert.equal(Date.parse(frame.valid_time) - previous, 60 * 60 * 1000);
     }
   });
+});
+
+test("first visible frame contains real antecedent rain rather than zero padding", () => {
+  const first = loadTimelineData().storms.isaias_2020.frames[0];
+  const preWindowContributionCells = first.rain_6h_in.reduce(
+    (count, value, index) => count + (value > first.rain_1h_in[index] + 0.004 ? 1 : 0),
+    0,
+  );
+  assert.ok(preWindowContributionCells > 0);
+  const generator = fs.readFileSync(path.join(ROOT, "12_fetch_hrrr_storm_wind.py"), "utf8");
+  assert.match(generator, /Actual HRRR f01 APCP fields are fetched/);
+  assert.match(generator, /not zero-padded/);
 });
 
 test("six-hour rain agrees with the aligned hourly fields after the pre-window period", () => {

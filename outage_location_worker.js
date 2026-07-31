@@ -20,7 +20,7 @@
   let yieldToMessages;
 
   if (typeof importScripts === "function" && typeof self !== "undefined") {
-    importScripts("outage_location_model.js");
+    importScripts("outage_location_model.js?v=4");
     model = self.OutageLocationModel;
     send = (message, transfer = []) => self.postMessage(message, transfer);
     subscribe = (handler) => self.addEventListener("message", (event) => handler(event.data));
@@ -122,6 +122,12 @@
   }
 
   function prepareSurfaceTransport(customer, weather, impact) {
+    const normalizedImpactScore = flattenGrid(impact.normalizedImpactScore);
+    const weatherSeverity = flattenGrid(weather.weatherSeverity);
+    const relativeCustomerConsequenceIndex = flattenGrid(
+      impact.relativeCustomerConsequenceIndex,
+    );
+    const smoothedImpact = flattenGrid(impact.smoothedImpact);
     const surfaces = {
       rows: customer.latitudes.length,
       columns: customer.longitudes.length,
@@ -129,25 +135,42 @@
       longitudes: Float64Array.from(customer.longitudes),
       mask: flattenGrid(customer.connecticutMask, Uint8Array),
       customerExposure: flattenGrid(customer.smoothedCustomerAccounts),
-      weatherSeverity: flattenGrid(weather.weatherSeverity),
+      relativeCustomerConsequenceIndex,
+      weatherSeverity,
+      hazardIndex: weatherSeverity,
       rawImpact: flattenGrid(impact.rawImpact),
-      smoothedImpact: flattenGrid(impact.smoothedImpact),
-      probability: flattenGrid(impact.samplingProbability),
+      smoothedImpact,
+      impactPriorityScore: smoothedImpact,
+      normalizedImpactScore,
+      normalizedImpactPriorityScore: normalizedImpactScore,
+      spatialMethod: {
+        customer: customer.spatialMethod,
+        weather: weather.spatialMethod,
+        impact: impact.spatialMethod,
+      },
+      // Deprecated protocol alias; both fields reference the same transferred
+      // array and neither represents fixed-size marginal inclusion probability.
+      probability: normalizedImpactScore,
     };
     const transfer = [
       surfaces.latitudes.buffer,
       surfaces.longitudes.buffer,
       surfaces.mask.buffer,
       surfaces.customerExposure.buffer,
+      surfaces.relativeCustomerConsequenceIndex.buffer,
       surfaces.weatherSeverity.buffer,
       surfaces.rawImpact.buffer,
       surfaces.smoothedImpact.buffer,
-      surfaces.probability.buffer,
+      surfaces.normalizedImpactScore.buffer,
     ];
     return { surfaces, transfer };
   }
 
   function prepareTimelineSurfaceTransport(customer, timeline) {
+    const relativeCustomerConsequenceIndex = flattenGrid(
+      timeline.frames[0].impact.relativeCustomerConsequenceIndex,
+      Float32Array,
+    );
     const surfaces = {
       mode: "timeline",
       rows: customer.latitudes.length,
@@ -156,6 +179,12 @@
       longitudes: Float64Array.from(customer.longitudes),
       mask: flattenGrid(customer.connecticutMask, Uint8Array),
       customerExposure: flattenGrid(customer.smoothedCustomerAccounts, Float32Array),
+      relativeCustomerConsequenceIndex,
+      spatialMethod: {
+        customer: customer.spatialMethod,
+        weather: timeline.frames[0].weather.spatialMethod,
+        impact: timeline.frames[0].impact.spatialMethod,
+      },
       timeline: {
         stormId: timeline.stormId,
         stormName: timeline.stormName,
@@ -164,16 +193,28 @@
         intervalMinutes: timeline.intervalMinutes,
         antecedentRainHours: timeline.antecedentRainHours,
         rainInputKind: timeline.rainInputKind,
-        frames: timeline.frames.map((frame) => ({
-          frameIndex: frame.frameIndex,
-          validTime: frame.validTime,
-          windGustMph: flattenGrid(frame.weather.windMph, Float32Array),
-          rain1hIn: flattenGrid(frame.rain1hIn, Float32Array),
-          rain6hIn: flattenGrid(frame.rain6hIn, Float32Array),
-          weatherSeverity: flattenGrid(frame.weather.weatherSeverity, Float32Array),
-          rawImpact: flattenGrid(frame.impact.rawImpact, Float32Array),
-          smoothedImpact: flattenGrid(frame.impact.smoothedImpact, Float32Array),
-        })),
+        frames: timeline.frames.map((frame) => {
+          const weatherSeverity = flattenGrid(
+            frame.weather.weatherSeverity,
+            Float32Array,
+          );
+          const smoothedImpact = flattenGrid(
+            frame.impact.smoothedImpact,
+            Float32Array,
+          );
+          return {
+            frameIndex: frame.frameIndex,
+            validTime: frame.validTime,
+            windGustMph: flattenGrid(frame.weather.windMph, Float32Array),
+            rain1hIn: flattenGrid(frame.rain1hIn, Float32Array),
+            rain6hIn: flattenGrid(frame.rain6hIn, Float32Array),
+            weatherSeverity,
+            hazardIndex: weatherSeverity,
+            rawImpact: flattenGrid(frame.impact.rawImpact, Float32Array),
+            smoothedImpact,
+            impactPriorityScore: smoothedImpact,
+          };
+        }),
       },
     };
     const transfer = [
@@ -181,6 +222,7 @@
       surfaces.longitudes.buffer,
       surfaces.mask.buffer,
       surfaces.customerExposure.buffer,
+      surfaces.relativeCustomerConsequenceIndex.buffer,
     ];
     for (const frame of surfaces.timeline.frames) {
       transfer.push(
@@ -204,6 +246,8 @@
     );
     const totalSegmentWeight = segments.reduce((sum, segment) => sum + segment.weight, 0);
     return {
+      placementModel: `${scenario.methodology.placementMode}_snapshot_v2`,
+      placementMode: scenario.methodology.placementMode,
       candidateSegments: segments.length,
       feederCandidateSegments,
       lateralCandidateSegments: segments.length - feederCandidateSegments,
@@ -213,11 +257,18 @@
       lateralOutages: scenario.outages.length - feederOutages,
       representedCustomers: scenario.totalCustomers,
       totalSegmentWeight,
+      totalFailureOrientedWeight: segments.reduce(
+        (sum, segment) => sum + (segment.failureOrientedWeight || 0), 0,
+      ),
+      totalImpactPriorityWeight: segments.reduce(
+        (sum, segment) => sum + (segment.impactPriorityWeight || 0), 0,
+      ),
       feederSamplingWeightShare: segments.reduce(
         (sum, segment) => sum + (segment.networkKind === "feeder" ? segment.weight : 0), 0,
       ) / totalSegmentWeight,
       surface: {
         validConnecticutCells: customer.summary.validCellCount,
+        totalPopulationPersons: customer.totalPopulationPersons,
         totalCustomerAccounts: customer.totalCustomerAccounts,
         positiveWeatherCells: weather.summary.positiveSeverityCells,
         maximumWeatherSeverity: weather.summary.maximumSeverity,
@@ -307,7 +358,7 @@
         timingsMs,
         currentStage,
         0.18,
-        "Calculating 24 hourly weather, impact, and outage-risk frames…",
+        "Calculating separated hourly hazard, consequence, and impact frames…",
         () => model.generateTimelineOutageScenario(input),
       );
 
@@ -406,7 +457,8 @@
 
       currentStage = "network-weighting";
       const segments = await stage(
-        runId, timingsMs, currentStage, 0.58, "Weighting atomic feeder and lateral segments…",
+        runId, timingsMs, currentStage, 0.58,
+        "Integrating hazard and impact scores along standardized network segments…",
         () => model.buildWeightedNetworkSegments(
           input.network, customer, weather, impact, validated.config,
         ),
@@ -464,6 +516,9 @@
           supersession: true,
           transferableSurfaces: true,
           timelineWeather: true,
+          separatedRiskComponents: true,
+          lineIntegratedNetworkScores: true,
+          segmentKeyedSampling: true,
         } }));
         return;
       }
@@ -497,5 +552,8 @@
     supersession: true,
     transferableSurfaces: true,
     timelineWeather: true,
+    separatedRiskComponents: true,
+    lineIntegratedNetworkScores: true,
+    segmentKeyedSampling: true,
   } }));
 })();

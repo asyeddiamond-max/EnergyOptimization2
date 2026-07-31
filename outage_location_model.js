@@ -17,7 +17,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function buildModule() {
   "use strict";
 
-  const SCHEMA_VERSION = 1;
+  const SCHEMA_VERSION = 2;
   const POPULATION_TO_CUSTOMER_RATIO = 1633000 / 3605944;
   const EARTH_RADIUS_KM = 6371.0088;
 
@@ -33,11 +33,23 @@
     rainReferenceIn: 1,
     rainScoreCap: 2,
     exposureExponent: 1,
+    // Prespecified regularization: tract/block sensitivity is negligible at
+    // this bandwidth on the 3 km analysis grid. It is not a fitted parameter.
     customerSmoothingKm: 6,
-    ruralBaselineFraction: 0.02,
+    // No synthetic uniform exposure is added by default. A nonzero value
+    // remains available for sensitivity experiments, but requires an explicit
+    // scenario choice.
+    ruralBaselineFraction: 0,
+    // Prespecified impact-surface regularization, retained with explicit
+    // sensitivity results rather than represented as a calibrated constant.
     gaussianBandwidthKm: 10,
+    placementMode: "impact_weighted",
+    candidateSegmentLengthKm: 1,
+    lineIntegrationStepKm: 0.25,
+    // Neutral type multipliers. Non-neutral values require an explicit
+    // sensitivity scenario or empirical calibration.
     feederSusceptibility: 1,
-    lateralSusceptibility: 1.25,
+    lateralSusceptibility: 1,
   });
 
   class InputValidationError extends Error {
@@ -61,6 +73,9 @@
     customer_smoothing_km: "customerSmoothingKm",
     rural_baseline_fraction: "ruralBaselineFraction",
     gaussian_bandwidth_km: "gaussianBandwidthKm",
+    placement_mode: "placementMode",
+    candidate_segment_length_km: "candidateSegmentLengthKm",
+    line_integration_step_km: "lineIntegrationStepKm",
     feeder_susceptibility: "feederSusceptibility",
     lateral_susceptibility: "lateralSusceptibility",
   });
@@ -98,11 +113,16 @@
     if (typeof config.stormId !== "string" || !config.stormId.trim()) {
       throw new InputValidationError("stormId must not be empty");
     }
+    if (!["failure_oriented", "impact_weighted"].includes(config.placementMode)) {
+      throw new InputValidationError(
+        "placementMode must be failure_oriented or impact_weighted",
+      );
+    }
     integer(config.seed, "seed");
     integer(config.nOutages, "nOutages", 1);
     integer(config.customersPerOutage, "customersPerOutage", 1);
     if (config.customersPerOutage !== 50) {
-      throw new InputValidationError("version-one outages must represent exactly 50 customers");
+      throw new InputValidationError("generated outages must represent exactly 50 customers");
     }
     for (const key of ["windThresholdMph", "rainCoefficient", "ruralBaselineFraction"]) {
       if (finiteNumber(config[key], key) < 0) {
@@ -112,6 +132,7 @@
     for (const key of [
       "windExcessScaleMph", "windExponent", "rainReferenceIn", "rainScoreCap",
       "exposureExponent", "customerSmoothingKm", "gaussianBandwidthKm",
+      "candidateSegmentLengthKm", "lineIntegrationStepKm",
       "feederSusceptibility", "lateralSusceptibility",
     ]) {
       if (finiteNumber(config[key], key) <= 0) {
@@ -290,7 +311,7 @@
     });
   }
 
-  function rasterizeCustomerAccounts(censusTracts, latitudes, longitudes, mask) {
+  function rasterizePopulationPersons(censusTracts, latitudes, longitudes, mask) {
     const tracts = normalizeCensusTracts(censusTracts);
     const rows = latitudes.length;
     const columns = longitudes.length;
@@ -315,14 +336,24 @@
         candidates.set(row * columns + column, 1);
         totalWeight = 1;
       }
-      const accounts = tract.population * POPULATION_TO_CUSTOMER_RATIO;
       for (const [key, weight] of candidates) {
         const row = Math.floor(key / columns);
         const column = key % columns;
-        grid[row][column] += accounts * weight / totalWeight;
+        grid[row][column] += tract.population * weight / totalWeight;
       }
     }
     return grid;
+  }
+
+  function scaleGrid(grid, scalar) {
+    return grid.map((row) => row.map((value) => value * scalar));
+  }
+
+  function rasterizeCustomerAccounts(censusTracts, latitudes, longitudes, mask) {
+    return scaleGrid(
+      rasterizePopulationPersons(censusTracts, latitudes, longitudes, mask),
+      POPULATION_TO_CUSTOMER_RATIO,
+    );
   }
 
   function gaussianKernel(sigmaCells) {
@@ -384,6 +415,33 @@
     };
   }
 
+  function spatialGridMetadata(latitudes, longitudes) {
+    const spacing = gridCellSpacingKm(latitudes, longitudes);
+    const longitudeScales = latitudes.map(
+      (latitude) => 111.195 * Math.cos(latitude * Math.PI / 180),
+    );
+    const minimumLongitudeScale = Math.min(...longitudeScales);
+    const maximumLongitudeScale = Math.max(...longitudeScales);
+    return {
+      coordinateReferenceSystem: "EPSG:4326",
+      coordinateOrder: "[longitude, latitude]",
+      gridType: "regular_geographic_grid_nodes",
+      gridValuesLocatedAt: "node_centers",
+      rows: latitudes.length,
+      columns: longitudes.length,
+      latitudeCellKm: spacing.latitudeCellKm,
+      longitudeCellKmAtMeanLatitude: spacing.longitudeCellKm,
+      approximateCellAreaKm2AtMeanLatitude:
+        spacing.latitudeCellKm * spacing.longitudeCellKm,
+      longitudeKmPerDegreeRange: [minimumLongitudeScale, maximumLongitudeScale],
+      distanceApproximation: "spherical Earth, radius 6371.0088 km",
+      interpolation: "bilinear in latitude/longitude coordinates",
+      boundaryRule: "grid node center inside polygon; polygon edges count as inside",
+      boundaryPolygonSemantics: "even-odd rings",
+      gridNormalizationMeasure: "equal node weights; population values are mass per node",
+    };
+  }
+
   function gridTotal(grid) {
     let total = 0;
     for (const row of grid) for (const value of row) total += value;
@@ -437,45 +495,83 @@
     const lats = validateCoordinates(latitudes, "latitudes");
     const lons = validateCoordinates(longitudes, "longitudes");
     const mask = buildConnecticutMask(boundary, lats, lons);
-    const rawCustomerAccounts = rasterizeCustomerAccounts(censusTracts, lats, lons, mask);
+    const rawPopulationPersons = rasterizePopulationPersons(censusTracts, lats, lons, mask);
     const spacing = gridCellSpacingKm(lats, lons);
-    const smoothedCustomerAccounts = boundaryAwareGaussianSmooth(rawCustomerAccounts, mask, {
+    const smoothedPopulationPersons = boundaryAwareGaussianSmooth(rawPopulationPersons, mask, {
       smoothingKm, ...spacing,
     });
-    const total = gridTotal(rawCustomerAccounts);
+    const totalPopulationPersons = gridTotal(rawPopulationPersons);
     const validCellCount = mask.reduce((sum, row) => sum + row.filter(Boolean).length, 0);
-    if (!validCellCount || total <= 0) throw new InputValidationError("customer surface has no in-state customer accounts");
-    const baseline = ruralBaselineFraction * total / validCellCount;
+    if (!validCellCount || totalPopulationPersons <= 0) {
+      throw new InputValidationError("population surface has no in-state persons");
+    }
+    const baseline = ruralBaselineFraction * totalPopulationPersons / validCellCount;
     if (baseline) {
       for (let row = 0; row < mask.length; row += 1) {
         for (let column = 0; column < mask[0].length; column += 1) {
-          if (mask[row][column]) smoothedCustomerAccounts[row][column] += baseline;
+          if (mask[row][column]) smoothedPopulationPersons[row][column] += baseline;
         }
       }
     }
-    const rescale = total / gridTotal(smoothedCustomerAccounts);
+    const rescale = totalPopulationPersons / gridTotal(smoothedPopulationPersons);
     for (let row = 0; row < mask.length; row += 1) {
-      for (let column = 0; column < mask[0].length; column += 1) smoothedCustomerAccounts[row][column] *= rescale;
+      for (let column = 0; column < mask[0].length; column += 1) {
+        smoothedPopulationPersons[row][column] *= rescale;
+      }
     }
+    const rawCustomerAccounts = scaleGrid(rawPopulationPersons, POPULATION_TO_CUSTOMER_RATIO);
+    const smoothedCustomerAccounts = scaleGrid(
+      smoothedPopulationPersons,
+      POPULATION_TO_CUSTOMER_RATIO,
+    );
+    const totalCustomerAccounts = totalPopulationPersons * POPULATION_TO_CUSTOMER_RATIO;
     return {
       schemaVersion: SCHEMA_VERSION,
-      schema: "connecticut_customer_exposure_v1",
+      schema: "connecticut_customer_exposure_v2",
+      sourceQuantity: "census_population_persons",
+      accountEstimateMethod: "uniform_statewide_population_ratio",
+      populationToCustomerAccountRatio: POPULATION_TO_CUSTOMER_RATIO,
       latitudes: lats,
       longitudes: lons,
       connecticutMask: mask,
+      rawPopulationPersons,
+      smoothedPopulationPersons,
+      totalPopulationPersons,
       rawCustomerAccounts,
       smoothedCustomerAccounts,
-      totalCustomerAccounts: total,
+      totalCustomerAccounts,
       smoothingKm,
       ruralBaselineFraction,
       ...spacing,
-      summary: { rawTotal: gridTotal(rawCustomerAccounts), smoothedTotal: gridTotal(smoothedCustomerAccounts), validCellCount },
+      spatialMethod: {
+        ...spatialGridMetadata(lats, lons),
+        sourceQuantity: "2020 Census population persons at tract internal points",
+        populationAllocation:
+          "bilinear allocation to four surrounding valid nodes, renormalized at boundary; nearest valid node fallback",
+        smoothing: {
+          kernel: "separable Gaussian",
+          standardDeviationKm: smoothingKm,
+          nominalTruncationStandardDeviations: 4,
+          boundaryCorrection: "normalized convolution by binary in-state node mask",
+          massPreservation: "rescaled to the exact pre-smoothing in-state population total",
+        },
+        uniformExposureBaselineFraction: ruralBaselineFraction,
+        accountConversion:
+          `estimated accounts = persons * ${POPULATION_TO_CUSTOMER_RATIO}`,
+      },
+      summary: {
+        rawPopulationTotal: gridTotal(rawPopulationPersons),
+        smoothedPopulationTotal: gridTotal(smoothedPopulationPersons),
+        rawTotal: gridTotal(rawCustomerAccounts),
+        smoothedTotal: gridTotal(smoothedCustomerAccounts),
+        validCellCount,
+      },
     };
   }
 
-  function weatherSeverityScore(windMph, rainInPerHour, options = {}) {
+  function weatherSeverityScore(windMph, rainAccumulationIn, options = {}) {
     const wind = finiteNumber(windMph, "windMph");
-    const rain = finiteNumber(rainInPerHour, "rainInPerHour");
+    const rain = finiteNumber(rainAccumulationIn, "rainAccumulationIn");
     const threshold = options.windThresholdMph ?? DEFAULT_CONFIG.windThresholdMph;
     const scale = options.windExcessScaleMph ?? DEFAULT_CONFIG.windExcessScaleMph;
     const exponent = options.windExponent ?? DEFAULT_CONFIG.windExponent;
@@ -483,7 +579,7 @@
     const coefficient = options.rainCoefficient ?? DEFAULT_CONFIG.rainCoefficient;
     const rainCap = options.rainScoreCap ?? DEFAULT_CONFIG.rainScoreCap;
     if (wind < 0 || wind > 250) throw new InputValidationError("windMph must be within [0, 250]");
-    if (rain < 0 || rain > 15) throw new InputValidationError("rainInPerHour must be within [0, 15]");
+    if (rain < 0 || rain > 15) throw new InputValidationError("rainAccumulationIn must be within [0, 15]");
     if (threshold < 0 || threshold >= 250 || scale <= 0 || exponent <= 0
       || rainReference <= 0 || coefficient < 0 || rainCap <= 0) {
       throw new InputValidationError("weather severity parameters are outside their valid ranges");
@@ -605,7 +701,7 @@
         || row.some((cell) => typeof cell !== "boolean"))) {
       throw new InputValidationError(`connecticutMask shape must be ${latitudes.length} x ${longitudes.length} booleans`);
     }
-    const windMph = [], rainInPerHour = [], windDamageScore = [], rainAmplification = [], weatherSeverity = [];
+    const windMph = [], rainAccumulationIn = [], windDamageScore = [], rainAmplification = [], weatherSeverity = [];
     for (let row = 0; row < latitudes.length; row += 1) {
       const windRow = [], rainRow = [], damageRow = [], amplificationRow = [], severityRow = [];
       for (let column = 0; column < longitudes.length; column += 1) {
@@ -617,20 +713,34 @@
         amplificationRow.push(inside ? components.rainAmplification : 0);
         severityRow.push(inside ? components.weatherSeverity : 0);
       }
-      windMph.push(windRow); rainInPerHour.push(rainRow); windDamageScore.push(damageRow);
+      windMph.push(windRow); rainAccumulationIn.push(rainRow); windDamageScore.push(damageRow);
       rainAmplification.push(amplificationRow); weatherSeverity.push(severityRow);
     }
     const flatSeverity = weatherSeverity.flat();
     return {
       schemaVersion: SCHEMA_VERSION,
-      schema: "connecticut_weather_severity_v1",
+      schema: "connecticut_weather_severity_v2",
       stormId: normalized.stormId,
       stormName: normalized.name,
       stormDate: normalized.date,
       precipitationType: normalized.precipitationType,
       rainInputKind: normalized.rainInputKind,
-      latitudes, longitudes, connecticutMask, windMph, rainInPerHour,
+      latitudes, longitudes, connecticutMask, windMph,
+      rainAccumulationIn,
+      // Deprecated compatibility alias. The active timeline input is a six-hour
+      // accumulation, so "per hour" is not a scientifically correct name.
+      rainInPerHour: rainAccumulationIn,
       windDamageScore, rainAmplification, weatherSeverity,
+      hazardIndex: weatherSeverity,
+      spatialMethod: {
+        ...spatialGridMetadata(latitudes, longitudes),
+        hazardEquation:
+          "max(0, (gust_mph - threshold_mph) / wind_excess_scale_mph)^wind_exponent"
+          + " * (1 + rain_coefficient * min(rain_accumulation_in / rain_reference_in, rain_score_cap))",
+        hazardInterpretation:
+          "dimensionless relative storm stress; not an absolute component-failure probability",
+        precipitationInput: normalized.rainInputKind,
+      },
       summary: {
         positiveSeverityCells: flatSeverity.filter((value) => value > 0).length,
         maximumSeverity: Math.max(...flatSeverity),
@@ -647,8 +757,16 @@
     const mask = customerSurface.connecticutMask;
     const rows = customerSurface.latitudes.length;
     const columns = customerSurface.longitudes.length;
-    if (weatherSurface.latitudes.length !== rows || weatherSurface.longitudes.length !== columns) {
-      throw new InputValidationError("customer and weather surface shapes must match");
+    const latitudeCoordinatesMatch = weatherSurface.latitudes.length === rows
+      && weatherSurface.latitudes.every(
+        (value, index) => value === customerSurface.latitudes[index],
+      );
+    const longitudeCoordinatesMatch = weatherSurface.longitudes.length === columns
+      && weatherSurface.longitudes.every(
+        (value, index) => value === customerSurface.longitudes[index],
+      );
+    if (!latitudeCoordinatesMatch || !longitudeCoordinatesMatch) {
+      throw new InputValidationError("customer and weather grid coordinates must match exactly");
     }
     const validCellCount = customerSurface.summary.validCellCount;
     const meanExposure = customerSurface.summary.smoothedTotal / validCellCount;
@@ -678,27 +796,58 @@
       });
     }
     const smoothedTotal = gridTotal(smoothedImpact);
-    const samplingProbability = mask.map((row, rowIndex) => row.map((inside, columnIndex) =>
+    const normalizedImpactScore = mask.map((row, rowIndex) => row.map((inside, columnIndex) =>
       inside && smoothedTotal > 0 ? smoothedImpact[rowIndex][columnIndex] / smoothedTotal : 0));
     return {
       schemaVersion: SCHEMA_VERSION,
-      schema: "connecticut_combined_impact_v1",
+      schema: "connecticut_risk_components_v2",
       stormId: weatherSurface.stormId,
       latitudes: customerSurface.latitudes,
       longitudes: customerSurface.longitudes,
       connecticutMask: mask,
       relativeCustomerExposure,
+      relativeCustomerConsequenceIndex: relativeCustomerExposure,
       weatherSeverity: weatherSurface.weatherSeverity,
+      hazardIndex: weatherSurface.weatherSeverity,
       rawImpact,
       smoothedImpact,
-      samplingProbability,
+      normalizedImpactScore,
+      rawImpactPriorityScore: rawImpact,
+      smoothedImpactPriorityScore: smoothedImpact,
+      normalizedImpactPriorityScore: normalizedImpactScore,
+      // Deprecated compatibility alias. These normalized cell scores are not
+      // marginal inclusion probabilities under fixed-size sampling.
+      samplingProbability: normalizedImpactScore,
       exposureExponent,
       gaussianBandwidthKm,
       meanCustomerAccountsPerValidCell: meanExposure,
+      interpretation: {
+        hazardIndex:
+          "dimensionless relative storm stress; not a calibrated failure probability",
+        relativeCustomerConsequenceIndex:
+          "smoothed estimated customer accounts divided by the in-state grid-node mean",
+        impactPriorityScore:
+          "hazardIndex * relativeCustomerConsequenceIndex^exposureExponent, then spatially smoothed",
+        normalizedImpactPriorityScore:
+          "relative grid score summing to one; not a marginal outage inclusion probability",
+      },
+      spatialMethod: {
+        ...spatialGridMetadata(customerSurface.latitudes, customerSurface.longitudes),
+        combination:
+          "hazard_index * relative_customer_consequence_index^exposure_exponent",
+        smoothing: {
+          kernel: "separable Gaussian",
+          standardDeviationKm: gaussianBandwidthKm,
+          nominalTruncationStandardDeviations: 4,
+          boundaryCorrection: "normalized convolution by binary in-state node mask",
+          massPreservation: "rescaled to preserve the pre-smoothing impact-score sum",
+        },
+      },
       summary: {
         rawTotal,
         smoothedTotal,
-        probabilityTotal: gridTotal(samplingProbability),
+        normalizedScoreTotal: gridTotal(normalizedImpactScore),
+        probabilityTotal: gridTotal(normalizedImpactScore),
         rawPositiveCells: rawImpact.flat().filter((value) => value > 0).length,
         smoothedPositiveCells: smoothedImpact.flat().filter((value) => value > 0).length,
       },
@@ -716,16 +865,171 @@
     return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(value)));
   }
 
+  function bilinearStencil(latitudes, longitudes, latitude, longitude) {
+    const [row0, row1, rowFraction] = bracketingIndices(latitudes, latitude);
+    const [column0, column1, columnFraction] = bracketingIndices(longitudes, longitude);
+    return { row0, row1, rowFraction, column0, column1, columnFraction };
+  }
+
+  function bilinearValueFromStencil(values, stencil) {
+    const {
+      row0, row1, rowFraction, column0, column1, columnFraction,
+    } = stencil;
+    const lower = values[row0][column0] * (1 - columnFraction)
+      + values[row0][column1] * columnFraction;
+    const upper = values[row1][column0] * (1 - columnFraction)
+      + values[row1][column1] * columnFraction;
+    return lower * (1 - rowFraction) + upper * rowFraction;
+  }
+
   function bilinearGridValue(latitudes, longitudes, values, latitude, longitude) {
     if (!Array.isArray(values) || values.length !== latitudes.length
       || !Array.isArray(values[0]) || values[0].length !== longitudes.length) {
       throw new InputValidationError("bilinear grid shape does not match coordinates");
     }
-    const [row0, row1, rowFraction] = bracketingIndices(latitudes, latitude);
-    const [column0, column1, columnFraction] = bracketingIndices(longitudes, longitude);
-    const lower = values[row0][column0] * (1 - columnFraction) + values[row0][column1] * columnFraction;
-    const upper = values[row1][column0] * (1 - columnFraction) + values[row1][column1] * columnFraction;
-    return lower * (1 - rowFraction) + upper * rowFraction;
+    return bilinearValueFromStencil(
+      values,
+      bilinearStencil(latitudes, longitudes, latitude, longitude),
+    );
+  }
+
+  function pathGeometry(coordinates) {
+    const cumulativeKm = [0];
+    for (let index = 1; index < coordinates.length; index += 1) {
+      cumulativeKm.push(
+        cumulativeKm[index - 1] + haversineKm(coordinates[index - 1], coordinates[index]),
+      );
+    }
+    return {
+      coordinates,
+      cumulativeKm,
+      lengthKm: cumulativeKm[cumulativeKm.length - 1],
+    };
+  }
+
+  function pointAlongPath(pathOrCoordinates, fraction) {
+    const geometry = Array.isArray(pathOrCoordinates)
+      ? pathGeometry(pathOrCoordinates)
+      : pathOrCoordinates;
+    const boundedFraction = Math.max(0, Math.min(1, fraction));
+    if (geometry.lengthKm <= 0) return geometry.coordinates[0].slice();
+    const targetKm = boundedFraction * geometry.lengthKm;
+    let index = 1;
+    while (index < geometry.cumulativeKm.length
+      && geometry.cumulativeKm[index] < targetKm) index += 1;
+    if (index >= geometry.coordinates.length) {
+      return geometry.coordinates[geometry.coordinates.length - 1].slice();
+    }
+    const startKm = geometry.cumulativeKm[index - 1];
+    const endKm = geometry.cumulativeKm[index];
+    const localFraction = endKm > startKm ? (targetKm - startKm) / (endKm - startKm) : 0;
+    const start = geometry.coordinates[index - 1];
+    const end = geometry.coordinates[index];
+    return [
+      start[0] + (end[0] - start[0]) * localFraction,
+      start[1] + (end[1] - start[1]) * localFraction,
+    ];
+  }
+
+  function subpathByDistance(geometry, startKm, endKm) {
+    const startFraction = geometry.lengthKm > 0 ? startKm / geometry.lengthKm : 0;
+    const endFraction = geometry.lengthKm > 0 ? endKm / geometry.lengthKm : 1;
+    const coordinates = [pointAlongPath(geometry, startFraction)];
+    for (let index = 1; index < geometry.coordinates.length - 1; index += 1) {
+      const distance = geometry.cumulativeKm[index];
+      if (distance > startKm + 1e-12 && distance < endKm - 1e-12) {
+        coordinates.push(geometry.coordinates[index].slice());
+      }
+    }
+    coordinates.push(pointAlongPath(geometry, endFraction));
+    return coordinates;
+  }
+
+  function standardizeLineSegments(coordinates, maximumLengthKm) {
+    const maximum = finiteNumber(maximumLengthKm, "candidateSegmentLengthKm");
+    if (maximum <= 0) throw new InputValidationError("candidateSegmentLengthKm must be > 0");
+    const geometry = pathGeometry(coordinates);
+    if (geometry.lengthKm <= 0) return [];
+    const count = Math.max(1, Math.ceil(geometry.lengthKm / maximum));
+    const intervalKm = geometry.lengthKm / count;
+    return Array.from({ length: count }, (_, segmentIndex) => {
+      const startKm = intervalKm * segmentIndex;
+      const endKm = segmentIndex === count - 1
+        ? geometry.lengthKm
+        : intervalKm * (segmentIndex + 1);
+      const pathCoordinates = subpathByDistance(geometry, startKm, endKm);
+      const path = pathGeometry(pathCoordinates);
+      return {
+        segmentIndex,
+        startChainageKm: startKm,
+        endChainageKm: endKm,
+        pathCoordinates,
+        path,
+        lengthKm: path.lengthKm,
+        start: pathCoordinates[0],
+        end: pathCoordinates[pathCoordinates.length - 1],
+        midpoint: pointAlongPath(path, 0.5),
+      };
+    }).filter((segment) => segment.lengthKm > 0);
+  }
+
+  function integrateGridAlongPath(
+    latitudes,
+    longitudes,
+    values,
+    pathOrCoordinates,
+    integrationStepKm,
+  ) {
+    const stepKm = finiteNumber(integrationStepKm, "lineIntegrationStepKm");
+    if (stepKm <= 0) throw new InputValidationError("lineIntegrationStepKm must be > 0");
+    const geometry = Array.isArray(pathOrCoordinates)
+      ? pathGeometry(pathOrCoordinates)
+      : pathOrCoordinates;
+    if (geometry.lengthKm <= 0) {
+      return { integral: 0, mean: 0, samples: 0 };
+    }
+    const samples = Math.max(1, Math.ceil(geometry.lengthKm / stepKm));
+    let sum = 0;
+    for (let index = 0; index < samples; index += 1) {
+      const [longitude, latitude] = pointAlongPath(geometry, (index + 0.5) / samples);
+      sum += bilinearGridValue(latitudes, longitudes, values, latitude, longitude);
+    }
+    const mean = sum / samples;
+    return { integral: mean * geometry.lengthKm, mean, samples };
+  }
+
+  function integrateNamedGridsAlongPath(
+    latitudes,
+    longitudes,
+    namedGrids,
+    pathOrCoordinates,
+    integrationStepKm,
+  ) {
+    const stepKm = finiteNumber(integrationStepKm, "lineIntegrationStepKm");
+    if (stepKm <= 0) throw new InputValidationError("lineIntegrationStepKm must be > 0");
+    const geometry = Array.isArray(pathOrCoordinates)
+      ? pathGeometry(pathOrCoordinates)
+      : pathOrCoordinates;
+    const names = Object.keys(namedGrids);
+    const sums = Object.fromEntries(names.map((name) => [name, 0]));
+    if (geometry.lengthKm <= 0) {
+      return { means: sums, integrals: { ...sums }, samples: 0 };
+    }
+    const samples = Math.max(1, Math.ceil(geometry.lengthKm / stepKm));
+    for (let index = 0; index < samples; index += 1) {
+      const [longitude, latitude] = pointAlongPath(geometry, (index + 0.5) / samples);
+      const stencil = bilinearStencil(latitudes, longitudes, latitude, longitude);
+      for (const name of names) {
+        sums[name] += bilinearValueFromStencil(namedGrids[name], stencil);
+      }
+    }
+    const means = Object.fromEntries(
+      names.map((name) => [name, sums[name] / samples]),
+    );
+    const integrals = Object.fromEntries(
+      names.map((name) => [name, means[name] * geometry.lengthKm]),
+    );
+    return { means, integrals, samples };
   }
 
   function normalizeNetwork(network) {
@@ -741,6 +1045,9 @@
           ? assertCoordinate(point, `feeders[${fi}].coordinates[${index}]`)
           : assertCoordinate([point[1], point[0]], `feeders[${fi}].pts[${index}]`)),
     }));
+    if (new Set(feeders.map((feeder) => feeder.feederId)).size !== feeders.length) {
+      throw new InputValidationError("feederId values must be unique");
+    }
     if (Array.isArray(network.substations) && network.substations.length) {
       const substationIds = new Set(network.substations.map((substation, index) =>
         integer(substation.subId ?? substation.sub_id ?? index, `substations[${index}].subId`, 0)));
@@ -765,6 +1072,9 @@
             : assertCoordinate([point[1], point[0]], `laterals[${li}].pts[${index}]`)),
       };
     });
+    if (new Set(laterals.map((lateral) => lateral.lateralId)).size !== laterals.length) {
+      throw new InputValidationError("lateralId values must be unique");
+    }
     for (const [label, lines] of [["feeder", feeders], ["lateral", laterals]]) {
       for (const line of lines) {
         if (line.coordinates.length < 2) throw new InputValidationError(`${label} ${line.fi ?? line.li} needs at least two points`);
@@ -776,55 +1086,94 @@
   function buildWeightedNetworkSegments(network, customerSurface, weatherSurface, impactSurface, options = {}) {
     const feederSusceptibility = options.feederSusceptibility ?? DEFAULT_CONFIG.feederSusceptibility;
     const lateralSusceptibility = options.lateralSusceptibility ?? DEFAULT_CONFIG.lateralSusceptibility;
+    const candidateSegmentLengthKm = options.candidateSegmentLengthKm
+      ?? DEFAULT_CONFIG.candidateSegmentLengthKm;
+    const lineIntegrationStepKm = options.lineIntegrationStepKm
+      ?? DEFAULT_CONFIG.lineIntegrationStepKm;
+    const placementMode = options.placementMode ?? DEFAULT_CONFIG.placementMode;
     if (feederSusceptibility <= 0 || lateralSusceptibility <= 0) {
       throw new InputValidationError("network susceptibility factors must be positive");
     }
+    if (candidateSegmentLengthKm <= 0 || lineIntegrationStepKm <= 0) {
+      throw new InputValidationError("network segmentation and integration distances must be positive");
+    }
+    if (!["failure_oriented", "impact_weighted"].includes(placementMode)) {
+      throw new InputValidationError("placementMode must be failure_oriented or impact_weighted");
+    }
     const normalized = normalizeNetwork(network);
     const { latitudes, longitudes } = impactSurface;
-    const interpolationGrids = [
-      weatherSurface.windMph,
-      weatherSurface.rainInPerHour,
-      customerSurface.smoothedCustomerAccounts,
-      impactSurface.relativeCustomerExposure,
-      impactSurface.weatherSeverity,
-      impactSurface.rawImpact,
-      impactSurface.smoothedImpact,
-    ];
-    if (interpolationGrids.some((grid) => !Array.isArray(grid)
+    const interpolationGrids = {
+      windMph: weatherSurface.windMph,
+      rainAccumulationIn: weatherSurface.rainAccumulationIn,
+      customerAccounts: customerSurface.smoothedCustomerAccounts,
+      relativeCustomerConsequenceIndex: impactSurface.relativeCustomerExposure,
+      hazardIndex: impactSurface.weatherSeverity,
+      rawImpactPriorityScore: impactSurface.rawImpact,
+      smoothedImpactPriorityScore: impactSurface.smoothedImpact,
+    };
+    if (Object.values(interpolationGrids).some((grid) => !Array.isArray(grid)
       || grid.length !== latitudes.length
       || grid.some((row) => !Array.isArray(row) || row.length !== longitudes.length))) {
       throw new InputValidationError("network weighting surfaces must share one grid");
     }
     const segments = [];
     function addLine(kind, line, feeder, coordinates, susceptibility) {
-      for (let segmentIndex = 0; segmentIndex < coordinates.length - 1; segmentIndex += 1) {
-        const start = coordinates[segmentIndex];
-        const end = coordinates[segmentIndex + 1];
-        const lengthKm = haversineKm(start, end);
-        if (lengthKm <= 0) continue;
-        const midpoint = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
-        const latitude = midpoint[1], longitude = midpoint[0];
-        const smoothedImpact = bilinearGridValue(latitudes, longitudes, impactSurface.smoothedImpact, latitude, longitude);
-        const weight = smoothedImpact * lengthKm * susceptibility;
+      const standardized = standardizeLineSegments(coordinates, candidateSegmentLengthKm);
+      for (const geometry of standardized) {
+        const integrated = integrateNamedGridsAlongPath(
+          latitudes,
+          longitudes,
+          interpolationGrids,
+          geometry.path,
+          lineIntegrationStepKm,
+        );
+        const failureOrientedWeight = susceptibility * integrated.integrals.hazardIndex;
+        const impactPriorityWeight =
+          susceptibility * integrated.integrals.smoothedImpactPriorityScore;
+        const weight = placementMode === "failure_oriented"
+          ? failureOrientedWeight
+          : impactPriorityWeight;
         if (weight <= 0 || !Number.isFinite(weight)) continue;
         const lineId = kind === "feeder" ? feeder.feederId : line.lateralId;
         segments.push({
-          segmentId: `${kind}:${lineId}:${segmentIndex}`,
+          segmentId: `${kind}:${lineId}:${geometry.segmentIndex}`,
           networkKind: kind,
           fi: feeder.fi,
           li: kind === "lateral" ? line.li : null,
-          segmentIndex,
+          segmentIndex: geometry.segmentIndex,
           feederId: feeder.feederId,
           lateralId: kind === "lateral" ? line.lateralId : null,
           subId: feeder.subId,
-          start, end, midpoint, lengthKm,
-          localWindMph: bilinearGridValue(latitudes, longitudes, weatherSurface.windMph, latitude, longitude),
-          localRainIn: bilinearGridValue(latitudes, longitudes, weatherSurface.rainInPerHour, latitude, longitude),
-          customerExposure: bilinearGridValue(latitudes, longitudes, customerSurface.smoothedCustomerAccounts, latitude, longitude),
-          relativeCustomerExposure: bilinearGridValue(latitudes, longitudes, impactSurface.relativeCustomerExposure, latitude, longitude),
-          localWeatherSeverity: bilinearGridValue(latitudes, longitudes, impactSurface.weatherSeverity, latitude, longitude),
-          rawImpact: bilinearGridValue(latitudes, longitudes, impactSurface.rawImpact, latitude, longitude),
-          smoothedImpact, susceptibility, weight,
+          start: geometry.start,
+          end: geometry.end,
+          midpoint: geometry.midpoint,
+          pathCoordinates: geometry.pathCoordinates,
+          lengthKm: geometry.lengthKm,
+          startChainageKm: geometry.startChainageKm,
+          endChainageKm: geometry.endChainageKm,
+          localWindMph: integrated.means.windMph,
+          localRainAccumulationIn: integrated.means.rainAccumulationIn,
+          localRainInputKind: weatherSurface.rainInputKind,
+          localRainIn: integrated.means.rainAccumulationIn,
+          customerExposure: integrated.means.customerAccounts,
+          relativeCustomerExposure: integrated.means.relativeCustomerConsequenceIndex,
+          customerConsequenceIndex: integrated.means.relativeCustomerConsequenceIndex,
+          localWeatherSeverity: integrated.means.hazardIndex,
+          hazardIndex: integrated.means.hazardIndex,
+          rawImpact: integrated.means.rawImpactPriorityScore,
+          smoothedImpact: integrated.means.smoothedImpactPriorityScore,
+          impactPriorityScore: integrated.means.smoothedImpactPriorityScore,
+          integratedHazardScoreKm: integrated.integrals.hazardIndex,
+          integratedImpactPriorityScoreKm:
+            integrated.integrals.smoothedImpactPriorityScore,
+          failureOrientedWeight,
+          impactPriorityWeight,
+          placementMode,
+          susceptibility,
+          weight,
+          integrationMethod: "composite_midpoint_rule_along_polyline",
+          integrationStepKm: lineIntegrationStepKm,
+          integrationSampleCount: integrated.samples,
         });
       }
     }
@@ -837,40 +1186,53 @@
   function buildBasicNetworkSegments(network, options = {}) {
     const feederSusceptibility = options.feederSusceptibility ?? DEFAULT_CONFIG.feederSusceptibility;
     const lateralSusceptibility = options.lateralSusceptibility ?? DEFAULT_CONFIG.lateralSusceptibility;
+    const candidateSegmentLengthKm = options.candidateSegmentLengthKm
+      ?? DEFAULT_CONFIG.candidateSegmentLengthKm;
     if (feederSusceptibility <= 0 || lateralSusceptibility <= 0) {
       throw new InputValidationError("network susceptibility factors must be positive");
+    }
+    if (candidateSegmentLengthKm <= 0) {
+      throw new InputValidationError("candidateSegmentLengthKm must be positive");
     }
     const normalized = normalizeNetwork(network);
     const segments = [];
     function addLine(kind, line, feeder, coordinates, susceptibility) {
-      for (let segmentIndex = 0; segmentIndex < coordinates.length - 1; segmentIndex += 1) {
-        const start = coordinates[segmentIndex];
-        const end = coordinates[segmentIndex + 1];
-        const lengthKm = haversineKm(start, end);
-        if (lengthKm <= 0) continue;
+      const standardized = standardizeLineSegments(coordinates, candidateSegmentLengthKm);
+      for (const geometry of standardized) {
         const lineId = kind === "feeder" ? feeder.feederId : line.lateralId;
         segments.push({
-          segmentId: `basic:${kind}:${lineId}:${segmentIndex}`,
+          segmentId: `basic:${kind}:${lineId}:${geometry.segmentIndex}`,
           networkKind: kind,
           fi: feeder.fi,
           li: kind === "lateral" ? line.li : null,
-          segmentIndex,
+          segmentIndex: geometry.segmentIndex,
           feederId: feeder.feederId,
           lateralId: kind === "lateral" ? line.lateralId : null,
           subId: feeder.subId,
-          start,
-          end,
-          midpoint: [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2],
-          lengthKm,
+          start: geometry.start,
+          end: geometry.end,
+          midpoint: geometry.midpoint,
+          pathCoordinates: geometry.pathCoordinates,
+          lengthKm: geometry.lengthKm,
+          startChainageKm: geometry.startChainageKm,
+          endChainageKm: geometry.endChainageKm,
           localWindMph: null,
           localRainIn: null,
+          localRainAccumulationIn: null,
+          localRainInputKind: null,
           customerExposure: null,
           relativeCustomerExposure: null,
           localWeatherSeverity: null,
           rawImpact: null,
           smoothedImpact: null,
+          hazardIndex: null,
+          customerConsequenceIndex: null,
+          impactPriorityScore: null,
+          failureOrientedWeight: null,
+          impactPriorityWeight: null,
+          placementMode: "network_length_only",
           susceptibility,
-          weight: lengthKm * susceptibility,
+          weight: geometry.lengthKm * susceptibility,
         });
       }
     }
@@ -890,14 +1252,37 @@
     };
   }
 
+  function fnv1a32(value) {
+    let hash = 0x811C9DC5;
+    const text = String(value);
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    hash ^= hash >>> 16;
+    hash = Math.imul(hash, 0x7FEB352D);
+    hash ^= hash >>> 15;
+    hash = Math.imul(hash, 0x846CA68B);
+    hash ^= hash >>> 16;
+    return hash >>> 0;
+  }
+
+  function segmentKeyedUniform(seed, stream, segmentId, counter = 0) {
+    const hash = fnv1a32(`${seed}|${stream}|${segmentId}|${counter}`);
+    return (hash + 0.5) / 4294967296;
+  }
+
+  function segmentPoint(segment, fraction) {
+    return pointAlongPath(segment.pathCoordinates || [segment.start, segment.end], fraction);
+  }
+
   // A segment can only ever yield an outage if SOME point along it is inside the
   // boundary. Checked at the same fixed fractions the fallback below uses, so a
   // segment that survives this can never fail there.
   function segmentCanPlace(segment, boundaryRings) {
     if (!boundaryRings) return true;
     for (const f of [0.5, 0, 1, 0.25, 0.75]) {
-      const lon = segment.start[0] + (segment.end[0] - segment.start[0]) * f;
-      const lat = segment.start[1] + (segment.end[1] - segment.start[1]) * f;
+      const [lon, lat] = segmentPoint(segment, f);
       if (pointInBoundary(boundaryRings, lat, lon)) return true;
     }
     return false;
@@ -918,9 +1303,14 @@
     // run ("has no sampled position inside the boundary"). They are candidates
     // that cannot produce a valid point, so the correct place to handle them is
     // the candidate pool, which also keeps the exactly-nOutages contract.
-    const placeable = boundaryRings
+    const placeable = (boundaryRings
       ? weightedSegments.filter((segment) => segmentCanPlace(segment, boundaryRings))
-      : weightedSegments;
+      : weightedSegments.slice()).sort(
+      (left, right) => left.segmentId.localeCompare(right.segmentId),
+    );
+    if (new Set(placeable.map((segment) => segment.segmentId)).size !== placeable.length) {
+      throw new InputValidationError("weighted segment IDs must be unique");
+    }
     const rejected = weightedSegments.length - placeable.length;
     if (placeable.length < config.nOutages) {
       throw new InputValidationError(`only ${placeable.length} placeable positive-weight network segments are available for ${config.nOutages} unique outages`
@@ -928,25 +1318,47 @@
     }
     const totalWeight = placeable.reduce((sum, segment) => sum + finiteNumber(segment.weight, "segment.weight"), 0);
     if (totalWeight <= 0) throw new InputValidationError("network sampling weight must be positive");
-    const random = mulberry32(config.seed);
+    const effectivePlacementMode = placeable.every(
+      (segment) => segment.placementMode === "network_length_only",
+    ) ? "network_length_only" : config.placementMode;
+    // Exponential-race/random-key weighted sampling without replacement:
+    // K_s = log(U_s) / W_s, U_s ~ Uniform(0, 1); retain the k largest keys.
+    // W_s / sum(W) is the first-draw probability, not the final marginal
+    // inclusion probability when k > 1. U_s is keyed by seed and stable
+    // segment ID, so unrelated candidate insertion or array reordering cannot
+    // change a retained segment's random key.
     const selected = placeable.map((segment, index) => ({
-      key: Math.log(Math.max(random(), Number.MIN_VALUE)) / segment.weight,
+      key: Math.log(segmentKeyedUniform(
+        config.seed,
+        "selection",
+        segment.segmentId,
+      )) / segment.weight,
       index,
-    })).sort((a, b) => b.key - a.key || b.index - a.index).slice(0, config.nOutages);
+    })).sort((a, b) => b.key - a.key
+      || placeable[a.index].segmentId.localeCompare(placeable[b.index].segmentId))
+      .slice(0, config.nOutages);
     const outages = selected.map(({ index }) => {
       const segment = placeable[index];
-      let position=random(),lon,lat,inside=!boundaryRings;
+      let position = segmentKeyedUniform(
+        config.seed,
+        "position",
+        segment.segmentId,
+      );
+      let lon, lat, inside = !boundaryRings;
       for (let attempt=0;attempt<32;attempt++){
-        lon=segment.start[0]+(segment.end[0]-segment.start[0])*position;
-        lat=segment.start[1]+(segment.end[1]-segment.start[1])*position;
+        [lon, lat] = segmentPoint(segment, position);
         inside=!boundaryRings||pointInBoundary(boundaryRings,lat,lon);
         if (inside) break;
-        position=random();
+        position = segmentKeyedUniform(
+          config.seed,
+          "position",
+          segment.segmentId,
+          attempt + 1,
+        );
       }
       if (!inside){
         for (const fallback of [0.5,0,1,0.25,0.75]){
-          lon=segment.start[0]+(segment.end[0]-segment.start[0])*fallback;
-          lat=segment.start[1]+(segment.end[1]-segment.start[1])*fallback;
+          [lon, lat] = segmentPoint(segment, fallback);
           if (pointInBoundary(boundaryRings,lat,lon)){inside=true;break;}
         }
       }
@@ -975,24 +1387,59 @@
         lateralId: segment.lateralId,
         localWindMph: segment.localWindMph,
         localRainIn: segment.localRainIn,
+        localRainAccumulationIn: segment.localRainAccumulationIn,
+        localRainInputKind: segment.localRainInputKind,
         customerExposure: segment.customerExposure,
         relativeCustomerExposure: segment.relativeCustomerExposure,
         localWeatherSeverity: segment.localWeatherSeverity,
+        hazardIndex: segment.hazardIndex,
         rawImpact: segment.rawImpact,
         smoothedImpact: segment.smoothedImpact,
+        customerConsequenceIndex: segment.customerConsequenceIndex,
+        impactPriorityScore: segment.impactPriorityScore,
+        failureOrientedWeight: segment.failureOrientedWeight,
+        impactPriorityWeight: segment.impactPriorityWeight,
+        placementMode: segment.placementMode,
         segmentLengthKm: segment.lengthKm,
         susceptibility: segment.susceptibility,
+        normalizedSegmentScore: segment.weight / totalWeight,
+        // Deprecated compatibility alias; not a fixed-k inclusion probability.
         samplingWeight: segment.weight / totalWeight,
       };
     });
     return {
       schemaVersion: SCHEMA_VERSION,
-      schema: "connecticut_outage_scenario_v1",
+      schema: "connecticut_outage_scenario_v2",
       scenarioId: `${config.stormId}_seed${config.seed}`,
       config,
       inputs: { ...inputs },
       outages,
       totalCustomers: outages.length * config.customersPerOutage,
+      samplingDesign: {
+        algorithm: "segment_keyed_exponential_random_key_without_replacement",
+        keyEquation: "log(U_s) / W_s",
+        uniformKey: "FNV-1a-derived 32-bit hash of seed, stream, segment ID, and counter",
+        stableUnderCandidateReordering: true,
+        conditionedOnOutageCount: config.nOutages,
+        normalizedScoresAreInclusionProbabilities: false,
+      },
+      methodology: {
+        placementMode: effectivePlacementMode,
+        placementInterpretation: effectivePlacementMode === "network_length_only"
+          ? "explicit weather-independent network-length fallback"
+          : effectivePlacementMode === "failure_oriented"
+            ? "conditional failure-oriented synthetic placement"
+            : "conditional impact-weighted synthetic placement",
+        calibratedAbsoluteFailureProbability: false,
+        candidateSegmentation: {
+          method: "equal-chainage subdivision of each feeder/lateral polyline",
+          maximumLengthKm: config.candidateSegmentLengthKm,
+        },
+        lineIntegration: {
+          method: "composite midpoint quadrature along polyline chainage",
+          maximumStepKm: config.lineIntegrationStepKm,
+        },
+      },
     };
   }
 
@@ -1016,6 +1463,8 @@
       ...scenario,
       surfaces: { customer: customerSurface, weather: weatherSurface, impact: impactSurface },
       summary: {
+        placementModel: `${config.placementMode}_snapshot_v2`,
+        placementMode: config.placementMode,
         candidateSegments: weightedSegments.length,
         feederCandidateSegments: weightedSegments.filter((segment) => segment.networkKind === "feeder").length,
         lateralCandidateSegments: weightedSegments.filter((segment) => segment.networkKind === "lateral").length,
@@ -1025,6 +1474,12 @@
         lateralOutages: scenario.outages.length - feederOutages,
         representedCustomers: scenario.totalCustomers,
         totalSegmentWeight: weightedSegments.reduce((sum, segment) => sum + segment.weight, 0),
+        totalFailureOrientedWeight: weightedSegments.reduce(
+          (sum, segment) => sum + segment.failureOrientedWeight, 0,
+        ),
+        totalImpactPriorityWeight: weightedSegments.reduce(
+          (sum, segment) => sum + segment.impactPriorityWeight, 0,
+        ),
       },
     };
   }
@@ -1075,24 +1530,45 @@
     const segments = buildBasicNetworkSegments(network, config).map((segment) => ({
       ...segment,
       segmentId: segment.segmentId.replace(/^basic:/, ""),
+      placementMode: config.placementMode,
+      failureOrientedWeight: 0,
+      impactPriorityWeight: 0,
       weight: 0,
     }));
     for (const frame of frameSurfaces) {
       for (const segment of segments) {
-        const localImpact = bilinearGridValue(
+        const integrated = integrateNamedGridsAlongPath(
           latitudes,
           longitudes,
-          frame.impact.smoothedImpact,
-          segment.midpoint[1],
-          segment.midpoint[0],
+          {
+            hazardIndex: frame.weather.weatherSeverity,
+            impactPriorityScore: frame.impact.smoothedImpact,
+          },
+          segment.pathCoordinates,
+          config.lineIntegrationStepKm,
         );
-        const frameWeight = localImpact * segment.lengthKm * segment.susceptibility;
-        if (frameWeight > 0 && Number.isFinite(frameWeight)) segment.weight += frameWeight;
+        segment.failureOrientedWeight +=
+          integrated.integrals.hazardIndex * segment.susceptibility;
+        segment.impactPriorityWeight +=
+          integrated.integrals.impactPriorityScore * segment.susceptibility;
       }
+    }
+    for (const segment of segments) {
+      segment.weight = config.placementMode === "failure_oriented"
+        ? segment.failureOrientedWeight
+        : segment.impactPriorityWeight;
+      segment.integrationMethod = "composite_midpoint_rule_along_polyline";
+      segment.integrationStepKm = config.lineIntegrationStepKm;
+      segment.integrationSampleCount = Math.max(
+        1,
+        Math.ceil(segment.lengthKm / config.lineIntegrationStepKm),
+      );
     }
     const positiveSegments = segments.filter((segment) => segment.weight > 0 && Number.isFinite(segment.weight));
     if (!positiveSegments.length) {
-      throw new InputValidationError("storm timeline has no positive network impact at the configured threshold");
+      throw new InputValidationError(
+        "storm timeline has no positive network score at the configured threshold",
+      );
     }
     return positiveSegments;
   }
@@ -1115,27 +1591,33 @@
     const segmentById = new Map(weightedSegments.map((segment) => [segment.segmentId, segment]));
     const latitudes = customerSurface.latitudes;
     const longitudes = customerSurface.longitudes;
-    const timeRandom = mulberry32(config.seed ^ 0x51F15E5D);
     const frameOutageCounts = Array(frameSurfaces.length).fill(0);
 
     const outages = baseScenario.outages.map((outage) => {
       const segment = segmentById.get(outage.networkSegmentId);
       if (!segment) throw new InputValidationError(`missing timeline segment ${outage.networkSegmentId}`);
       const frameWeights = frameSurfaces.map((frame) => {
-        const localImpact = bilinearGridValue(
+        const grid = config.placementMode === "failure_oriented"
+          ? frame.weather.weatherSeverity
+          : frame.impact.smoothedImpact;
+        const integrated = integrateNamedGridsAlongPath(
           latitudes,
           longitudes,
-          frame.impact.smoothedImpact,
-          segment.midpoint[1],
-          segment.midpoint[0],
+          { selectedScore: grid },
+          segment.pathCoordinates,
+          config.lineIntegrationStepKm,
         );
-        return Math.max(0, localImpact * segment.lengthKm * segment.susceptibility);
+        return Math.max(0, integrated.integrals.selectedScore * segment.susceptibility);
       });
       const totalFrameWeight = frameWeights.reduce((sum, value) => sum + value, 0);
       if (totalFrameWeight <= 0) {
         throw new InputValidationError(`timeline segment ${segment.segmentId} has no positive frame weight`);
       }
-      const target = timeRandom() * totalFrameWeight;
+      const target = segmentKeyedUniform(
+        config.seed,
+        "occurrence_frame",
+        segment.segmentId,
+      ) * totalFrameWeight;
       let cumulative = 0;
       let selectedFrameIndex = frameWeights.length - 1;
       for (let frameIndex = 0; frameIndex < frameWeights.length; frameIndex += 1) {
@@ -1146,8 +1628,17 @@
         }
       }
       const frame = frameSurfaces[selectedFrameIndex];
-      const latitude = segment.midpoint[1];
-      const longitude = segment.midpoint[0];
+      const latitude = outage.lat;
+      const longitude = outage.lon;
+      const localHazard = bilinearGridValue(
+        latitudes, longitudes, frame.weather.weatherSeverity, latitude, longitude,
+      );
+      const localConsequence = bilinearGridValue(
+        latitudes, longitudes, frame.impact.relativeCustomerExposure, latitude, longitude,
+      );
+      const localImpactPriority = bilinearGridValue(
+        latitudes, longitudes, frame.impact.smoothedImpact, latitude, longitude,
+      );
       frameOutageCounts[selectedFrameIndex] += 1;
       return {
         ...outage,
@@ -1163,20 +1654,21 @@
         relativeCustomerExposure: bilinearGridValue(
           latitudes, longitudes, frame.impact.relativeCustomerExposure, latitude, longitude,
         ),
-        localWeatherSeverity: bilinearGridValue(
-          latitudes, longitudes, frame.weather.weatherSeverity, latitude, longitude,
-        ),
+        customerConsequenceIndex: localConsequence,
+        localWeatherSeverity: localHazard,
+        hazardIndex: localHazard,
         rawImpact: bilinearGridValue(latitudes, longitudes, frame.impact.rawImpact, latitude, longitude),
-        smoothedImpact: bilinearGridValue(
-          latitudes, longitudes, frame.impact.smoothedImpact, latitude, longitude,
-        ),
+        smoothedImpact: localImpactPriority,
+        impactPriorityScore: localImpactPriority,
+        conditionalFrameWeightShare: frameWeights[selectedFrameIndex] / totalFrameWeight,
+        // Deprecated compatibility alias.
         frameSamplingWeight: frameWeights[selectedFrameIndex] / totalFrameWeight,
       };
     });
 
     return {
       ...baseScenario,
-      schema: "connecticut_timeline_outage_scenario_v1",
+      schema: "connecticut_timeline_outage_scenario_v2",
       scenarioId: `${config.stormId}_timeline_seed${config.seed}`,
       outages,
       frameOutageCounts,
@@ -1233,7 +1725,8 @@
         },
       },
       summary: {
-        placementModel: "curated_hourly_timeline_v1",
+        placementModel: `${config.placementMode}_curated_hourly_timeline_v2`,
+        placementMode: config.placementMode,
         candidateSegments: weightedSegments.length,
         feederCandidateSegments: weightedSegments.filter(
           (segment) => segment.networkKind === "feeder",
@@ -1247,6 +1740,12 @@
         lateralOutages: scenario.outages.length - feederOutages,
         representedCustomers: scenario.totalCustomers,
         totalSegmentWeight: weightedSegments.reduce((sum, segment) => sum + segment.weight, 0),
+        totalFailureOrientedWeight: weightedSegments.reduce(
+          (sum, segment) => sum + segment.failureOrientedWeight, 0,
+        ),
+        totalImpactPriorityWeight: weightedSegments.reduce(
+          (sum, segment) => sum + segment.impactPriorityWeight, 0,
+        ),
         timelineFrames: frameSurfaces.length,
         activeOutageFrames: activeFrameCount,
         frameOutageCounts: scenario.frameOutageCounts.slice(),
@@ -1271,8 +1770,10 @@
     extractBoundaryRings,
     pointInBoundary,
     buildConnecticutMask,
+    rasterizePopulationPersons,
     rasterizeCustomerAccounts,
     boundaryAwareGaussianSmooth,
+    spatialGridMetadata,
     buildCustomerExposureSurface,
     weatherSeverityScore,
     normalizeWeather,
@@ -1281,10 +1782,14 @@
     buildCombinedImpactSurface,
     haversineKm,
     bilinearGridValue,
+    pointAlongPath,
+    standardizeLineSegments,
+    integrateGridAlongPath,
     normalizeNetwork,
     buildWeightedNetworkSegments,
     buildBasicNetworkSegments,
     mulberry32,
+    segmentKeyedUniform,
     sampleOutageScenario,
     buildTimelineFrameSurfaces,
     buildTimelineWeightedSegments,

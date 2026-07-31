@@ -63,8 +63,13 @@ test("full Isaias timeline produces exactly 2,000 unique timestamped outages", (
   const result = model.generateTimelineOutageScenario(input);
   const validTimes = new Set(result.surfaces.timeline.frames.map((frame) => frame.validTime));
 
-  assert.equal(result.schema, "connecticut_timeline_outage_scenario_v1");
-  assert.equal(result.summary.placementModel, "curated_hourly_timeline_v1");
+  assert.equal(result.schemaVersion, 2);
+  assert.equal(result.schema, "connecticut_timeline_outage_scenario_v2");
+  assert.equal(
+    result.summary.placementModel,
+    "impact_weighted_curated_hourly_timeline_v2",
+  );
+  assert.equal(result.summary.placementMode, "impact_weighted");
   assert.equal(result.summary.timelineFrames, 24);
   assert.equal(result.outages.length, 2000);
   assert.equal(result.totalCustomers, 100000);
@@ -108,6 +113,33 @@ test("timeline generation is deterministic for a fixed seed", () => {
   );
 });
 
+test("failure-oriented timeline mode excludes Census exposure from placement weights", () => {
+  const input = loadInputs();
+  const failure = model.generateTimelineOutageScenario({
+    ...input,
+    config: { ...input.config, placementMode: "failure_oriented", nOutages: 100 },
+  });
+  const impact = model.generateTimelineOutageScenario({
+    ...input,
+    config: { ...input.config, placementMode: "impact_weighted", nOutages: 100 },
+  });
+  assert.equal(
+    failure.summary.placementModel,
+    "failure_oriented_curated_hourly_timeline_v2",
+  );
+  assert.equal(failure.methodology.placementMode, "failure_oriented");
+  assert.equal(failure.summary.totalSegmentWeight, failure.summary.totalFailureOrientedWeight);
+  assert.ok(failure.outages.every(
+    (outage) => outage.placementMode === "failure_oriented"
+      && outage.failureOrientedWeight >= 0
+      && outage.impactPriorityWeight >= 0,
+  ));
+  assert.notDeepEqual(
+    failure.outages.map((outage) => outage.networkSegmentId),
+    impact.outages.map((outage) => outage.networkSegmentId),
+  );
+});
+
 test("hourly timeline remains comparable to but meaningfully differs from the old peak-hour snapshot", () => {
   const input = loadInputs();
   const timeline = model.generateTimelineOutageScenario(input);
@@ -127,6 +159,6 @@ test("hourly timeline remains comparable to but meaningfully differs from the ol
   assert.equal(timeline.totalCustomers, 100000);
   assert.ok(snapshot.outages.every((outage) => outage.occurredAt == null));
   assert.ok(timeline.outages.every((outage) => outage.occurredAt != null));
-  assert.equal(overlap, 1613);
+  assert.equal(overlap, 1587);
   assert.ok(overlap > 0 && overlap < timeline.outages.length);
 });

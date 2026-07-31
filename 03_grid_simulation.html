@@ -151,11 +151,53 @@
   .model-availability.ok { color:#065f46; background:#d1fae5; }
   .model-availability.warn { color:#92400e; background:#fef3c7; }
   .model-availability.error { color:#991b1b; background:#fee2e2; }
+  /* Outage-location tuning panel.
+   * Markup: #outageModelAdvanced.
+   * Control-to-config mapping and help text: MODEL_PARAMETER_INPUTS /
+   * MODEL_CONTROL_HELP in the outage-model UI section below. */
   .model-advanced { margin-top:8px; border-top:1px solid #bfdbfe; padding-top:7px; }
-  .model-advanced summary { color:#1d4ed8; cursor:pointer; font-weight:700; font-size:11px; }
+  .model-advanced summary {
+    display:inline-flex; align-items:center; gap:5px; list-style:none; color:#1d4ed8;
+    cursor:pointer; font-weight:750; font-size:10.5px; padding:4px 8px;
+    border:1px solid #93c5fd; border-radius:999px; background:#fff;
+    user-select:none;
+  }
+  .model-advanced summary::-webkit-details-marker { display:none; }
+  .model-advanced summary::before { content:'⚙'; font-size:11px; }
+  .model-advanced summary::after { content:'›'; font-size:14px; line-height:1; }
+  .model-advanced[open] summary { background:#dbeafe; }
+  .model-advanced[open] summary::after { transform:rotate(90deg); }
+  .model-tuning-panel {
+    margin-top:7px; padding:7px; border:1px solid #bfdbfe; border-radius:7px;
+    background:rgba(255,255,255,.72);
+  }
   .model-param-grid { display:grid; grid-template-columns:1fr 82px; gap:5px 8px; align-items:center; margin-top:7px; }
   .model-param-grid label { color:#475569; font-size:10px; line-height:1.2; }
+  .model-tuning-panel label[data-help] {
+    position:relative; cursor:help; border-bottom:1px dotted #94a3b8;
+    width:max-content; max-width:100%;
+  }
   .model-param-grid input { width:68px !important; }
+  .model-param-grid .tuning-group {
+    grid-column:1 / -1; margin-top:4px; padding-top:5px; border-top:1px solid #dbeafe;
+    color:#1e3a8a; font-size:9px; font-weight:800; letter-spacing:.05em;
+    text-transform:uppercase;
+  }
+  .model-param-grid .tuning-group:first-child { margin-top:0; padding-top:0; border-top:none; }
+  .model-tuning-panel label[data-help]::after {
+    content:attr(data-help); position:absolute; z-index:1200; left:0; top:calc(100% + 5px);
+    width:215px; padding:6px 7px; border-radius:6px; background:#172554; color:#fff;
+    font-size:9.5px; font-weight:500; line-height:1.35; letter-spacing:0;
+    text-transform:none; box-shadow:0 4px 12px rgba(15,23,42,.22);
+    opacity:0; visibility:hidden; pointer-events:none; transform:translateY(-2px);
+    transition:opacity .12s ease .45s, transform .12s ease .45s, visibility 0s linear .57s;
+  }
+  .model-tuning-panel label[data-help]:hover::after,
+  .model-tuning-panel label[data-help]:focus::after {
+    opacity:1; visibility:visible; transform:translateY(0);
+    transition-delay:.45s,.45s,0s;
+  }
+  .tuning-help-note { color:#64748b; font-size:9px; line-height:1.35; margin-top:5px; }
   .model-summary { display:none; background:#f8fafc; border:1px solid #cbd5e1; padding:8px; border-radius:7px; margin:7px 0; }
   .model-summary.visible { display:block; }
   .model-summary-grid { display:grid; grid-template-columns:1fr 1fr; gap:5px 8px; }
@@ -324,28 +366,45 @@
       <button type="button" id="retryOutageEngine" class="engine-retry">Retry outage generator</button>
       <div class="small">Customers per outage are geography-derived from each feeder/lateral's served population (avg ~35, per Wanik 2017 / PURA 13-03-23), not a flat constant.</div>
       <button type="button" id="applyHistoricalPreset" class="future-tool" style="margin-top:7px;width:100%;border:1px solid #93c5fd;background:#fff;color:#1d4ed8;border-radius:5px;padding:5px;font-size:10px;cursor:pointer;">Apply historical restoration preset</button>
+      <!-- OUTAGE-LOCATION MODEL TUNING
+           Each input ID is mapped to its outage_location_model.js config key by
+           MODEL_PARAMETER_INPUTS. Defaults come only from DEFAULT_CONFIG in
+           outage_location_model.js; explanatory text lives in MODEL_CONTROL_HELP. -->
       <details class="model-advanced" id="outageModelAdvanced">
-        <summary>Expert scientific calibration</summary>
-        <div style="font-size:9.5px;color:#64748b;line-height:1.35;margin-top:6px;">The validated weather-and-customer method is recommended. Change these controls only when testing model assumptions.</div>
+        <summary>Model tuning</summary>
+        <div class="model-tuning-panel">
+        <div style="font-size:9.5px;color:#64748b;line-height:1.35;">Sensitivity controls for uncalibrated assumptions. Defaults remain the paper reference configuration.</div>
+        <div class="tuning-help-note">Hover over a dotted parameter name for a short explanation.</div>
         <label for="outagePlacementModel" style="display:block;font-size:10px;color:#475569;margin-top:6px;">Placement method</label>
         <select id="outagePlacementModel">
-          <option value="research">Weather + customer exposure</option>
+          <option value="research">Weather-based research model</option>
           <option value="basic">Basic network placement (no weather field)</option>
         </select>
+        <label for="modelRiskObjective" style="display:block;font-size:10px;color:#475569;margin-top:6px;">Research placement objective</label>
+        <select id="modelRiskObjective">
+          <option value="impact_weighted">Impact-weighted (hazard × customer consequence)</option>
+          <option value="failure_oriented">Failure-oriented (hazard only)</option>
+        </select>
         <div class="model-param-grid">
+          <div class="tuning-group">Storm hazard</div>
           <label for="modelWindThreshold">Wind threshold (mph)</label><input id="modelWindThreshold" type="number" min="0" max="249" step="1" />
           <label for="modelWindScale">Wind exceedance scale (mph)</label><input id="modelWindScale" type="number" min="0.1" step="1" />
           <label for="modelWindExponent">Wind exponent</label><input id="modelWindExponent" type="number" min="0.1" step="0.1" />
           <label for="modelRainCoefficient">Rain amplification</label><input id="modelRainCoefficient" type="number" min="0" step="0.1" />
           <label for="modelRainCap">Rain-score cap</label><input id="modelRainCap" type="number" min="0.1" step="0.1" />
+          <div class="tuning-group">Customer exposure and smoothing</div>
           <label for="modelExposureExponent">Exposure exponent</label><input id="modelExposureExponent" type="number" min="0.1" step="0.1" />
           <label for="modelCustomerSmoothing">Customer smoothing (km)</label><input id="modelCustomerSmoothing" type="number" min="0.1" step="0.5" />
           <label for="modelRuralBaseline">Rural baseline fraction</label><input id="modelRuralBaseline" type="number" min="0" step="0.01" />
           <label for="modelGaussianBandwidth">Impact bandwidth (km)</label><input id="modelGaussianBandwidth" type="number" min="0.1" step="0.5" />
+          <div class="tuning-group">Network and numerical controls</div>
+          <label for="modelCandidateLength">Candidate length (km)</label><input id="modelCandidateLength" type="number" min="0.1" step="0.1" />
+          <label for="modelIntegrationStep">Line-integration step (km)</label><input id="modelIntegrationStep" type="number" min="0.05" step="0.05" />
           <label for="modelFeederSusceptibility">Feeder susceptibility</label><input id="modelFeederSusceptibility" type="number" min="0.1" step="0.05" />
           <label for="modelLateralSusceptibility">Lateral susceptibility</label><input id="modelLateralSusceptibility" type="number" min="0.1" step="0.05" />
         </div>
         <button type="button" id="resetModelDefaults" style="margin-top:7px;width:100%;border:1px solid #bfdbfe;background:#fff;color:#1d4ed8;border-radius:5px;padding:5px;font-size:10px;cursor:pointer;">Reset scientific defaults</button>
+        </div>
       </details>
     </div>
 
@@ -430,7 +489,7 @@
     <div class="stat-box stat-affected">
       <div class="lbl">Customers without power</div>
       <div class="big" id="affected">0</div>
-      <div class="sub" id="affectedPct">0% of state population</div>
+      <div class="sub" id="affectedPct">0% of estimated statewide accounts</div>
     </div>
 
     <div class="stat-box stat-outage">
@@ -646,7 +705,7 @@
      here just means the fetch script hasn't been run yet; live mode shows
      instructions instead of data. -->
 <script src="./data/connecticut_live_outages.js"></script>
-<script src="./outage_location_model.js"></script>
+<script src="./outage_location_model.js?v=4"></script>
 <script src="./outage_restoration_adapter.js"></script>
 <script>
 // Real Connecticut town population + centroid (169 towns), from the 2020
@@ -661,14 +720,14 @@
 // household"). Every "customers without power" figure this tool shows is
 // compared directly against utility-reported customer counts (DOE OE-417
 // panel, PURA filings, news coverage), so demand weight is converted to
-// customer-account-equivalent units right here, once, rather than left in
-// raw population units -- otherwise every such comparison is off by ~2.2x.
+// Raw town and tract values remain in persons throughout grid construction.
+// Conversion to estimated customer accounts occurs only where an account-valued
+// output is explicitly needed.
 const POP_TO_CUSTOMER_RATIO = 1633000 / 3605944; // ≈ 0.4529
-const TOWNS = (window.CONNECTICUT_TOWNS_POPULATION || []).map(t => ({...t, pop: t.pop * POP_TO_CUSTOMER_RATIO}));
-if (window.CONNECTICUT_CENSUS_TRACTS){
-  window.CONNECTICUT_CENSUS_TRACTS = window.CONNECTICUT_CENSUS_TRACTS.map(t => ({...t, pop: t.pop * POP_TO_CUSTOMER_RATIO}));
-}
-const TOTAL_POP = TOWNS.reduce((s,t)=>s+t.pop,0);
+const TOWNS = (window.CONNECTICUT_TOWNS_POPULATION || []).map(t => ({...t}));
+const TOTAL_POPULATION_PERSONS = TOWNS.reduce((sum,town)=>sum+town.pop,0);
+const ESTIMATED_STATEWIDE_CUSTOMER_ACCOUNTS =
+  TOTAL_POPULATION_PERSONS * POP_TO_CUSTOMER_RATIO;
 const PALETTE = ["#ff7f0e","#8B4513","#fdbb84","#fc8d8d","#bcbcbc","#1fb8d1","#2ca02c","#9ed0e6","#c266a7","#a68272","#7e5fc4","#f4c842","#e377c2","#f7b6d2","#888888","#d62728","#1f77b4","#9c8fbf","#a7e09b","#7f7f7f","#d6c95a","#bcbd22","#17becf","#ffbb78","#98df8a"];
 
 // --- NLCD 2021 tree-canopy fraction per substation (USGS 30m resolution) ---
@@ -1635,7 +1694,7 @@ function buildDemandPoints(rnd){
   // This pulls k-means centroids into rural areas so substations reach every corner.
   if (_bitmapReady){
     const uniformN = 1200;
-    const uniformWeightTotal = TOTAL_POP * 0.35;   // 35% of total weight goes to area
+    const uniformWeightTotal = TOTAL_POPULATION_PERSONS * 0.35; // 35% of total person weight goes to area
     const wPerPt = uniformWeightTotal / uniformN;
     let placed=0, tries=0;
     while (placed < uniformN && tries < uniformN*10){
@@ -1825,7 +1884,7 @@ async function generateGrid(){
   // Reset downstream state
   storm=null; plan=null;
   outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
-  affectedEl.textContent='0'; affectedPctEl.textContent='0% of state population';
+  affectedEl.textContent='0'; affectedPctEl.textContent='0% of estimated statewide accounts';
   outageCountEl.textContent='0'; clearRestorationResult();
 }
 
@@ -1904,14 +1963,22 @@ function renderGrid(){
     const label = s.name ? s.name : `Substation ${i+1}`;
     const volt = s.voltage ? ` · ${s.voltage.replace(/;/g,'/')} V` : '';
     L.marker([s.lat,s.lon],{icon,interactive:true}).addTo(subLayer)
-      .bindTooltip(`${label}${volt} — ${Math.round(s.popServed).toLocaleString()} customers`);
+      .bindTooltip(
+        `${label}${volt} — ~${Math.round(s.popServed*POP_TO_CUSTOMER_RATIO).toLocaleString()} estimated accounts`,
+      );
   });
   if (window._mask) window._mask.bringToFront();
   syncMapLayerVisibility();
 }
 
 
-// --- Browser-native weather + customer exposure outage model ---
+// ============================================================================
+// OUTAGE-LOCATION MODEL UI
+// Core equations/defaults: outage_location_model.js
+// Worker boundary: outage_location_worker.js
+// Reviewer guide: OUTAGE_LOCATION_MODEL_GUIDE.md
+// Keep this map as the single UI-input -> model-config crosswalk.
+// ============================================================================
 const OUTAGE_WORKER_PROTOCOL = 'connecticut_outage_worker_v1';
 const MODEL_PARAMETER_INPUTS = {
   windThresholdMph:'modelWindThreshold',
@@ -1923,15 +1990,64 @@ const MODEL_PARAMETER_INPUTS = {
   customerSmoothingKm:'modelCustomerSmoothing',
   ruralBaselineFraction:'modelRuralBaseline',
   gaussianBandwidthKm:'modelGaussianBandwidth',
+  candidateSegmentLengthKm:'modelCandidateLength',
+  lineIntegrationStepKm:'modelIntegrationStep',
   feederSusceptibility:'modelFeederSusceptibility',
   lateralSusceptibility:'modelLateralSusceptibility',
 };
+const MODEL_CONTROL_HELP = Object.freeze({
+  outagePlacementModel:
+    'Chooses whether locations follow the weather-and-exposure research model or network length alone.',
+  modelRiskObjective:
+    'Impact-weighted placement combines storm hazard with customer exposure. Failure-oriented placement uses storm hazard only.',
+  modelWindThreshold:
+    'Gusts at or below this threshold receive zero wind-damage score. Raising it excludes more moderate-wind locations.',
+  modelWindScale:
+    'Divides wind exceedance before the exponent is applied. With a fixed outage count and normalized location weights, changing only this global scale does not change placement probabilities.',
+  modelWindExponent:
+    'Controls how strongly high gust exceedances dominate. Larger values concentrate outages more sharply in the strongest-wind areas.',
+  modelRainCoefficient:
+    'Controls how much accumulated rain amplifies wind damage. Zero disables rain amplification; larger values favor wetter locations.',
+  modelRainCap:
+    'Limits the rain term before amplification, preventing very wet cells from growing without bound.',
+  modelExposureExponent:
+    'Controls how strongly customer density affects impact-weighted placement. It is ignored by the failure-oriented objective.',
+  modelCustomerSmoothing:
+    'Gaussian standard deviation used to map Census population onto the analysis grid. Larger values spread customer exposure farther.',
+  modelRuralBaseline:
+    'Adds a uniform synthetic exposure equal to this fraction of statewide population. The paper default is zero; nonzero values are sensitivity scenarios.',
+  modelGaussianBandwidth:
+    'Gaussian standard deviation applied to the combined hazard-and-exposure impact surface. Larger values produce broader, less localized hotspots.',
+  modelCandidateLength:
+    'Maximum length of each network candidate used for sampling without replacement. Smaller values create finer placement choices at higher cost.',
+  modelIntegrationStep:
+    'Maximum spacing of midpoint samples used to integrate scores along a line. Smaller values improve numerical resolution but increase runtime.',
+  modelFeederSusceptibility:
+    'Relative multiplier on feeder candidate weights. Values above one favor feeder failures; the neutral paper default is one.',
+  modelLateralSusceptibility:
+    'Relative multiplier on lateral candidate weights. Values above one favor lateral failures; the neutral paper default is one.',
+});
 const SURFACE_SCALES = {
   customerExposure:{max:4000,label:'4,000 customer accounts / grid node'},
   weatherSeverity:{max:4,label:'severity 4.0'},
   rawImpact:{max:8,label:'impact 8.0'},
   smoothedImpact:{max:4,label:'impact 4.0'},
 };
+
+// Install the same short explanation on the visible label, native control, and
+// accessibility description so the UI documentation cannot drift by modality.
+function installModelTuningHelp(){
+  for (const [id,help] of Object.entries(MODEL_CONTROL_HELP)){
+    const control=document.getElementById(id);
+    const label=document.querySelector(`label[for="${id}"]`);
+    if (!control || !label) continue;
+    control.title=help;
+    control.setAttribute('aria-description',help);
+    label.dataset.help=help;
+    label.tabIndex=0;
+    label.setAttribute('aria-label',`${label.textContent.trim()}: ${help}`);
+  }
+}
 
 function setModelAvailability(kind, text){
   const el=document.getElementById('modelAvailability');
@@ -2018,9 +2134,12 @@ function resetOutageModelDefaults(markStale=true){
   for (const [key,id] of Object.entries(MODEL_PARAMETER_INPUTS)){
     document.getElementById(id).value=String(defaults[key]);
   }
+  document.getElementById('modelRiskObjective').value=defaults.placementMode;
   if (markStale) markOutageModelStale('Scientific defaults restored. Generate a new scenario.');
 }
 
+// Read only UI/orchestration values here. Scientific validation and authoritative
+// defaults remain centralized in OutageLocationModel.validateConfig/DEFAULT_CONFIG.
 function readOutageModelConfig(){
   const config={
     // An empty stormTrackSelect is this project's long-standing "uniform
@@ -2034,6 +2153,7 @@ function readOutageModelConfig(){
     seed:Number(seedI.value),
     nOutages:Number(oS.value),
     customersPerOutage:50,
+    placementMode:document.getElementById('modelRiskObjective').value,
   };
   for (const [key,id] of Object.entries(MODEL_PARAMETER_INPUTS)){
     config[key]=Number(document.getElementById(id).value);
@@ -2069,7 +2189,7 @@ function markOutageModelStale(reason){
   if (storm || currentOutageModelResult){
     storm=null; plan=null; currentOutageModelResult=null;
     clearOutageResultLayers();
-    affectedEl.textContent='0'; affectedPctEl.textContent='0% of state population';
+    affectedEl.textContent='0'; affectedPctEl.textContent='0% of estimated statewide accounts';
     outageCountEl.textContent='0'; clearRestorationResult();
     const summary=document.getElementById('modelSummary');
     if (summary.classList.contains('visible')){
@@ -2449,9 +2569,9 @@ function applyOutageModelResult(result){
     undergroundEnabled:document.getElementById('undergroundLines').checked,
   });
   const outages=enriched.outages;
-  // GEOGRAPHY-DERIVED CUSTOMERS (replaces Alex's model's unsourced flat 50).
+  // GEOGRAPHY-DERIVED CUSTOMER-ACCOUNT ESTIMATE (replaces the flat 50).
   // Each outage inherits the customers of the feeder/lateral SEGMENT it sits on:
-  // census population is split substation -> feeder (popServed/feedersPerSub) ->
+  // census persons are split substation -> feeder (popServed/feedersPerSub) ->
   // lateral (/lateralsPerFeeder) -> segment (/#segments) at grid-build time, then
   // converted to electric customers via the real ratio (1,633,000 customers /
   // 3,605,944 residents = POP_TO_CUSTOMER_RATIO). This is the same cascade the
@@ -2467,11 +2587,10 @@ function applyOutageModelResult(result){
     o.popLoss = Math.max(1, Math.round(_segPop(o)*POP_TO_CUSTOMER_RATIO));
     o.customers = o.popLoss;
   }
-  // No cap needed: geography popLoss cascades from the network's own popServed,
-  // whose statewide sum is TOTAL_POP x POP_TO_CUSTOMER_RATIO (~1.63M), so any
-  // subset of hit segments is already bounded. Using one uncapped value here
-  // keeps storm.totalCust, the handoff contract, and the restoration curve all
-  // summing the SAME number (a cap made them disagree and threw).
+  // Keep one uncapped per-location estimate so storm.totalCust, the handoff
+  // contract, and the restoration curve sum the same values. Feeder and lateral
+  // service allocations overlap by construction, so this is a consequence proxy,
+  // not a conserved utility customer inventory.
   const geoSumCust = outages.reduce((s,o)=>s+o.popLoss,0);
   // Re-issue the handoff contract on the geography-derived customer total, so the
   // restoration-handoff integrity check (prepareTimelineForRestoration) validates
@@ -2491,7 +2610,7 @@ function applyOutageModelResult(result){
   storm={
     outages,totalCust:geoSumCust,switchRestoredCount:enriched.summary.switchRestored,
     isLocalized:!!trackData?.is_localized_reports,
-    placementModel:result.summary.placementModel||'weather_customer_exposure_v1',
+    placementModel:result.summary.placementModel||'impact_weighted_research_unknown_version',
     modelConfig:result.config,modelSummary:result.summary,
     initialContract:geoContract,
     restorationMetadata:{...enriched.summary,localPlannerReasons},
@@ -2529,7 +2648,8 @@ function applyOutageModelResult(result){
   document.getElementById('modelSummaryRestoration').textContent=
     `Restoration tags: ${enriched.summary.critical} critical · ${enriched.summary.treeBlocked} tree-blocked · `+
     `${enriched.summary.nearFloodZone} flood-zone · ${enriched.summary.callbackDelayed} delayed callbacks · `+
-    `${enriched.summary.switchRestored} quick-switch · ${enriched.summary.underground} underground. Placement and the ${expectedCustomers.toLocaleString()}-customer initial total are unchanged.`;
+    `${enriched.summary.switchRestored} quick-switch · ${enriched.summary.underground} underground. `+
+    `Placement is unchanged; the restoration handoff uses ${geoSumCust.toLocaleString()} geography-derived estimated accounts.`;
   const fresh=document.getElementById('modelFreshness');fresh.textContent='current';fresh.className='';
   document.getElementById('modelSummary').classList.add('visible');
   const surfaceSelect=document.getElementById('modelSurfaceSelect');
@@ -2603,7 +2723,7 @@ function initializeOutageModelWorker(){
     setModelAvailability('warn','Starting outage generator…');
     document.getElementById('simStorm').disabled=true;
     const attempt=++outageModelWorkerAttempt;
-    outageModelWorker=new Worker('./outage_location_worker.js?v=3');
+    outageModelWorker=new Worker('./outage_location_worker.js?v=4');
     outageModelWorker.onmessage=handleOutageWorkerMessage;
     outageModelWorker.onerror=(event)=>{
       if (outageModelWorkerStartupTimer){clearTimeout(outageModelWorkerStartupTimer);outageModelWorkerStartupTimer=null;}
@@ -2677,6 +2797,7 @@ function simulateStorm(){
 function initializeOutageModelUI(){
   populateStormModelOptions();
   resetOutageModelDefaults(false);
+  installModelTuningHelp();
   const parameterIds=Object.values(MODEL_PARAMETER_INPUTS);
   for (const id of parameterIds){
     document.getElementById(id).addEventListener('input',()=>markOutageModelStale('Scientific parameter changed. Generate a new scenario.'));
@@ -2686,6 +2807,9 @@ function initializeOutageModelUI(){
   document.getElementById('outagePlacementModel').onchange=()=>{
     markOutageModelStale('Placement method changed. Generate a new scenario.');
     updateOutageModelAvailability();
+  };
+  document.getElementById('modelRiskObjective').onchange=()=>{
+    markOutageModelStale('Research placement objective changed. Generate a new scenario.');
   };
   document.getElementById('modelSurfaceSelect').onchange=renderSelectedModelSurface;
   document.getElementById('timelinePlayPause').onclick=()=>{
@@ -2813,7 +2937,9 @@ function loadLiveOutages(){
   window._outageCloud = new PointCloudLayer(pts, {uniformColor:true, marker:'x', radius:2.5, markerWidth:1.1, fillColor:"#059669", fillOpacity:0.95}).addTo(map);
 
   affectedEl.textContent = Math.round(totalCust).toLocaleString();
-  affectedPctEl.textContent = (100*totalCust/TOTAL_POP).toFixed(3)+"% of state population";
+  affectedPctEl.textContent =
+    (100*totalCust/ESTIMATED_STATEWIDE_CUSTOMER_ACCOUNTS).toFixed(3)
+    +"% of estimated statewide accounts";
   outageCountEl.textContent = outages.length.toLocaleString();
   clearRestorationResult();
   const staleWarn = ageH > 2 ? ` — STALE (run 17_fetch_live_outages.py to refresh)` : '';
@@ -4149,7 +4275,7 @@ function resetStorm(){
   if (window._depotCloud){ map.removeLayer(window._depotCloud); window._depotCloud=null; }
   if (window._repairCloud){ map.removeLayer(window._repairCloud); window._repairCloud=null; }
   removeOutageSurface();
-  affectedEl.textContent='0'; affectedPctEl.textContent='0% of state population';
+  affectedEl.textContent='0'; affectedPctEl.textContent='0% of estimated statewide accounts';
   outageCountEl.textContent='0'; clearRestorationResult();
   document.getElementById('modelSummary').classList.remove('visible');
   document.getElementById('modelSurfaceSelect').value='none';
@@ -5332,12 +5458,13 @@ function _generateSimulationReport(){
   r += `Substations:        ${substations?.length || 0}\n`;
   r += `Feeders:            ${feeders?.length || 0}\n`;
   r += `Laterals:           ${laterals?.length || 0}\n`;
-  r += `State Population:  ${TOTAL_POP?.toLocaleString() || '—'}\n\n`;
+  r += `State Population:   ${TOTAL_POPULATION_PERSONS?.toLocaleString() || '—'} persons\n`;
+  r += `Estimated Accounts: ${Math.round(ESTIMATED_STATEWIDE_CUSTOMER_ACCOUNTS).toLocaleString()}\n\n`;
 
   r += 'STORM IMPACT\n';
   r += '-'.repeat(80) + '\n';
   r += `Outage Locations:   ${N.toLocaleString()}\n`;
-  r += `Customers Affected: ${Math.round(totalCust).toLocaleString()} (${(100*totalCust/TOTAL_POP).toFixed(1)}% of county)\n`;
+  r += `Customers Affected: ${Math.round(totalCust).toLocaleString()} (${(100*totalCust/ESTIMATED_STATEWIDE_CUSTOMER_ACCOUNTS).toFixed(1)}% of estimated statewide accounts)\n`;
   r += `Avg per Outage:     ${(totalCust/N).toFixed(0)} customers\n`;
   if (storm.placementModel){
     const cfg=storm.modelConfig||{};
@@ -5345,9 +5472,13 @@ function _generateSimulationReport(){
     const research=!!currentOutageModelResult?.surfaces;
     r += `Placement Model:    ${storm.placementModel}\n`;
     r += `Weather Event:      ${cfg.stormId||'basic/no weather field'}\n`;
-    r += `Placement Formula:  ${research?'weather severity × relative customer exposure, Gaussian-smoothed':'network length × susceptibility (explicit basic fallback)'}\n`;
+    const objective=cfg.placementMode==='failure_oriented'
+      ? 'line-integrated weather hazard × susceptibility'
+      : 'line-integrated smoothed impact priority × susceptibility';
+    r += `Placement Formula:  ${research?objective:'network length × susceptibility (explicit basic fallback)'}\n`;
     if (research){
       r += `Gaussian Bandwidth: ${cfg.gaussianBandwidthKm} km\n`;
+      r += `Network Numerics:   max ${cfg.candidateSegmentLengthKm} km candidates; ${cfg.lineIntegrationStepKm} km midpoint quadrature\n`;
       r += `Wind Parameters:    threshold ${cfg.windThresholdMph} mph; scale ${cfg.windExcessScaleMph} mph; exponent ${cfg.windExponent}\n`;
       r += `Rain / Exposure:    coefficient ${cfg.rainCoefficient}; cap ${cfg.rainScoreCap}; exposure exponent ${cfg.exposureExponent}\n`;
     }

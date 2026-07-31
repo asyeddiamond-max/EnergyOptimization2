@@ -22,7 +22,7 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
 | Capability | How |
 |---|---|
 | Real statewide Connecticut distribution grid | 299 HIFLD substations across all 8 counties, branching feeders + laterals, census-tract-weighted demand (883 tracts) |
-| Weather/customer-weighted outage locations | Browser Worker combines HRRR wind and rain, census customer exposure, Gaussian smoothing, and the live network; default is 2,000 unique points × 50 customers |
+| Weather/customer-weighted outage locations | Browser Worker combines HRRR wind and rain, census customer exposure, Gaussian smoothing, and the live network; the UI converts each selected network segment to a geography-derived estimated account impact |
 | Realistic-mode scheduler with seven factors | assessment delay, log-normal repair, discovery ramp, mutual-aid waves, road proxy, workday clamp, critical priority |
 | Real critical facilities (HIFLD/EPA) | 1,143 hospitals, fire stations, EMS, water plants statewide — outages near real facilities get priority-1 restoration |
 | NLCD tree canopy per substation | USGS 30m canopy cover (live-computed 1km buffer mean per substation) replaces the distance-based urban/suburban/rural heuristic |
@@ -117,26 +117,23 @@ No Python, backend, JSON import, or downloaded handoff file is required:
 The browser sends the live in-memory feeder/lateral network to
 `outage_location_worker.js`, which calls the same pure
 `outage_location_model.js` used by the automated tests. The default generates
-2,000 unique Connecticut network locations with exactly 50 customers each,
-so the restoration curve begins at exactly 100,000 customers without power.
-`outage_restoration_adapter.js` then attaches deterministic critical-facility,
-tree, flood, callback, switching, underground, feeder, and substation metadata
-without moving a point or changing its initial customer count.
+2,000 unique Connecticut network locations. Before restoration planning, the UI
+assigns each location a geography-derived estimated account impact from its
+served feeder/lateral segment. `outage_restoration_adapter.js` then attaches
+deterministic critical-facility, tree, flood, callback, switching, underground,
+feeder, and substation metadata without moving a selected point.
 
-The version-one model is:
+At a high level, the research placement path constructs separate storm-hazard
+and customer-consequence fields, optionally combines them into an
+impact-priority field, smooths on the Connecticut boundary, integrates the
+selected field along standardized network candidates, and samples unique
+locations reproducibly. The UI’s **Model tuning** panel exposes prespecified
+constants for sensitivity analysis and always resets from the model’s
+authoritative defaults.
 
-```text
-wind_damage = max(0, (wind_mph - 35) / 25) ^ 2
-rain_amplification = 1 + 0.5 * min(rain_in_per_hour, 2)
-weather_severity = wind_damage * rain_amplification
-raw_impact = weather_severity * relative_customer_exposure
-smoothed_impact = boundary_aware_gaussian(raw_impact, 10 km)
-segment_weight = smoothed_impact_at_midpoint * segment_length_km * susceptibility
-```
-
-The NOAA storm-track layer is visualization only and does not alter placement.
-Events without complete HRRR wind/rain data require the explicitly labeled
-basic network-placement mode; the page never silently changes algorithms.
+For the equations, parameter table, granularity treatment, and direct map from
+UI controls to source functions, see
+**[`OUTAGE_LOCATION_MODEL_GUIDE.md`](OUTAGE_LOCATION_MODEL_GUIDE.md)**.
 
 ---
 
@@ -150,6 +147,7 @@ basic network-placement mode; the page never silently changes algorithms.
 ├── outage_location_model.js      # sole weather/customer outage-location generator
 ├── outage_location_worker.js     # off-main-thread generation and progress protocol
 ├── outage_restoration_adapter.js # deterministic restoration metadata handoff
+├── OUTAGE_LOCATION_MODEL_GUIDE.md # equations, tuning parameters, and code map
 ├── 04_geojson_to_shapefile.py     # offline GeoJSON → shapefile converter (optional)
 ├── 05_generate_artifacts.py       # offline matplotlib PNG generator for output/
 ├── 07_server.py                   # FastAPI backend (~780 LOC), disk-backed result cache
@@ -236,8 +234,8 @@ npm test
 ```
 
 The dependency-free suite covers frozen Python-to-JavaScript component parity,
-scientific controls, determinism, every complete HRRR event, exact customer
-totals, Connecticut geography, network membership, Worker cancellation and
+scientific controls, determinism, every complete HRRR event, the standalone
+generator customer contract, Connecticut geography, network membership, Worker cancellation and
 responsiveness, 24-frame Isaias timeline generation, timestamped storm-path
 movement, restoration metadata, and zero-endpoint accounting. The
 100,000-segment performance fixture is built deterministically in JavaScript;
@@ -290,8 +288,9 @@ History of the speedup at 25k × 5000 over the project:
 
 ## Documentation deliverables
 
-Three documents in the repo capture the project's full development arc and research context:
+Repository documentation covers the implementation, data, and research context:
 
+- **[`OUTAGE_LOCATION_MODEL_GUIDE.md`](OUTAGE_LOCATION_MODEL_GUIDE.md)** — concise code map, equations, tuning-parameter table, resolution handling, and maintainer checklist for the outage-location model.
 - **`JOURNAL.html`** — open in any browser. Chapters covering everything from foundations through The Realism Fix, with verbatim user-question quotes, colored category tags, a cross-project "Problems Faced" appendix, and an addendum on the Realism Fix phases + advisor feedback. Browser-viewable and printable.
 - **`Hartford_Grid_Dev_Journal.docx`** — same content as a Word document for upload to Google Docs (drag into `drive.google.com` → right-click → Open with Google Docs → auto-converts). Regenerate with `python build_docx.py`.
 - **`Hartford_Grid_Research_Context.docx`** — 19 cited research papers across 6 themes (each with author/title/venue + "Why it matters" + "What it does" + "Key terms" vocab), niche analysis, sketch of paper introduction, open research questions, and PURA / Eversource data sources to pursue.
@@ -310,7 +309,8 @@ Three documents in the repo capture the project's full development arc and resea
 **Phase 3** weather window (no work during the storm itself).
 Revert point for the original realism work: `git tag before-realism-fix`.
 Switching/back-feed and underground interactions are now explicit restoration
-metadata: they never remove an outage or change the initial 50-customer value.
+metadata: they never move a selected outage or alter its geography-derived
+estimated account impact.
 
 **Advisor feedback & next priorities:** detailed advisor feedback reshaped the
 roadmap — see **[`ROADMAP.md`](ROADMAP.md)** for the full plan. Headline next steps:

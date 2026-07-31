@@ -1,9 +1,12 @@
 {
+  "reference_status": "Legacy version-one Python parity fixture. Active tests use its component surfaces and explicit historical configuration; its midpoint network outputs are not production version-two expectations.",
   "equations": {
     "rain_amplification": "1 + rain_coefficient * min(rain_in_per_hour / rain_reference_in, rain_score_cap)",
     "raw_impact": "weather_severity * relative_exposure ** exposure_exponent",
     "relative_exposure": "smoothed_customer_accounts / mean_in_state_exposure",
-    "segment_weight": "smoothed_impact_at_midpoint * segment_length_km * susceptibility",
+    "legacy_segment_weight_v1": "smoothed_impact_at_midpoint * segment_length_km * susceptibility",
+    "failure_weight_v2": "susceptibility * integral_along_segment(weather_severity) dx",
+    "impact_weight_v2": "susceptibility * integral_along_segment(smoothed_impact) dx",
     "smoothed_impact": "boundary_aware_gaussian(raw_impact, gaussian_bandwidth_km)",
     "weather_severity": "wind_damage * rain_amplification",
     "wind_damage": "max(0, (wind_mph - wind_threshold_mph) / wind_excess_scale_mph) ** wind_exponent"

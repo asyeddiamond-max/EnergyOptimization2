@@ -267,6 +267,10 @@ def build_timeline(key, cfg):
         "interval_minutes": 60,
         "timezone_note": cfg["timezone_note"],
         "rain_alignment": "rain_1h_in is the f01 APCP interval ending at valid_time",
+        "antecedent_rain_source": (
+            "Actual HRRR f01 APCP fields are fetched for the five hours before "
+            "the visible timeline; early rain_6h_in values are not zero-padded."
+        ),
         "antecedent_rain_hours": ANTECEDENT_RAIN_HOURS,
         "frames": frames,
     }

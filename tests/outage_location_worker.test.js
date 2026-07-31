@@ -124,6 +124,9 @@ test("Worker announces its versioned capabilities", async (t) => {
   assert.equal(ready.capabilities.progress, true);
   assert.equal(ready.capabilities.transferableSurfaces, true);
   assert.equal(ready.capabilities.timelineWeather, true);
+  assert.equal(ready.capabilities.separatedRiskComponents, true);
+  assert.equal(ready.capabilities.lineIntegratedNetworkScores, true);
+  assert.equal(ready.capabilities.segmentKeyedSampling, true);
 });
 
 test("Worker answers an explicit startup status handshake", async (t) => {
@@ -161,9 +164,18 @@ test("Worker reports real stages and returns typed surfaces plus restoration-com
   assert.ok(result.outages.every((outage) => outage.popLoss === 50));
   assert.ok(result.surfaces.mask instanceof Uint8Array);
   assert.ok(result.surfaces.smoothedImpact instanceof Float64Array);
+  assert.equal(result.surfaces.hazardIndex, result.surfaces.weatherSeverity);
+  assert.equal(result.surfaces.impactPriorityScore, result.surfaces.smoothedImpact);
+  assert.ok(result.surfaces.relativeCustomerConsequenceIndex instanceof Float64Array);
+  assert.ok(result.surfaces.normalizedImpactScore instanceof Float64Array);
+  assert.equal(result.summary.placementMode, "impact_weighted");
+  assert.ok(result.summary.totalFailureOrientedWeight > 0);
+  assert.ok(result.summary.totalImpactPriorityWeight > 0);
+  assert.equal(result.surfaces.spatialMethod.customer.coordinateReferenceSystem, "EPSG:4326");
   assert.deepEqual([result.surfaces.rows, result.surfaces.columns], [3, 3]);
   assert.equal(result.surfaces.smoothedImpact.length, 9);
   assert.ok(result.summary.timingsMs["network-weighting"] >= 0);
+  assert.ok(result.summary.surface.totalPopulationPersons > result.summary.surface.totalCustomerAccounts);
 });
 
 test("Worker returns 24 transferable Isaias frames and 2,000 timestamped outages", { timeout: 30000 }, async (t) => {
@@ -184,7 +196,11 @@ test("Worker returns 24 transferable Isaias frames and 2,000 timestamped outages
   assert.deepEqual(stages, [
     "timeline-validation", "timeline-modeling", "timeline-serialization", "complete",
   ]);
-  assert.equal(result.summary.placementModel, "curated_hourly_timeline_v1");
+  assert.equal(
+    result.summary.placementModel,
+    "impact_weighted_curated_hourly_timeline_v2",
+  );
+  assert.equal(result.summary.placementMode, "impact_weighted");
   assert.equal(result.outages.length, 2000);
   assert.equal(result.totalCustomers, 100000);
   assert.equal(result.summary.uniqueSampledSegments, 2000);
@@ -195,6 +211,14 @@ test("Worker returns 24 transferable Isaias frames and 2,000 timestamped outages
   assert.ok(result.surfaces.timeline.frames[0].rain1hIn instanceof Float32Array);
   assert.ok(result.surfaces.timeline.frames[0].rain6hIn instanceof Float32Array);
   assert.ok(result.surfaces.timeline.frames[0].smoothedImpact instanceof Float32Array);
+  assert.equal(
+    result.surfaces.timeline.frames[0].hazardIndex,
+    result.surfaces.timeline.frames[0].weatherSeverity,
+  );
+  assert.equal(
+    result.surfaces.timeline.frames[0].impactPriorityScore,
+    result.surfaces.timeline.frames[0].smoothedImpact,
+  );
   assert.equal(result.surfaces.timeline.frames[0].windGustMph.length, 41 * 65);
 });
 
@@ -279,7 +303,14 @@ test("full Isaias generation runs off-thread on a 100k-segment test network", { 
   let mainThreadTicks = 0;
   const ticker = setInterval(() => { mainThreadTicks += 1; }, 5);
   t.after(() => clearInterval(ticker));
-  worker.postMessage(request("full-isaias", fullInput()));
+  const input = fullInput();
+  const rawInputSegments = [...input.network.feeders, ...input.network.laterals]
+    .reduce(
+      (sum, line) => sum + Math.max(0, (line.pts || line.coordinates).length - 1),
+      0,
+    );
+  assert.ok(rawInputSegments >= 100000);
+  worker.postMessage(request("full-isaias", input));
   const message = await waitFor(
     worker,
     (value) => value.type === "result" && value.runId === "full-isaias",
@@ -287,7 +318,7 @@ test("full Isaias generation runs off-thread on a 100k-segment test network", { 
   );
   clearInterval(ticker);
   assert.ok(mainThreadTicks >= 10, `expected responsive main-thread ticks, received ${mainThreadTicks}`);
-  assert.ok(message.result.summary.candidateSegments >= 100000);
+  assert.ok(message.result.summary.candidateSegments >= message.result.summary.sampledOutages);
   assert.equal(message.result.summary.sampledOutages, 2000);
   assert.equal(message.result.summary.uniqueSampledSegments, 2000);
   assert.equal(message.result.summary.representedCustomers, 100000);

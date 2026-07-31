@@ -48,12 +48,18 @@ function smallSurfaces() {
   return { config, customer, severity, impact };
 }
 
-test("configuration has frozen defaults and rejects invalid version-one inputs", () => {
+test("configuration has frozen defaults and rejects invalid inputs", () => {
   assert.equal(model.DEFAULT_CONFIG.nOutages, 2000);
   assert.equal(model.DEFAULT_CONFIG.customersPerOutage, 50);
+  assert.equal(model.DEFAULT_CONFIG.ruralBaselineFraction, 0);
+  assert.equal(model.DEFAULT_CONFIG.placementMode, "impact_weighted");
+  assert.equal(model.DEFAULT_CONFIG.candidateSegmentLengthKm, 1);
+  assert.equal(model.DEFAULT_CONFIG.lineIntegrationStepKm, 0.25);
+  assert.equal(model.DEFAULT_CONFIG.lateralSusceptibility, 1);
   assert.equal(model.validateConfig({ n_outages: 3 }).nOutages, 3);
   assert.throws(() => model.validateConfig({ customersPerOutage: 49 }), model.InputValidationError);
   assert.throws(() => model.validateConfig({ gaussianBandwidthKm: 0 }), model.InputValidationError);
+  assert.throws(() => model.validateConfig({ placementMode: "probability" }), model.InputValidationError);
   assert.throws(() => model.validateConfig({ typoBandwidthKm: 10 }), model.InputValidationError);
 });
 
@@ -75,12 +81,21 @@ test("small customer allocation, Gaussian smoothing, rural floor, and conservati
   const { customer } = smallSurfaces();
   const expected = small.expected.customer_surface;
   assert.deepEqual(customer.connecticutMask, expected.connecticut_mask);
+  tolerance(
+    customer.totalCustomerAccounts,
+    customer.totalPopulationPersons * model.POPULATION_TO_CUSTOMER_RATIO,
+  );
+  tolerance(customer.summary.rawPopulationTotal, customer.totalPopulationPersons);
+  tolerance(customer.summary.smoothedPopulationTotal, customer.totalPopulationPersons);
   compareGrid(customer.rawCustomerAccounts, expected.raw_customer_accounts);
   compareGrid(customer.smoothedCustomerAccounts, expected.smoothed_customer_accounts);
   tolerance(customer.summary.rawTotal, expected.summary.raw_total);
   tolerance(customer.summary.smoothedTotal, expected.summary.smoothed_total);
   assert.equal(customer.summary.validCellCount, 9);
   assert.ok(customer.smoothedCustomerAccounts.flat().every((value) => value > 0));
+  assert.equal(customer.spatialMethod.coordinateReferenceSystem, "EPSG:4326");
+  assert.equal(customer.spatialMethod.smoothing.standardDeviationKm, small.input.config.customer_smoothing_km);
+  assert.match(customer.spatialMethod.populationAllocation, /bilinear/);
 });
 
 test("wind threshold and rain amplification preserve all weather components", () => {
@@ -92,6 +107,8 @@ test("wind threshold and rain amplification preserve all weather components", ()
   const { severity } = smallSurfaces();
   const expected = small.expected.weather_surface;
   compareGrid(severity.windMph, expected.wind_mph);
+  assert.equal(severity.rainInputKind, "one_hour_accumulation");
+  assert.equal(severity.rainAccumulationIn, severity.rainInPerHour);
   compareGrid(severity.rainInPerHour, expected.rain_in_per_hour);
   compareGrid(severity.windDamageScore, expected.wind_damage_score);
   compareGrid(severity.rainAmplification, expected.rain_amplification);
@@ -101,40 +118,53 @@ test("wind threshold and rain amplification preserve all weather components", ()
 });
 
 test("combined impact and boundary-aware Gaussian surface match Python", () => {
-  const { impact } = smallSurfaces();
+  const { severity, impact } = smallSurfaces();
   const expected = small.expected.impact_surface;
   compareGrid(impact.relativeCustomerExposure, expected.relative_customer_exposure);
   compareGrid(impact.rawImpact, expected.raw_impact);
   compareGrid(impact.smoothedImpact, expected.smoothed_impact);
+  assert.equal(impact.normalizedImpactScore, impact.samplingProbability);
+  assert.equal(impact.hazardIndex, severity.weatherSeverity);
+  assert.equal(impact.relativeCustomerConsequenceIndex, impact.relativeCustomerExposure);
+  assert.equal(impact.smoothedImpactPriorityScore, impact.smoothedImpact);
+  assert.match(impact.interpretation.hazardIndex, /not a calibrated/);
   compareGrid(impact.samplingProbability, expected.sampling_probability);
   tolerance(impact.summary.rawTotal, expected.summary.raw_total);
   tolerance(impact.summary.smoothedTotal, expected.summary.smoothed_total);
+  tolerance(impact.summary.normalizedScoreTotal, 1);
   tolerance(impact.summary.probabilityTotal, 1);
 });
 
-test("network expansion produces the eight expected weighted atomic segments", () => {
+test("combined impact rejects equal-shaped surfaces on different coordinates", () => {
+  const { config, customer, severity } = smallSurfaces();
+  const shiftedWeather = {
+    ...severity,
+    latitudes: severity.latitudes.map((value, index) => index === 0 ? value + 1e-6 : value),
+  };
+  assert.throws(
+    () => model.buildCombinedImpactSurface(customer, shiftedWeather, config),
+    /grid coordinates must match exactly/,
+  );
+});
+
+test("network expansion standardizes candidate length and line-integrates separated scores", () => {
   const { config, customer, severity, impact } = smallSurfaces();
   const segments = model.buildWeightedNetworkSegments(small.input.network, customer, severity, impact, config);
-  assert.equal(segments.length, small.expected.weighted_segments.length);
-  segments.forEach((segment, index) => {
-    const expected = small.expected.weighted_segments[index];
-    assert.equal(segment.segmentId, expected.segment_id);
-    assert.equal(segment.networkKind, expected.network_kind);
-    assert.equal(segment.feederId, expected.feeder_id);
-    assert.equal(segment.lateralId, expected.lateral_id);
-    assert.equal(segment.subId, expected.sub_id);
-    for (const [actualKey, expectedKey] of [
-      ["lengthKm", "length_km"], ["localWindMph", "local_wind_mph"],
-      ["localRainIn", "local_rain_in"], ["customerExposure", "customer_exposure"],
-      ["relativeCustomerExposure", "relative_customer_exposure"],
-      ["localWeatherSeverity", "local_weather_severity"], ["rawImpact", "raw_impact"],
-      ["smoothedImpact", "smoothed_impact"], ["susceptibility", "susceptibility"],
-      ["weight", "weight"],
-    ]) tolerance(segment[actualKey], expected[expectedKey], 3e-12);
+  assert.ok(segments.length > small.expected.weighted_segments.length);
+  assert.equal(new Set(segments.map((segment) => segment.segmentId)).size, segments.length);
+  segments.forEach((segment) => {
+    assert.ok(segment.lengthKm <= config.candidateSegmentLengthKm + 1e-9);
+    assert.ok(segment.integrationSampleCount >= 1);
+    assert.equal(segment.integrationMethod, "composite_midpoint_rule_along_polyline");
+    assert.equal(segment.placementMode, "impact_weighted");
+    tolerance(segment.weight, segment.impactPriorityWeight);
+    assert.ok(segment.failureOrientedWeight >= 0);
+    assert.ok(segment.customerConsequenceIndex >= 0);
+    assert.ok(segment.pathCoordinates.length >= 2);
   });
 });
 
-test("Mulberry32 sampling is deterministic, unique, and restoration-compatible", () => {
+test("segment-keyed sampling is deterministic, order-invariant, unique, and restoration-compatible", () => {
   const input = small.input;
   const first = model.generateOutageScenario({
     config: input.config,
@@ -153,6 +183,21 @@ test("Mulberry32 sampling is deterministic, unique, and restoration-compatible",
   assert.deepEqual(first.outages, second.outages);
   assert.equal(first.outages.length, 3);
   assert.equal(first.totalCustomers, 150);
+  assert.deepEqual(first.samplingDesign, {
+    algorithm: "segment_keyed_exponential_random_key_without_replacement",
+    keyEquation: "log(U_s) / W_s",
+    uniformKey: "FNV-1a-derived 32-bit hash of seed, stream, segment ID, and counter",
+    stableUnderCandidateReordering: true,
+    conditionedOnOutageCount: 3,
+    normalizedScoresAreInclusionProbabilities: false,
+  });
+  const { config, customer, severity, impact } = smallSurfaces();
+  const segments = model.buildWeightedNetworkSegments(
+    small.input.network, customer, severity, impact, config,
+  );
+  const forward = model.sampleOutageScenario(segments, config);
+  const reversed = model.sampleOutageScenario(segments.slice().reverse(), config);
+  assert.deepEqual(reversed.outages, forward.outages);
   assert.equal(new Set(first.outages.map((outage) => outage.networkSegmentId)).size, 3);
   first.outages.forEach((outage) => {
     assert.equal(outage.popLoss, 50);
@@ -162,6 +207,66 @@ test("Mulberry32 sampling is deterministic, unique, and restoration-compatible",
     assert.ok(outage.is_feeder === 0 || outage.is_feeder === 1);
     assert.equal(outage.sub_id, 0);
   });
+});
+
+test("uniform population scaling leaves relative exposure and sampled geography invariant", () => {
+  const source = small.input;
+  const run = (factor) => model.generateOutageScenario({
+    config: source.config,
+    boundary: source.boundary,
+    censusTracts: source.census_tracts.map((tract) => ({ ...tract, pop: tract.pop * factor })),
+    weather: source.weather,
+    network: source.network,
+  });
+  const baseline = run(1);
+  for (const factor of [model.POPULATION_TO_CUSTOMER_RATIO, 7.25]) {
+    const scaled = run(factor);
+    compareGrid(
+      scaled.surfaces.impact.relativeCustomerExposure,
+      baseline.surfaces.impact.relativeCustomerExposure,
+      2e-12,
+    );
+    assert.deepEqual(
+      scaled.outages.map((outage) => [
+        outage.networkSegmentId, outage.lat, outage.lon,
+      ]),
+      baseline.outages.map((outage) => [
+        outage.networkSegmentId, outage.lat, outage.lon,
+      ]),
+    );
+  }
+});
+
+test("wind exceedance scale changes score magnitude but cancels from conditional geography", () => {
+  const source = small.input;
+  const run = (windExcessScaleMph) => model.generateOutageScenario({
+    config: { ...source.config, windExcessScaleMph },
+    boundary: source.boundary,
+    censusTracts: source.census_tracts,
+    weather: source.weather,
+    network: source.network,
+  });
+  const reference = run(25);
+  for (const scale of [20, 30]) {
+    const candidate = run(scale);
+    compareGrid(
+      candidate.surfaces.impact.normalizedImpactPriorityScore,
+      reference.surfaces.impact.normalizedImpactPriorityScore,
+      3e-12,
+    );
+    assert.deepEqual(
+      candidate.outages.map((outage) => [
+        outage.networkSegmentId, outage.lat, outage.lon,
+      ]),
+      reference.outages.map((outage) => [
+        outage.networkSegmentId, outage.lat, outage.lon,
+      ]),
+    );
+    assert.notEqual(
+      candidate.summary.totalSegmentWeight,
+      reference.summary.totalSegmentWeight,
+    );
+  }
 });
 
 test("live website pts arrays are accepted without coordinate reversal errors", () => {
@@ -176,16 +281,86 @@ test("live website pts arrays are accepted without coordinate reversal errors", 
 
 test("explicit basic fallback uses network length without weather or customer claims", () => {
   const segments = model.buildBasicNetworkSegments(small.input.network, small.input.config);
-  assert.equal(segments.length, 8);
+  assert.ok(segments.length > 8);
   assert.ok(segments.every((segment) => segment.segmentId.startsWith("basic:")
-    && segment.weight > 0 && segment.localWeatherSeverity === null));
+    && segment.weight > 0 && segment.localWeatherSeverity === null
+    && segment.lengthKm <= model.DEFAULT_CONFIG.candidateSegmentLengthKm + 1e-9));
   const scenario = model.sampleOutageScenario(segments, small.input.config);
   assert.equal(scenario.outages.length, 3);
   assert.equal(scenario.totalCustomers, 150);
   assert.ok(scenario.outages.every((outage) => outage.localWeatherSeverity === null));
+  assert.equal(scenario.methodology.placementMode, "network_length_only");
 });
 
-test("full default Isaias component surfaces match the frozen W0 reference", { timeout: 120000 }, () => {
+test("candidate construction and line integrals are invariant to redundant polyline vertices", () => {
+  const original = {
+    feeders: [{
+      feederId: 0,
+      subId: 0,
+      coordinates: [[-72.9, 41.4], [-72.87, 41.42], [-72.84, 41.41]],
+    }],
+    laterals: [],
+  };
+  const first = original.feeders[0].coordinates[0];
+  const second = original.feeders[0].coordinates[1];
+  const subdivided = structuredClone(original);
+  subdivided.feeders[0].coordinates.splice(1, 0, [
+    (first[0] + second[0]) / 2,
+    (first[1] + second[1]) / 2,
+  ]);
+  const options = { candidateSegmentLengthKm: 0.75 };
+  const left = model.buildBasicNetworkSegments(original, options);
+  const right = model.buildBasicNetworkSegments(subdivided, options);
+  assert.deepEqual(left.map((segment) => segment.segmentId), right.map((segment) => segment.segmentId));
+  tolerance(
+    left.reduce((sum, segment) => sum + segment.weight, 0),
+    right.reduce((sum, segment) => sum + segment.weight, 0),
+    2e-8,
+  );
+
+  const latitudes = [41.3, 41.4, 41.5];
+  const longitudes = [-73.0, -72.9, -72.8];
+  const values = latitudes.map((latitude) =>
+    longitudes.map((longitude) => 2 * latitude + 3 * longitude + 300));
+  const coarse = model.integrateGridAlongPath(
+    latitudes, longitudes, values, original.feeders[0].coordinates, 0.5,
+  );
+  const fine = model.integrateGridAlongPath(
+    latitudes, longitudes, values, subdivided.feeders[0].coordinates, 0.125,
+  );
+  tolerance(coarse.integral, fine.integral, 3e-7);
+});
+
+test("failure-oriented and impact-weighted objectives are explicit and use different weights", () => {
+  const { config, customer, severity, impact } = smallSurfaces();
+  const impactSegments = model.buildWeightedNetworkSegments(
+    small.input.network,
+    customer,
+    severity,
+    impact,
+    { ...config, placementMode: "impact_weighted" },
+  );
+  const failureSegments = model.buildWeightedNetworkSegments(
+    small.input.network,
+    customer,
+    severity,
+    impact,
+    { ...config, placementMode: "failure_oriented" },
+  );
+  const impactById = new Map(impactSegments.map((segment) => [segment.segmentId, segment]));
+  for (const failure of failureSegments) {
+    const candidate = impactById.get(failure.segmentId);
+    if (!candidate) continue;
+    tolerance(failure.weight, failure.failureOrientedWeight);
+    tolerance(candidate.weight, candidate.impactPriorityWeight);
+  }
+  assert.ok(failureSegments.some((failure) => {
+    const candidate = impactById.get(failure.segmentId);
+    return candidate && Math.abs(failure.weight - candidate.weight) > 1e-8;
+  }));
+});
+
+test("full Isaias component surfaces match the frozen legacy W0 reference", { timeout: 120000 }, () => {
   const expected = fixture.full_isaias_reference.expected;
   const boundaryRaw = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "connecticut_boundary.json"), "utf8"));
   const censusRaw = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "connecticut_census_tracts.json"), "utf8"));
