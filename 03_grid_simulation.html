@@ -699,6 +699,7 @@
 <script src="./data/hartford_storm_tracks.js"></script>
 <script src="./data/hartford_doe_oe417.js"></script>
 <script src="./data/connecticut_storm_timelines.js"></script>
+<script src="./data/july2026_town_outages.js"></script>
 <script src="./data/connecticut_flood_corridors.js"></script>
 <script src="./data/connecticut_storm_events.js"></script>
 <!-- LIVE Eversource CT outages (17_fetch_live_outages.py). Optional: a 404
@@ -2540,6 +2541,33 @@ function initializeTimelinePlayback(){
   },250);
 }
 
+// Town-anchor July 4, 2026 to the REPORTED per-town outage distribution: relocate each generated
+// outage so per-town COUNTS follow the reconstructed peak (data/july2026_town_outages.js, sums to
+// ~94k, = what the accurate July 4 Storm Simulator uses), scattered within each town's footprint.
+// This is placement-only: the customer total is still anchored to ~94k downstream, and the
+// restoration curve is decoupled from location -- totals/ETR are unchanged. It replaces the model's
+// population-weighted spread (which over-concentrated in the Hartford metro) with where outages were
+// actually reported (New Britain/Bristol + NW Litchfield + SW Fairfield + SE CT).
+function relocateJuly4ToReportedTowns(outages){
+  if (document.getElementById('stormTrackSelect').value!=='ct_july2026_severe_tstorm') return;
+  const T=window.JULY4_TOWN_OUTAGES; if (!T || !outages.length) return;
+  const names=Object.keys(T), N=outages.length;
+  const total=names.reduce((s,n)=>s+T[n].peak,0);
+  const raw=names.map(n=>T[n].peak/total*N), counts=raw.map(Math.floor);
+  let rem=N-counts.reduce((a,b)=>a+b,0);
+  raw.map((v,i)=>[v-counts[i],i]).sort((a,b)=>b[0]-a[0]).forEach(p=>{ if(rem>0){counts[p[1]]++;rem--;} });
+  let idx=0;
+  for (let ti=0; ti<names.length; ti++){
+    const t=T[names[ti]], coslat=Math.cos(t.lat*Math.PI/180)||1;
+    for (let c=0; c<counts[ti] && idx<N; c++){
+      const o=outages[idx++];
+      const ang=Math.random()*6.283185307, rad=Math.sqrt(Math.random())*0.6*t.r;
+      o.lat=t.lat+rad*Math.sin(ang);
+      o.lon=t.lon+rad*Math.cos(ang)/coslat;
+      o.town=names[ti];
+    }
+  }
+}
 function applyOutageModelResult(result){
   const expectedCustomers=result.outages.length*50;
   if (result.totalCustomers!==expectedCustomers||result.outages.some(outage=>outage.popLoss!==50)){
@@ -2548,6 +2576,7 @@ function applyOutageModelResult(result){
   if (!window.OutageRestorationAdapter){
     throw new Error('The restoration metadata adapter did not load. Refresh the page and try again.');
   }
+  relocateJuly4ToReportedTowns(result.outages);   // town-anchor July 4 to reported locations (placement-only)
   const sampledOutages=result.outages.map(outage=>({
     ...outage,popLoss:50,customers:50,
     wind_mph:Number.isFinite(outage.localWindMph)?outage.localWindMph:30,
