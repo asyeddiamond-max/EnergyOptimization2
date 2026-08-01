@@ -700,6 +700,7 @@
 <script src="./data/hartford_doe_oe417.js"></script>
 <script src="./data/connecticut_storm_timelines.js"></script>
 <script src="./data/july2026_town_outages.js"></script>
+<script src="./data/july2026_observed_restoration.js"></script>
 <script src="./data/connecticut_flood_corridors.js"></script>
 <script src="./data/connecticut_storm_events.js"></script>
 <!-- LIVE Eversource CT outages (17_fetch_live_outages.py). Optional: a 404
@@ -4183,7 +4184,22 @@ function renderRestorationCurve(crews, totalTime, fmtDuration){
   let doeLegend = '';
   const doeEvents = window.HARTFORD_DOE_OE417 || [];
   let matchedEvent = null;
-  if (doeEvents.length && tMax > 0){
+  const _selStorm = document.getElementById('stormTrackSelect').value;
+  if (_selStorm==='ct_july2026_severe_tstorm' && window.JULY4_OBSERVED && tMax > 0){
+    // July 4: compare against July 4's OWN observed restoration (peak-based ~94k), NOT the
+    // closest-magnitude DOE event. July 4's DOE record is filed under its ~180k CUMULATIVE, so
+    // the size-matcher would otherwise pick a different storm (e.g. Dec 2025 Windstorm, 89.2k).
+    const O=window.JULY4_OBSERVED, pk=O.peak||94000;
+    const rPts=O.points.map(p=>[p[0], Math.max(0,Math.min(1,p[1]/pk))]);
+    let rd='';
+    for (const [rt,frac] of rPts){ const rx=(rt/tMax)*W; if(rx>W)break; const ry=4+(1-frac)*(H-8); rd+=rd?` L ${rx.toFixed(1)} ${ry.toFixed(1)}`:`M ${rx.toFixed(1)} ${ry.toFixed(1)}`; }
+    doeOverlay=`<path d="${rd}" fill="none" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5,3"/>`;
+    for (const [rt,frac] of rPts){ const rx=(rt/tMax)*W; if(rx>W)break; const ry=4+(1-frac)*(H-8); doeOverlay+=`<circle cx="${rx.toFixed(1)}" cy="${ry.toFixed(1)}" r="2" fill="#2563eb"/>`; }
+    doeLegend=`<div style="font-size:9px;color:#64748b;margin-top:3px;display:flex;gap:10px;align-items:center;">`+
+      `<span><span style="display:inline-block;width:16px;height:2px;background:#dc2626;vertical-align:middle;margin-right:3px;"></span>Simulated</span>`+
+      `<span><span style="display:inline-block;width:16px;height:0;border-top:2px dashed #2563eb;vertical-align:middle;margin-right:3px;"></span>Real: July 4, 2026 (~94k peak, Eversource)</span>`+
+      `</div>`;
+  } else if (doeEvents.length && tMax > 0){
     const bestMatch = doeEvents.reduce((best, e) => {
       const diff = Math.abs(e.customers_affected - totalCust);
       return diff < best.diff ? {e, diff} : best;
