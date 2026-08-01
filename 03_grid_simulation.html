@@ -3220,7 +3220,20 @@ function staticGridAnyWithin(grid, cellDeg, cLat, cLon, points, radiusMi){
 // mutual aid to take 2.5-3.5 days to reach half peak. Using Isaias's slow
 // curve unconditionally made every storm -- even a ~100K-customer one --
 // ramp as if it needed the same days-long mutual-aid mobilization.
-function deriveRampParams(totalCust, assessmentDelay){
+function deriveRampParams(totalCust, assessmentDelay, preferDailyCrews){
+  // If the selected storm's OWN crew mobilization is known (its DOE daily_crews), use it directly
+  // instead of blending by customer magnitude. July 4 2026 pulled multi-state mutual aid
+  // (daily_crews [80,500,702,...], t50~15.5h); the same-peak regional storms the magnitude-blend
+  // would otherwise pick mobilized on day 0 -> a near-instant ramp that clears the storm far faster
+  // than the real ~3-day restoration.
+  if (preferDailyCrews && preferDailyCrews.length >= 2){
+    const pk = Math.max(...preferDailyCrews);
+    const cross = f => { const tgt = pk * f; if (preferDailyCrews[0] >= tgt) return 0;
+      for (let i = 0; i < preferDailyCrews.length - 1; i++){ const a = preferDailyCrews[i], b = preferDailyCrews[i+1];
+        if (a <= tgt && tgt <= b) return (i + (tgt - a) / (b - a)) * 24; } return (preferDailyCrews.length - 1) * 24; };
+    const t50 = cross(0.5), t90 = cross(0.9);
+    return {t_mid: t50, k: Math.log(9) / Math.max(1, t90 - t50)};
+  }
   const FALLBACK = {t_mid: assessmentDelay + 72, k: 0.06}; // old Isaias-only default
   const events = (window.HARTFORD_DOE_OE417 || []).filter(e => e.daily_crews && e.daily_crews.length >= 2);
   if (!events.length) return FALLBACK;
@@ -3307,7 +3320,8 @@ async function planRestoration(){
   // untouched. LIVE mode keeps 0 (crews already dispatched to reported
   // outages).
   const ASSESSMENT_DELAY = (realistic && !isLive)
-    ? Math.max(4, Math.min(12, 12 * Math.pow(storm.totalCust / 60000, 0.4)))
+    ? (storm.isLocalized ? 4  // localized/convective (July 4 2026): concentrated damage + pre-staged local crews assess in hours, not the ~12h a statewide mega-storm needs -> gives the real front-loaded start instead of a flat plateau
+       : Math.max(4, Math.min(12, 12 * Math.pow(storm.totalCust / 60000, 0.4))))
     : 0;
   const WORKDAY_HOURS    = realistic ? 14   : 24;
   const ROAD_MULTIPLIER  = realistic ? 1.5  : 1.0;   // item 5: real driving > haversine
@@ -3323,7 +3337,10 @@ async function planRestoration(){
   // between the largest EAGLE-I-measured overnight-cleared storm (63,912)
   // and the smallest clamp-consistent reference (Dec 2023, 89,000).
   const OVERNIGHT_CUST_MAX = 70000;
-  const overnightOps = realistic && storm.totalCust <= OVERNIGHT_CUST_MAX;
+  // Localized/convective storms are worked around-the-clock (July 4 2026: crews "worked all night ...
+  // around-the-clock" -- Scacco), so overnight ops apply regardless of the customer count that would
+  // otherwise trip the mega-storm 14h-workday clamp (removes the staircase steps for July 4).
+  const overnightOps = realistic && (storm.isLocalized || storm.totalCust <= OVERNIGHT_CUST_MAX);
   function clampToWorkday(t){
     if (!realistic || overnightOps) return t;
     const dayN = Math.floor(t/24);
@@ -3497,7 +3514,13 @@ async function planRestoration(){
     document.getElementById('crewTimeSeriesRamp') &&
     document.getElementById('crewTimeSeriesRamp').checked;
   if (useCrewRamp){
-    const {t_mid, k} = deriveRampParams(storm.totalCust, ASSESSMENT_DELAY);
+    // July 4 2026: use its OWN documented crew mobilization (DOE daily_crews [80,500,702,350,80])
+    // rather than the magnitude-blend -- July 4 is filed under its ~180k cumulative and its
+    // same-peak neighbors mobilized on day 0, so the blend would give a near-instant ramp that
+    // clears the storm far faster than the real front-loaded multi-day restoration.
+    const _ownCrews = (document.getElementById('stormTrackSelect').value === 'ct_july2026_severe_tstorm')
+      ? ((window.HARTFORD_DOE_OE417 || []).find(e => /july 2026/i.test(e.event)) || {}).daily_crews : null;
+    const {t_mid, k} = deriveRampParams(storm.totalCust, ASSESSMENT_DELAY, _ownCrews);
     crewArrivals = [];
     for (let i = 0; i < M; i++){
       // Midpoint sampling (i+0.5)/M, not (i+1)/M: the endpoint frac=1 for the
@@ -5912,7 +5935,8 @@ async function recommendCrewCount(){
   // untouched. LIVE mode keeps 0 (crews already dispatched to reported
   // outages).
   const ASSESSMENT_DELAY = (realistic && !isLive)
-    ? Math.max(4, Math.min(12, 12 * Math.pow(storm.totalCust / 60000, 0.4)))
+    ? (storm.isLocalized ? 4  // localized/convective (July 4 2026): concentrated damage + pre-staged local crews assess in hours, not the ~12h a statewide mega-storm needs -> gives the real front-loaded start instead of a flat plateau
+       : Math.max(4, Math.min(12, 12 * Math.pow(storm.totalCust / 60000, 0.4))))
     : 0;
   const WORKDAY_HOURS    = realistic ? 14   : 24;
   const ROAD_MULTIPLIER  = realistic ? 1.5  : 1.0;
@@ -5920,7 +5944,10 @@ async function recommendCrewCount(){
   // EAGLE-I-derived rationale there); keeps the crew-count recommendation
   // consistent with what the plan itself will report.
   const OVERNIGHT_CUST_MAX = 70000;
-  const overnightOps = realistic && storm.totalCust <= OVERNIGHT_CUST_MAX;
+  // Localized/convective storms are worked around-the-clock (July 4 2026: crews "worked all night ...
+  // around-the-clock" -- Scacco), so overnight ops apply regardless of the customer count that would
+  // otherwise trip the mega-storm 14h-workday clamp (removes the staircase steps for July 4).
+  const overnightOps = realistic && (storm.isLocalized || storm.totalCust <= OVERNIGHT_CUST_MAX);
   function clampToWorkday(t){
     if (!realistic || overnightOps) return t;
     const dayN = Math.floor(t/24);
