@@ -38,7 +38,56 @@ test("research UI sends the curated timeline to the existing Worker", () => {
   assert.match(html, /mode:'timeline'/);
   assert.match(html, /weatherTimeline:\{/);
   assert.match(html, /CONNECTICUT_STORM_TIMELINES/);
-  assert.match(html, /outage_location_worker\.js\?v=3/);
+  assert.match(html, /outage_location_worker\.js\?v=4/);
+  assert.match(html, /outage_location_model\.js\?v=4/);
+  assert.match(html, /id="modelRiskObjective"/);
+  assert.match(html, /value="failure_oriented"/);
+  assert.match(html, /candidateSegmentLengthKm:'modelCandidateLength'/);
+  assert.match(html, /lineIntegrationStepKm:'modelIntegrationStep'/);
+  assert.doesNotMatch(
+    html,
+    /CONNECTICUT_CENSUS_TRACTS\s*=\s*window\.CONNECTICUT_CENSUS_TRACTS\.map/,
+  );
+  assert.doesNotMatch(
+    html,
+    /CONNECTICUT_TOWNS_POPULATION\s*\|\|\s*\[\]\)\.map\(t\s*=>\s*\(\{\.\.\.t,\s*pop:\s*t\.pop\s*\*\s*POP_TO_CUSTOMER_RATIO/,
+  );
+  assert.match(html, /TOTAL_POPULATION_PERSONS/);
+  assert.match(html, /ESTIMATED_STATEWIDE_CUSTOMER_ACCOUNTS/);
+});
+
+test("model tuning tab exposes sensitivity controls with delayed, accessible explanations", () => {
+  assert.match(html, /id="outageModelAdvanced"/);
+  assert.match(html, /<summary>Model tuning<\/summary>/);
+  assert.match(html, /const MODEL_CONTROL_HELP = Object\.freeze/);
+  assert.match(html, /function installModelTuningHelp\(\)/);
+  assert.match(html, /installModelTuningHelp\(\)/);
+  assert.match(html, /transition:opacity \.12s ease \.45s/);
+  assert.match(html, /control\.setAttribute\('aria-description',help\)/);
+  assert.match(html, /label\.tabIndex=0/);
+  for (const id of [
+    "modelWindThreshold",
+    "modelWindScale",
+    "modelWindExponent",
+    "modelRainCoefficient",
+    "modelRainCap",
+    "modelExposureExponent",
+    "modelCustomerSmoothing",
+    "modelRuralBaseline",
+    "modelGaussianBandwidth",
+    "modelCandidateLength",
+    "modelIntegrationStep",
+    "modelFeederSusceptibility",
+    "modelLateralSusceptibility",
+  ]) {
+    assert.match(html, new RegExp(`id="${id}"`));
+    assert.match(html, new RegExp(`${id}:\\s*`));
+  }
+  assert.match(
+    html,
+    /changing only this global scale does not change placement probabilities/,
+  );
+  assert.match(html, /the neutral paper default is one/);
 });
 
 test("map playback offers model-aligned weather and impact surfaces", () => {
