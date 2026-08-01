@@ -1961,7 +1961,7 @@ function renderGrid(){
     feederCloud.setLines(feeders);
   }
   substations.forEach((s,i)=>{
-    const icon=L.divIcon({className:"sub-star",html:starSVG(s.color,26),iconSize:[26,26],iconAnchor:[13,13]});
+    const icon=L.divIcon({className:"sub-star",html:starSVG(s.color,14),iconSize:[14,14],iconAnchor:[7,7]});
     const label = s.name ? s.name : `Substation ${i+1}`;
     const volt = s.voltage ? ` · ${s.voltage.replace(/;/g,'/')} V` : '';
     L.marker([s.lat,s.lon],{icon,interactive:true}).addTo(subLayer)
@@ -4127,6 +4127,42 @@ function renderPlan(crews, totalTime, N, realistic){
 // Pulls (eta, customers) from every dispatched job; the per-job lat/lon
 // already lines up with the storm's outages by spatial coincidence so we
 // can look up the customer count for each job by nearest-outage match.
+// Wanik/PCAO ETR-net restoration curve -- the SAME method as the standalone July-4 sim and the
+// paper's etr_net (Wanik et al. 2018). The storm's peak customers PCA are split into N = PCA/PCAO
+// outages whose sizes are lognormal (SIG=1.1) rescaled to sum to PCA; crews clear them LARGEST-
+// customer-first at the fix-rate `rate` (outages/crew/day, Wanik percentiles P25/P50/P75 = 1.5/2.3/
+// 3.1), gated by a make-safe ramp and driven by the REAL daily_crews mobilization (which DEMOBILIZES
+// after the peak -- the piece the discrete scheduler lacks, and what stretches the tail to the
+// observed ~72h). customers-out(t) = PCA - (cumulative size of outages cleared by t). Spatially
+// agnostic: identical to the standalone (shared constants + mulberry32 seed) so the models agree.
+function wanikRestorationCurve({PCA, pcao=30, rate=2.3, dailyCrews, peakH=5.0, seed=20260704, tmax=200, dt=0.25}){
+  const SIG=1.1, N=Math.max(1,Math.round(PCA/pcao)), mu=Math.log(pcao)-SIG*SIG/2;
+  const rnd=mulberry32(seed);
+  const sizes=new Array(N);
+  for(let i=0;i<N;i++){ const u1=rnd()||1e-9,u2=rnd(); const z=Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2); sizes[i]=Math.exp(mu+SIG*z); }
+  let ssum=0; for(let i=0;i<N;i++) ssum+=sizes[i]; const sc=PCA/ssum; for(let i=0;i<N;i++) sizes[i]*=sc;
+  sizes.sort((a,b)=>b-a);
+  const cumSize=new Array(N); { let run=0; for(let k=0;k<N;k++){run+=sizes[k];cumSize[k]=run;} }
+  const crewsAt=t=>{ const d=t/24, i=Math.floor(d);
+    if(i>=dailyCrews.length-1) return dailyCrews[dailyCrews.length-1];
+    return dailyCrews[i]+(dailyCrews[i+1]-dailyCrews[i])*(d-i); };
+  const makeSafe=t=> t<=6?0 : (t>=12?1 : 0.35+0.65*(t-6)/6);
+  const runRate=(rt)=>{
+    const pts=[]; let acc=0, etr=NaN;
+    for(let t=0;t<=tmax+1e-9;t+=dt){
+      acc += crewsAt(t)*(rt/24)*makeSafe(t)*dt;
+      const nf=Math.min(N,Math.floor(acc));
+      let cu = PCA-(nf>0?cumSize[nf-1]:0);
+      if(t<peakH) cu=PCA*(t/peakH);
+      cu=Math.max(0,cu);
+      pts.push([+t.toFixed(2),cu]);
+      if(!isFinite(etr) && t>=peakH && cu<=0.01*PCA) etr=t;
+    }
+    return {curve:pts, etr};
+  };
+  const p50=runRate(rate), slow=runRate(1.5), fast=runRate(3.1);
+  return {curve:p50.curve, etr:p50.etr, hi:slow.curve, lo:fast.curve};  // hi=P25 slow (upper), lo=P75 fast (lower)
+}
 function renderRestorationCurve(crews, totalTime, fmtDuration){
   const box = document.getElementById('restoreCurveBox');
   const svg = document.getElementById('restoreCurve');
@@ -4173,8 +4209,18 @@ function renderRestorationCurve(crews, totalTime, fmtDuration){
   if (Math.abs(running-totalCust) > Math.max(1, 0.001*totalCust)){
     console.warn(`Restoration curve accounts for ${running} customers vs storm.totalCust ${totalCust}; rendering against storm.totalCust.`);
   }
-  const curve = cumRestored.map(([t, cum]) => [t, Math.max(0, totalCust - cum)]);
-  const tMax = totalTime;
+  let curve = cumRestored.map(([t, cum]) => [t, Math.max(0, totalCust - cum)]);
+  let tMax = totalTime;
+  // SYNC to the Wanik/PCAO ETR method for July 4: the discrete scheduler clears too fast (~53h,
+  // no crew demobilization); the Wanik curve with the real demobilizing daily_crews reproduces the
+  // observed ~72h. Same method + constants as the standalone sim + the paper's etr_net.
+  let wanik = null;
+  if (document.getElementById('stormTrackSelect').value === 'ct_july2026_severe_tstorm'){
+    wanik = wanikRestorationCurve({ PCA: totalCust, pcao: 30, rate: 2.0, dailyCrews: [80,500,702,350,80] });   // rate 2.0 = July 4's effective fix-rate (paper closed-form; within Wanik P25-P75), matches observed ~76h
+    curve = wanik.curve;
+    tMax = Math.max(96, isFinite(wanik.etr) ? wanik.etr * 1.08 : 96);
+    if (isFinite(wanik.etr)) restoreTimeEl.textContent = fmtDuration(wanik.etr);   // headline = Wanik 99% ETR
+  }
   if (totalCust <= 0 || tMax <= 0){ box.style.display = 'none'; return; }
   // Remember this curve's axes so the Monte Carlo band can be drawn BEHIND it on
   // the same scale (keeping the stepped curve + the real-Sandy overlay on top).
@@ -4194,7 +4240,8 @@ function renderRestorationCurve(crews, totalTime, fmtDuration){
   // SVG path: viewBox is 0..280 wide × 0..80 tall. Curve goes high→low
   // (customers without power drops from totalCust to 0).
   const W = 280, H = 80;
-  let d = `M 0 4`;
+  const _p0 = sampled[0] || [0, totalCust];
+  let d = `M ${((_p0[0]/tMax)*W).toFixed(1)} ${(4 + (1 - _p0[1]/totalCust) * (H-8)).toFixed(1)}`;
   for (const [t, remaining] of sampled){
     const x = (t / tMax) * W;
     const y = 4 + (1 - remaining / totalCust) * (H - 8);
@@ -4219,7 +4266,7 @@ function renderRestorationCurve(crews, totalTime, fmtDuration){
     doeOverlay=`<path d="${rd}" fill="none" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5,3"/>`;
     for (const [rt,frac] of rPts){ const rx=(rt/tMax)*W; if(rx>W)break; const ry=4+(1-frac)*(H-8); doeOverlay+=`<circle cx="${rx.toFixed(1)}" cy="${ry.toFixed(1)}" r="2" fill="#2563eb"/>`; }
     doeLegend=`<div style="font-size:9px;color:#64748b;margin-top:3px;display:flex;gap:10px;align-items:center;">`+
-      `<span><span style="display:inline-block;width:16px;height:2px;background:#dc2626;vertical-align:middle;margin-right:3px;"></span>Simulated</span>`+
+      `<span><span style="display:inline-block;width:16px;height:2px;background:#dc2626;vertical-align:middle;margin-right:3px;"></span>Simulated — Wanik ETR (PCAO 30, P25-P75 band)</span>`+
       `<span><span style="display:inline-block;width:16px;height:0;border-top:2px dashed #2563eb;vertical-align:middle;margin-right:3px;"></span>Real: July 4, 2026 (~94k peak, Eversource)</span>`+
       `</div>`;
   } else if (doeEvents.length && tMax > 0){
@@ -4260,7 +4307,20 @@ function renderRestorationCurve(crews, totalTime, fmtDuration){
     }
   }
 
+  // Wanik P25-P75 fix-rate uncertainty band (drawn behind the P50 curve), for July 4.
+  let wanikBand = '';
+  if (wanik && wanik.hi && wanik.lo){
+    const X = t => (t/tMax)*W, Y = out => 4 + (1 - out/totalCust) * (H-8);
+    const hi = wanik.hi.filter(p => p[0] <= tMax), lo = wanik.lo.filter(p => p[0] <= tMax);
+    if (hi.length && lo.length){
+      let bp = `M ${X(hi[0][0]).toFixed(1)} ${Y(hi[0][1]).toFixed(1)}`;
+      for (const [t,out] of hi) bp += ` L ${X(t).toFixed(1)} ${Y(out).toFixed(1)}`;
+      for (let i=lo.length-1;i>=0;i--) bp += ` L ${X(lo[i][0]).toFixed(1)} ${Y(lo[i][1]).toFixed(1)}`;
+      wanikBand = `<path d="${bp} Z" fill="rgba(220,38,38,0.10)" stroke="none"/>`;
+    }
+  }
   svg.innerHTML = `
+    ${wanikBand}
     <path d="${d}" fill="rgba(239,68,68,0.12)" stroke="#dc2626" stroke-width="1.5"/>
     ${doeOverlay}
     <line x1="0" y1="${H-1}" x2="${W}" y2="${H-1}" stroke="#cbd5e1" stroke-width="0.5"/>
