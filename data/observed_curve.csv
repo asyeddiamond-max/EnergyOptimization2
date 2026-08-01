@@ -1,0 +1,16 @@
+datetime_et,hours_since_onset,customers_out,low,high,utility,source,note
+# July 4 2026 storm -- Eversource simultaneous customers-out. Onset = Sat Jul 4 ~8pm ET.
+# DATE-VERIFIED from cross-referenced reporting (see paper/citations). PEAK is authoritative
+# (CT Mirror / spokesman Max Reiss: "about 94,000 at its peak"). The 176-180k figures are
+# CUMULATIVE affected over the event (see data/cumulative_restored.md), NOT points here.
+2026-07-04T20:00,0.0,0,,,Eversource,storm onset,"winds up to 80 mph into western CT ~8pm (CT Insider); outages begin"
+2026-07-04T23:30,3.5,82522,,,Eversource,WTNH,"'as of 11:30pm'; town PEAKS here: New Britain >9,000, Torrington >5,000"
+2026-07-05T01:00,5.0,94000,,,Eversource,CT Mirror (Reiss),"PEAK -- 'about 94,000 at its peak, Sat night into Sun' (authoritative)"
+2026-07-05T10:00,14.0,71265,,,Eversource,CT Insider,"date-verified Jul 6; New Britain ~6,700 / New Canaan ~5,100 at this time"
+2026-07-05T16:55,20.9,57280,57280,58000,Eversource,CT Insider; Patch,"~58,000 at 4:55pm (CT Insider); Patch 57,280 (town breakdown -> town_outages.csv)"
+2026-07-05T22:00,26.0,45288,,,Eversource,FOX61,"10pm Sun; consistent w/ curve (FOX61 flagged lower-confidence)"
+2026-07-05T23:00,27.0,40000,38000,42000,Eversource,WFSB,"'nearly 40,000 at 11pm Sunday'"
+2026-07-06T16:00,44.0,21731,18000,23153,Eversource,WTNH; CT Mirror,"WTNH 21,731 @4pm; CT Mirror 23,153 (1.76%); ~77% restored from peak"
+2026-07-07T23:45,75.75,700,0,1300,Eversource,Westfair; CT Mirror,"~99% restored by Tue 11:45pm"
+2026-07-08T12:00,88.0,800,0,1000,statewide,CT Mirror (Jul 8),"<1,000 remaining Wed; tail to ~Jul 9"
+2026-07-05T16:55,20.9,405,,,United Illuminating,Patch,"UI (separate utility): >10,000 at peak -> 405 Sun afternoon; ~99% restored by Mon, no external crews (CT Mirror)"

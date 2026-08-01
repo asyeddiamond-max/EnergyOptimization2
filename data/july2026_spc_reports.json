@@ -1,0 +1,333 @@
+{
+ "date": "2026-07-04",
+ "source": "NOAA SPC Storm Reports (spc.noaa.gov/climo/reports)",
+ "note": "Connecticut-only storm-spotter/mesonet reports for the July 4 2026 storm. Hail size in inches; wind speed in knots (null = damage report, no measured gust).",
+ "hail": [
+  {
+   "time": "2350",
+   "size_in": 3.0,
+   "loc": "Bristol",
+   "county": "Hartford",
+   "lat": 41.68,
+   "lon": -72.94,
+   "comment": "In Bristol... 3 inch hail was reported. (BOX)"
+  },
+  {
+   "time": "2349",
+   "size_in": 1.75,
+   "loc": "Terryville",
+   "county": "Litchfield",
+   "lat": 41.68,
+   "lon": -73.01,
+   "comment": "Golf ball size hail reported. (ALY)"
+  },
+  {
+   "time": "2355",
+   "size_in": 1.75,
+   "loc": "Bristol",
+   "county": "Hartford",
+   "lat": 41.68,
+   "lon": -72.94,
+   "comment": "In Bristol... golf ball sized hail fell. (BOX)"
+  },
+  {
+   "time": "0007",
+   "size_in": 1.75,
+   "loc": "New Britain",
+   "county": "Hartford",
+   "lat": 41.68,
+   "lon": -72.79,
+   "comment": "In New Britain... golf ball sized hail was reported. Relayed via Amateur Radio. (BOX)"
+  },
+  {
+   "time": "2359",
+   "size_in": 1.25,
+   "loc": "1 W Plainville",
+   "county": "Hartford",
+   "lat": 41.67,
+   "lon": -72.91,
+   "comment": "In Plainville... Half Dollar sized hail fell. (BOX)"
+  }
+ ],
+ "wind": [
+  {
+   "time": "2307",
+   "speed_kt": null,
+   "loc": "4 NW Falls Village",
+   "county": "Litchfield",
+   "lat": 41.99,
+   "lon": -73.42,
+   "comment": "Lakeville CT: tree down and wires down on vehicle near Main St and Canaan Road (Lions Head Development). (ALY)"
+  },
+  {
+   "time": "2315",
+   "speed_kt": null,
+   "loc": "1 NNW North Madison",
+   "county": "New Haven",
+   "lat": 41.36,
+   "lon": -72.64,
+   "comment": "Trees down on wires. (OKX)"
+  },
+  {
+   "time": "2320",
+   "speed_kt": null,
+   "loc": "4 NE Cornwall Bridge",
+   "county": "Litchfield",
+   "lat": 41.85,
+   "lon": -73.31,
+   "comment": "Cornwall CT: Tree and wires down on Ream Hall Road. (ALY)"
+  },
+  {
+   "time": "2324",
+   "speed_kt": null,
+   "loc": "7 ENE Cornwall Bridge",
+   "county": "Litchfield",
+   "lat": 41.85,
+   "lon": -73.25,
+   "comment": "Goshen... CT: Wires down on West Side Road. (ALY)"
+  },
+  {
+   "time": "2329",
+   "speed_kt": null,
+   "loc": "Torrington",
+   "county": "Litchfield",
+   "lat": 41.8,
+   "lon": -73.12,
+   "comment": "Numerous reports of trees and wires down in the City of Torrington. A tree fell on and damaged the Torrington North End Fire House. (ALY)"
+  },
+  {
+   "time": "2330",
+   "speed_kt": null,
+   "loc": "1 NW Killingworth",
+   "county": "Middlesex",
+   "lat": 41.36,
+   "lon": -72.57,
+   "comment": "Trees down on power lines. (OKX)"
+  },
+  {
+   "time": "2349",
+   "speed_kt": null,
+   "loc": "Burlington",
+   "county": "Hartford",
+   "lat": 41.77,
+   "lon": -72.97,
+   "comment": "In Burlington... CT... trees and wires down on Route 4. Relayed via Amateur Radio. (BOX)"
+  },
+  {
+   "time": "2359",
+   "speed_kt": null,
+   "loc": "Bristol",
+   "county": "Hartford",
+   "lat": 41.68,
+   "lon": -72.94,
+   "comment": "In Bristol... power lines were reported down and on fire. Relayed via Amateur Radio. (BOX)"
+  },
+  {
+   "time": "0005",
+   "speed_kt": null,
+   "loc": "New Milford",
+   "county": "Litchfield",
+   "lat": 41.59,
+   "lon": -73.41,
+   "comment": "Numerous trees down. (ALY)"
+  },
+  {
+   "time": "0007",
+   "speed_kt": null,
+   "loc": "1 ENE New Fairfield",
+   "county": "Fairfield",
+   "lat": 41.48,
+   "lon": -73.44,
+   "comment": "Significant damage at Candlewood docks near Brookfield CT. Picture of dock turned over on land. Spotter also reported other docks being all over the place. (OKX)"
+  },
+  {
+   "time": "0007",
+   "speed_kt": null,
+   "loc": "Southington",
+   "county": "Hartford",
+   "lat": 41.6,
+   "lon": -72.88,
+   "comment": "In Southington... multiple trees and wires down blocking Andrew St. Relayed via Amateur Radio. (BOX)"
+  },
+  {
+   "time": "0012",
+   "speed_kt": null,
+   "loc": "North Lyme",
+   "county": "New London",
+   "lat": 41.41,
+   "lon": -72.34,
+   "comment": "Trees down on wires. (OKX)"
+  },
+  {
+   "time": "0014",
+   "speed_kt": null,
+   "loc": "3 ENE New Fairfield",
+   "county": "Fairfield",
+   "lat": 41.48,
+   "lon": -73.41,
+   "comment": "Brookfield PD states numerous downed trees... large limbs... powerlines and communication lines throughout the area. The vast majority of Brookfields west side is witho (OKX)"
+  },
+  {
+   "time": "0015",
+   "speed_kt": null,
+   "loc": "4 WNW New Fairfield",
+   "county": "Fairfield",
+   "lat": 41.5,
+   "lon": -73.53,
+   "comment": "Trees down blocking roadway. (OKX)"
+  },
+  {
+   "time": "0020",
+   "speed_kt": null,
+   "loc": "4 ESE New Fairfield",
+   "county": "Fairfield",
+   "lat": 41.44,
+   "lon": -73.39,
+   "comment": "Large maple tree snapped. (OKX)"
+  },
+  {
+   "time": "0028",
+   "speed_kt": null,
+   "loc": "1 N Ridgefield",
+   "county": "Fairfield",
+   "lat": 41.28,
+   "lon": -73.5,
+   "comment": "Numerous trees down on wires resulting in power outages across Ridgefield. (OKX)"
+  },
+  {
+   "time": "0032",
+   "speed_kt": null,
+   "loc": "3 WSW East Hampton",
+   "county": "Middlesex",
+   "lat": 41.56,
+   "lon": -72.55,
+   "comment": "Numerous power outages from downed trees on wires. (OKX)"
+  },
+  {
+   "time": "0035",
+   "speed_kt": 58,
+   "loc": "2 SSW Rowayton",
+   "county": "ANZ335",
+   "lat": 41.05,
+   "lon": -73.45,
+   "comment": "Corrects previous tstm wnd gst report from 2 SSW Rowayton. Wx flow station Green Ledge Light. (OKX)"
+  },
+  {
+   "time": "0040",
+   "speed_kt": 64,
+   "loc": "2 S Rowayton",
+   "county": "ANZ335",
+   "lat": 41.04,
+   "lon": -73.44,
+   "comment": "Greens Ledge Light. (OKX)"
+  },
+  {
+   "time": "0040",
+   "speed_kt": null,
+   "loc": "Moodus",
+   "county": "Middlesex",
+   "lat": 41.5,
+   "lon": -72.45,
+   "comment": "Numerous power outages from downed trees on wires. (OKX)"
+  },
+  {
+   "time": "0040",
+   "speed_kt": null,
+   "loc": "Southington",
+   "county": "Hartford",
+   "lat": 41.6,
+   "lon": -72.88,
+   "comment": "In Southington... multiple trees reported down on I-84. Relayed via Amateur Radio. (BOX)"
+  },
+  {
+   "time": "0040",
+   "speed_kt": null,
+   "loc": "Bristol",
+   "county": "Hartford",
+   "lat": 41.68,
+   "lon": -72.94,
+   "comment": "In Bristol... multiple power lines down across town. Relayed via Amateur Radio. (BOX)"
+  },
+  {
+   "time": "0042",
+   "speed_kt": 58,
+   "loc": "2 SSW Rowayton",
+   "county": "ANZ335",
+   "lat": 41.05,
+   "lon": -73.45,
+   "comment": "Wx flow station Green Ledge Light. (OKX)"
+  },
+  {
+   "time": "0043",
+   "speed_kt": null,
+   "loc": "2 WNW Ansonia",
+   "county": "New Haven",
+   "lat": 41.35,
+   "lon": -73.11,
+   "comment": "Road closed from tree down on wires. (OKX)"
+  },
+  {
+   "time": "0048",
+   "speed_kt": null,
+   "loc": "3 WNW Wallingford",
+   "county": "New Haven",
+   "lat": 41.46,
+   "lon": -72.87,
+   "comment": "Tree down on Tuttle Road. (OKX)"
+  },
+  {
+   "time": "0112",
+   "speed_kt": null,
+   "loc": "2 S Montville",
+   "county": "New London",
+   "lat": 41.41,
+   "lon": -72.12,
+   "comment": "Numerous downed trees across Quaker Hill and Montville. (OKX)"
+  },
+  {
+   "time": "0117",
+   "speed_kt": 65,
+   "loc": "2 N New London",
+   "county": "ANZ332",
+   "lat": 41.37,
+   "lon": -72.09,
+   "comment": "USCG Academy Mesonet. (OKX)"
+  },
+  {
+   "time": "0125",
+   "speed_kt": null,
+   "loc": "2 NNW Poquonock Bridge",
+   "county": "New London",
+   "lat": 41.38,
+   "lon": -72.04,
+   "comment": "Multiple trees down across northern Groton. (OKX)"
+  },
+  {
+   "time": "0135",
+   "speed_kt": null,
+   "loc": "4 ESE Mystic",
+   "county": "New London",
+   "lat": 41.34,
+   "lon": -71.9,
+   "comment": "Tree and wires down at Pearl street and Main street as well as tree down on Elm street in Stonington. (OKX)"
+  },
+  {
+   "time": "0140",
+   "speed_kt": null,
+   "loc": "1 WSW Poquonock Bridge",
+   "county": "New London",
+   "lat": 41.35,
+   "lon": -72.04,
+   "comment": "Several trees down across Groton. Trees were very large... strong and old. All fell facing same direction. (OKX)"
+  },
+  {
+   "time": "0202",
+   "speed_kt": null,
+   "loc": "2 SSE Ledyard Center",
+   "county": "New London",
+   "lat": 41.44,
+   "lon": -72.01,
+   "comment": "Trees down on wires across Ledyard. (OKX)"
+  }
+ ]
+}

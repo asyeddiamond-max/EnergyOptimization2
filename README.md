@@ -17,6 +17,18 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
 
 ---
 
+## July 4, 2026 storm — reconstruction & restoration
+
+A self-contained companion page reconstructs the **July 4, 2026 Connecticut storm** on the same statewide grid and data: [**Open the July 4 storm sim →**](https://asyeddiamond-max.github.io/EnergyOptimization2/july4_2026_storm.html)
+
+- **Restoration curve** — customers out over time, rising to the disclosed ~94k peak and decaying over three days, with a P25–P75 uncertainty band and the real observed data points overlaid. A dashed **cumulative** line shows the ~176k customers who lost power across the storm's two NW→SE waves — so the peak is only about half the storm total.
+- **Storm outage pulse** — customers losing power *per hour* during the onset squall (a bell peaking ~50k/hr near 8:15 pm), shaped by the timing of the 36 NOAA SPC/NWS storm reports; its area is the ~94k that formed the peak.
+- **Hazard + placement map** — multi-hazard (wind × canopy × rain × hail × customers) outage placement anchored to reported town totals, with a pure-physics hazard-forecast mode and a live forecast-skill readout.
+
+Public data sources: NOAA SPC storm reports (`data/july2026_spc_reports.json`), the cross-referenced observed restoration timeline (`data/observed_curve.csv`), NOAA HRRR wind, and 2020 Census tracts.
+
+---
+
 ## What's in the simulator
 
 | Capability | How |
