@@ -23,6 +23,28 @@ RADIUS_M = 2500
 spec = importlib.util.spec_from_file_location("rs27", HERE / "27_road_snapped_laterals.py")
 rs = importlib.util.module_from_spec(spec); spec.loader.exec_module(rs)
 ROAD_CLASSES = set(rs.CLASS_W.keys())   # primary, secondary, tertiary, unclassified, residential, living_street
+SIMPLIFY_EPS = 0.00012   # Douglas-Peucker tolerance (~12m); collapses straight road runs, keeps curves
+
+def douglas_peucker(pts, eps=SIMPLIFY_EPS):
+    """Ramer-Douglas-Peucker on a [(lat,lon),...] path (iterative). ~85% vertex cut, road shape kept."""
+    if len(pts) < 3:
+        return pts
+    keep = [False]*len(pts); keep[0] = keep[-1] = True; st = [(0, len(pts)-1)]
+    while st:
+        i, j = st.pop()
+        ax, ay = pts[i][1], pts[i][0]; bx, by = pts[j][1], pts[j][0]   # x=lon, y=lat
+        dx, dy = bx-ax, by-ay; dd = dx*dx + dy*dy; dmax = 0.0; idx = -1
+        for k in range(i+1, j):
+            px, py = pts[k][1], pts[k][0]
+            if dd == 0:
+                d = ((px-ax)**2 + (py-ay)**2) ** 0.5
+            else:
+                t = max(0.0, min(1.0, ((px-ax)*dx + (py-ay)*dy)/dd)); cx, cy = ax+t*dx, ay+t*dy
+                d = ((px-cx)**2 + (py-cy)**2) ** 0.5
+            if d > dmax: dmax = d; idx = k
+        if idx > 0 and dmax > eps:
+            keep[idx] = True; st.append((i, idx)); st.append((idx, j))
+    return [pts[k] for k in range(len(pts)) if keep[k]]
 
 # ---- 1) parse the PBF: road ways with node coordinates ----
 print("parsing PBF (highways)...", flush=True)
@@ -87,8 +109,8 @@ for i, s in enumerate(subs):
     except Exception:
         feeders, laterals = [], []
     results.append({"name": s["name"], "slat": round(slat, 6), "slon": round(slon, 6),
-        "feeders": [[[round(p[0], 6), round(p[1], 6)] for p in f] for f in feeders],
-        "laterals": [[[round(p[0], 6), round(p[1], 6)] for p in l] for l in laterals]})
+        "feeders": [[[round(p[0], 6), round(p[1], 6)] for p in douglas_peucker(f)] for f in feeders],
+        "laterals": [[[round(p[0], 6), round(p[1], 6)] for p in douglas_peucker(l)] for l in laterals]})
     if (i + 1) % 25 == 0:
         print(f"  routed [{i+1}/{len(subs)}]", flush=True)
 
