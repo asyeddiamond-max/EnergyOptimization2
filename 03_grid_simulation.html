@@ -1822,51 +1822,76 @@ async function generateGrid(){
   status.textContent=`Generating feeders and laterals…`;
   feeders=[]; laterals=[];
 
-  // For each substation: f feeder backbones radiating outward
+  // Road-snapped distribution grid: feeders/laterals follow REAL OSM streets (data/road_grid.json,
+  // built by build_road_grid_extract.py -- Dijkstra routing on the CT OSM extract, one entry per
+  // substation). Falls back to the synthetic radial/random-walk generator if the road grid can't be
+  // loaded (e.g. opened via file://). popServed is allocated exactly as before -- each tier sums to
+  // the substation's served population -- so the outage model + customer accounting are unchanged.
+  if (window._roadGrid === undefined){
+    try { const _r = await fetch('./data/road_grid.json'); window._roadGrid = _r.ok ? await _r.json() : null; }
+    catch(e){ window._roadGrid = null; }
+  }
+  const rg = window._roadGrid;
+  const rgByName = rg ? Object.fromEntries(rg.subs.map(x => [x.name, x])) : null;
+
   for (let si=0; si<substations.length; si++){
     const s = substations[si];
-    const popPerFeeder=s.popServed/feedersPerSub;
-    for (let f=0;f<feedersPerSub;f++){
-      const baseAng=(f/feedersPerSub)*Math.PI*2+rnd()*0.4;
-      let lat=s.lat,lon=s.lon,ang=baseAng;
-      const pts=[[lat,lon]];
-      const segs=8+Math.floor(rnd()*8);
-      for (let g=0;g<segs;g++){
-        ang+=(rnd()-0.5)*0.5;
-        const step=0.004+rnd()*0.005;
-        lon+=Math.cos(ang)*step; lat+=Math.sin(ang)*step;
-        if (!insideFast(lon,lat)) break;
-        pts.push([lat,lon]);
+    const entry = rgByName ? (rgByName[s.name] || rg.subs[si]) : null;
+    if (entry && entry.feeders && entry.feeders.length){
+      // --- road-snapped feeders + laterals ---
+      const nF = entry.feeders.length, nL = entry.laterals.length;
+      const feederPop = s.popServed / nF, latPop = nL > 0 ? s.popServed / nL : 0;
+      const subFeederIdx = [];
+      for (const fpts of entry.feeders){
+        subFeederIdx.push(feeders.length);
+        feeders.push({subIdx:si, pts:fpts, popServed:feederPop, color:s.color, trimAge:rnd()*TRIM_CYCLE_YEARS});
       }
-      if (pts.length<2) continue;
-      const fIdx=feeders.length;
-      // Vegetation-management age (years since last trim) drawn uniformly
-      // over the 4-year trim cycle. Per-feeder so older trim ages can cause
-      // more tree-blocked outages on those feeders.
-      const trimAge = rnd() * TRIM_CYCLE_YEARS;
-      feeders.push({subIdx:si,pts,popServed:popPerFeeder,color:s.color,trimAge});
-
-      // Laterals: branch from each midpoint of the feeder
-      const lateralsPerFeeder=4+Math.floor(rnd()*5);
-      for (let l=0;l<lateralsPerFeeder;l++){
-        const anchor=pts[1+Math.floor(rnd()*(pts.length-1))];
-        let lLat=anchor[0],lLon=anchor[1],lAng=rnd()*Math.PI*2;
-        const lPts=[[lLat,lLon]];
-        const lSegs=3+Math.floor(rnd()*5);
-        for (let g=0;g<lSegs;g++){
-          lAng+=(rnd()-0.5)*1.0;
-          const lStep=0.0015+rnd()*0.0025;
-          lLon+=Math.cos(lAng)*lStep; lLat+=Math.sin(lAng)*lStep;
-          if (!insideFast(lLon,lLat)) break;
-          lPts.push([lLat,lLon]);
+      for (const lpts of entry.laterals){
+        // attach each lateral to the nearest feeder in this substation (by its start point)
+        const a = lpts[0]; let best = subFeederIdx[0], bd = Infinity;
+        for (const fi of subFeederIdx){ const fp = feeders[fi].pts;
+          for (let k=0;k<fp.length;k+=3){ const dd=(fp[k][0]-a[0])**2+(fp[k][1]-a[1])**2; if(dd<bd){bd=dd;best=fi;} } }
+        laterals.push({feederIdx:best, pts:lpts, popServed:latPop});
+      }
+    } else {
+      // --- fallback: synthetic radial feeders + random-walk laterals ---
+      const popPerFeeder=s.popServed/feedersPerSub;
+      for (let f=0;f<feedersPerSub;f++){
+        const baseAng=(f/feedersPerSub)*Math.PI*2+rnd()*0.4;
+        let lat=s.lat,lon=s.lon,ang=baseAng;
+        const pts=[[lat,lon]];
+        const segs=8+Math.floor(rnd()*8);
+        for (let g=0;g<segs;g++){
+          ang+=(rnd()-0.5)*0.5;
+          const step=0.004+rnd()*0.005;
+          lon+=Math.cos(ang)*step; lat+=Math.sin(ang)*step;
+          if (!insideFast(lon,lat)) break;
+          pts.push([lat,lon]);
         }
-        if (lPts.length<2) continue;
-        laterals.push({feederIdx:fIdx,pts:lPts,popServed:popPerFeeder/lateralsPerFeeder});
+        if (pts.length<2) continue;
+        const fIdx=feeders.length;
+        const trimAge = rnd() * TRIM_CYCLE_YEARS;
+        feeders.push({subIdx:si,pts,popServed:popPerFeeder,color:s.color,trimAge});
+        const lateralsPerFeeder=4+Math.floor(rnd()*5);
+        for (let l=0;l<lateralsPerFeeder;l++){
+          const anchor=pts[1+Math.floor(rnd()*(pts.length-1))];
+          let lLat=anchor[0],lLon=anchor[1],lAng=rnd()*Math.PI*2;
+          const lPts=[[lLat,lLon]];
+          const lSegs=3+Math.floor(rnd()*5);
+          for (let g=0;g<lSegs;g++){
+            lAng+=(rnd()-0.5)*1.0;
+            const lStep=0.0015+rnd()*0.0025;
+            lLon+=Math.cos(lAng)*lStep; lLat+=Math.sin(lAng)*lStep;
+            if (!insideFast(lLon,lLat)) break;
+            lPts.push([lLat,lLon]);
+          }
+          if (lPts.length<2) continue;
+          laterals.push({feederIdx:fIdx,pts:lPts,popServed:popPerFeeder/lateralsPerFeeder});
+        }
       }
     }
 
-    // Yield every 20 substations so the browser can repaint and show
-    // progress at statewide scale (up to 299 substations).
+    // Yield every 20 substations so the browser can repaint and show progress.
     if ((si + 1) % 20 === 0 || si === substations.length - 1){
       setGridProgress(100 * (si + 1) / substations.length);
       await new Promise(r => setTimeout(r, 0));
