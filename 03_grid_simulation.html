@@ -2587,17 +2587,22 @@ function applyOutageModelResult(result){
     o.popLoss = Math.max(1, Math.round(_segPop(o)*POP_TO_CUSTOMER_RATIO));
     o.customers = o.popLoss;
   }
-  // PHYSICAL CEILING: customers affected can never exceed the state's real customer base.
-  // Feeder and lateral service allocations overlap by construction (note below), so an extreme
-  // scenario (e.g. the slider maxed = every segment out) would otherwise sum to ~2.3M -- more
-  // customers than Connecticut has (~1.633M statewide accounts). If the raw geography total
-  // exceeds that base, scale every per-outage allocation proportionally so the reported total is
-  // physically possible AND storm.totalCust / the handoff contract / the restoration curve all
-  // keep summing the same (scaled) values.
+  // Customer total: (a) ANCHOR to reported data when the selected storm has a known customer count
+  // (e.g. July 4, 2026 = ~94,000 out at peak) -- scale every per-outage allocation so the total
+  // matches the disclosed figure at the reported outage count (and scales at the same real per-outage
+  // ratio if the count is changed); otherwise (b) apply the PHYSICAL CEILING -- customers affected
+  // can never exceed the state's real base (~1.633M accounts), which the feeder/lateral overlap
+  // (note below) would otherwise blow past at the slider max. Either way storm.totalCust / the handoff
+  // contract / the restoration curve all keep summing the same (scaled) values.
   const _rawGeoSum = outages.reduce((s,o)=>s+o.popLoss,0);
-  if (_rawGeoSum > ESTIMATED_STATEWIDE_CUSTOMER_ACCOUNTS){
-    const _capScale = ESTIMATED_STATEWIDE_CUSTOMER_ACCOUNTS/_rawGeoSum;
-    for (const o of outages){ o.popLoss = Math.max(1, Math.round(o.popLoss*_capScale)); o.customers = o.popLoss; }
+  const _preset = REAL_STORM_PRESETS[document.getElementById('stormTrackSelect').value];
+  let _targetCust = (_preset && _preset.customers && _preset.outages)
+    ? Math.round(_preset.customers * (outages.length / _preset.outages))   // (a) reported anchor
+    : (_rawGeoSum > ESTIMATED_STATEWIDE_CUSTOMER_ACCOUNTS ? ESTIMATED_STATEWIDE_CUSTOMER_ACCOUNTS : null); // (b) ceiling
+  if (_targetCust != null) _targetCust = Math.min(_targetCust, ESTIMATED_STATEWIDE_CUSTOMER_ACCOUNTS);
+  if (_targetCust != null && _rawGeoSum > 0){
+    const _scale = _targetCust / _rawGeoSum;
+    for (const o of outages){ o.popLoss = Math.max(1, Math.round(o.popLoss*_scale)); o.customers = o.popLoss; }
   }
   // One shared per-location estimate so storm.totalCust, the handoff contract, and the
   // restoration curve sum the same values. Feeder and lateral service allocations overlap by
@@ -5359,6 +5364,17 @@ document.getElementById('stormTrackSelect').addEventListener('change', function(
     stormHasResearchWeather(this.value)?'research':'basic';
   markOutageModelStale('Storm weather event changed. Generate a new outage scenario.');
   updateOutageModelAvailability();
+  // For storms we've fully defined from reported/newspaper data (a preset carrying a known customer
+  // total, e.g. July 4, 2026), load the REAL scale on selection so the panel shows the actual
+  // reported outage count + customers-out rather than an arbitrary slider value.
+  const _rp = REAL_STORM_PRESETS[this.value];
+  if (_rp && _rp.customers){
+    document.getElementById('applyHistoricalPreset').click();          // sets outages + crews sliders
+    const _csv=document.getElementById('customerScaleVal');
+    if (_csv) _csv.textContent=_rp.customers.toLocaleString();         // show the reported customers-out now
+    status.textContent=`${_rp.label} loaded from reported data: ${_rp.outages.toLocaleString()} outages, `
+      +`~${_rp.customers.toLocaleString()} customers out at peak. Click "Generate outage scenario" to simulate.`;
+  }
 });
 
 // Real-storm calibration presets -- (storm_outages, crews) tuned so this
@@ -5382,7 +5398,7 @@ const REAL_STORM_PRESETS = {
   jan2024:                   {outages: 200,   crews: 100,  realH: 26,  label: "Jan 2024"},
   dec2023:                   {outages: 2850,  crews: 700,  realH: 83,  label: "Dec 2023"},
   henri_2021:                {outages: 830,   crews: 300,  realH: 34,  label: "Henri 2021"},
-  ct_july2026_severe_tstorm: {outages: 6000,  crews: 702,  realH: 108, label: "July 2026 T-storm"},
+  ct_july2026_severe_tstorm: {outages: 3130,  crews: 702,  realH: 108, customers: 94000, label: "July 4, 2026"},  // reported: ~94k peak customers (CT Mirror/Reiss) / "over 3,000 damage locations" (WFSB) -> PCAO ~30
   ct_aug2020_tornado:        {outages: 2050,  crews: 380,  realH: 66,  label: "Aug 2020 Tornado"},
   march2023_noreaster:       {outages: 450,   crews: 350,  realH: 60,  label: "March 2023 Nor'easter"},
   oct2020_derecho:           {outages: 950,   crews: 300,  realH: 28,  label: "Oct 2020 Derecho"},
