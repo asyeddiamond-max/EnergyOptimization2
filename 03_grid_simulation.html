@@ -2121,7 +2121,7 @@ function populateStormModelOptions(){
     if (!stormHasResearchWeather(id)) continue;
     const option=document.createElement('option');
     option.value=id;
-    option.textContent=`${data.name||id} · hourly HRRR`;
+    option.textContent=`${data.name||id} · ${data.reconstructed?'reconstructed':'hourly HRRR'}`;
     supported.appendChild(option);
   }
   select.appendChild(supported);
@@ -2587,10 +2587,21 @@ function applyOutageModelResult(result){
     o.popLoss = Math.max(1, Math.round(_segPop(o)*POP_TO_CUSTOMER_RATIO));
     o.customers = o.popLoss;
   }
-  // Keep one uncapped per-location estimate so storm.totalCust, the handoff
-  // contract, and the restoration curve sum the same values. Feeder and lateral
-  // service allocations overlap by construction, so this is a consequence proxy,
-  // not a conserved utility customer inventory.
+  // PHYSICAL CEILING: customers affected can never exceed the state's real customer base.
+  // Feeder and lateral service allocations overlap by construction (note below), so an extreme
+  // scenario (e.g. the slider maxed = every segment out) would otherwise sum to ~2.3M -- more
+  // customers than Connecticut has (~1.633M statewide accounts). If the raw geography total
+  // exceeds that base, scale every per-outage allocation proportionally so the reported total is
+  // physically possible AND storm.totalCust / the handoff contract / the restoration curve all
+  // keep summing the same (scaled) values.
+  const _rawGeoSum = outages.reduce((s,o)=>s+o.popLoss,0);
+  if (_rawGeoSum > ESTIMATED_STATEWIDE_CUSTOMER_ACCOUNTS){
+    const _capScale = ESTIMATED_STATEWIDE_CUSTOMER_ACCOUNTS/_rawGeoSum;
+    for (const o of outages){ o.popLoss = Math.max(1, Math.round(o.popLoss*_capScale)); o.customers = o.popLoss; }
+  }
+  // One shared per-location estimate so storm.totalCust, the handoff contract, and the
+  // restoration curve sum the same values. Feeder and lateral service allocations overlap by
+  // construction, so this is a consequence proxy, not a conserved utility customer inventory.
   const geoSumCust = outages.reduce((s,o)=>s+o.popLoss,0);
   // Re-issue the handoff contract on the geography-derived customer total, so the
   // restoration-handoff integrity check (prepareTimelineForRestoration) validates
