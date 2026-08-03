@@ -672,24 +672,25 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </style>
 <style>
 :root{
-  --bg:#eef1f5;--panel:#ffffff;--panel2:#f6f8fb;--ink:#18202b;--muted:#5a6675;
-  --border:#d7dde6;--grid:#e4e9f0;--accent:#c4771a;--sub:#2f6d8c;--obs:#2b3a4d;
+  --bg:#f3f1ec;--panel:#ffffff;--panel2:#faf8f3;--ink:#1b2129;--muted:#6b6459;
+  --border:#e3ded4;--grid:#ece7dd;--accent:#c4771a;--sub:#2f6d8c;--obs:#2b3a4d;
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
 }
 @media (prefers-color-scheme:dark){:root{
-  --bg:#0d1117;--panel:#141b25;--panel2:#0f1620;--ink:#e7eef6;--muted:#8c98a8;
-  --border:#243141;--grid:#1b2431;--accent:#f0a63a;--sub:#5bb3d6;--obs:#c9d5e3;
+  --bg:#12100c;--panel:#1b1712;--panel2:#15120d;--ink:#ece6dc;--muted:#9a9081;
+  --border:#2c271e;--grid:#221d16;--accent:#f0a63a;--sub:#5bb3d6;--obs:#c9d5e3;
 }}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
 body{font-family:var(--sans);color:var(--ink);background:var(--bg)}
 #app{display:flex;flex-direction:column;height:100vh;height:100dvh}
-.bar{display:flex;align-items:baseline;gap:14px;padding:12px 18px;border-bottom:1px solid var(--border);
+.bar{display:flex;align-items:baseline;gap:13px;padding:13px 20px;border-bottom:2px solid var(--accent);
   background:var(--panel);flex:0 0 auto;flex-wrap:wrap}
-.bar .mark{font-family:var(--mono);font-size:10.5px;letter-spacing:.26em;color:var(--accent);text-transform:uppercase}
-.bar h1{font-size:16px;margin:0;font-weight:650}
-.bar .sub{color:var(--muted);font-size:12.5px;margin-left:auto}
+.bar .mark{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;color:#fff;background:var(--accent);
+  padding:3px 7px;border-radius:5px;text-transform:uppercase;font-weight:700;align-self:center}
+.bar h1{font-size:18px;margin:0;font-weight:700;letter-spacing:-.01em}
+.bar .sub{color:var(--muted);font-size:12.5px;margin-left:auto;max-width:54ch;line-height:1.35}
 .body{display:flex;flex:1 1 auto;min-height:0}
 .panel{width:320px;flex:0 0 auto;background:var(--panel);border-right:1px solid var(--border);
   padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
@@ -697,9 +698,9 @@ body{font-family:var(--sans);color:var(--ink);background:var(--bg)}
 #map{position:absolute;inset:0;background:var(--panel2)}
 #ov{position:absolute;inset:0;pointer-events:none;z-index:450}
 .kpis{display:grid;grid-template-columns:1fr 1fr;gap:9px}
-.kpi{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:9px 11px;display:flex;flex-direction:column;gap:1px}
+.kpi{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;box-shadow:0 1px 2px rgba(60,50,30,.05)}
 .kl{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
-.kv{font-family:var(--mono);font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
+.kv{font-family:var(--mono);font-size:20px;font-weight:650;font-variant-numeric:tabular-nums}
 .kv.acc{color:var(--accent)}
 .sec{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:2px 0 -4px}
 .field{display:flex;flex-direction:column;gap:6px}
@@ -734,6 +735,16 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--accent)55}
 svg#curve{width:100%;aspect-ratio:300/170;height:auto;min-height:140px;display:block;flex:0 0 auto}
 svg#pulse{width:100%;aspect-ratio:300/150;height:auto;min-height:118px;display:block;flex:0 0 auto}
 .leaflet-container{font-family:var(--mono)}
+.explain{border:1px solid var(--border);border-radius:10px;background:var(--panel2);overflow:hidden}
+.explain>summary{cursor:pointer;padding:10px 12px;font-size:12.5px;font-weight:650;list-style:none;display:flex;align-items:center;gap:7px}
+.explain>summary::-webkit-details-marker{display:none}
+.explain>summary::before{content:"i";display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--accent);color:#fff;font-size:10px;font-weight:700;font-style:italic;flex:0 0 auto}
+.explain[open]>summary{border-bottom:1px solid var(--border)}
+.ex{padding:12px 13px;display:flex;flex-direction:column;gap:9px;font-size:12px;line-height:1.55;color:var(--ink)}
+.ex p{margin:0}
+.ex .eq{font-family:var(--mono);font-size:11px;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--sub);line-height:1.4}
+.ex .src{font-size:10.5px;color:var(--muted);border-top:1px dashed var(--border);padding-top:8px}
+.ex b{color:var(--ink);font-weight:650}
 @media (max-width:760px){.body{flex-direction:column}.panel{width:auto;border-right:none;border-bottom:1px solid var(--border);max-height:46vh}}
 </style>
 </head>
@@ -742,10 +753,22 @@ svg#pulse{width:100%;aspect-ratio:300/150;height:auto;min-height:118px;display:b
   <header class="bar">
     <span class="mark">CT&middot;Grid</span>
     <h1>July&nbsp;4, 2026 Storm Simulator</h1>
-    <span class="sub">reported July&nbsp;4 outages on real geography &middot; scrub time to replay restoration &middot; toggle the hazard model to explore</span>
+    <span class="sub">the real July&nbsp;4 outages on Connecticut geography &mdash; drag the sliders to change the response, scrub the timeline to watch power come back</span>
   </header>
   <div class="body">
     <aside class="panel">
+      <details class="explain">
+        <summary>How this works &mdash; in plain words</summary>
+        <div class="ex">
+          <p>At its peak the storm left <b>~94,000</b> customers without power. Each broken spot on the grid (an &ldquo;outage&rdquo;) takes out about <b>30</b> customers, so that&rsquo;s roughly <b>3,100 outages</b> for crews to find and fix.</p>
+          <p>How fast the lights come back depends on three things you can drag below: how many <b>crews</b> are working, how fast they&rsquo;re <b>brought online</b> each day, and how many outages each crew clears per day (the <b>fix-rate</b>, about 2.3 from Wanik et&nbsp;al.). Crews fix the <b>biggest outages first</b>, so most people are back quickly and a small tail lingers.</p>
+          <p>Two simple rules drive the curve:</p>
+          <p class="eq">customers still out = peak &minus; peak &times; (share of customers restored)</p>
+          <p class="eq">outages fixed per hour = crews &times; fix-rate &divide; 24 &times; make-safe throttle</p>
+          <p>The first turns &ldquo;outages fixed&rdquo; into &ldquo;people back on,&rdquo; biggest-first. The second is the engine &mdash; crews times their speed, throttled early while damage is still being assessed. The shaded band spans a slower (P25) to a faster (P75) crew day.</p>
+          <p class="src"><b>Sources:</b> peak &mdash; CT&nbsp;Mirror &middot; ~3,000 outages &mdash; Eversource (WFSB) &middot; fix-rate &amp; PCAO &mdash; Wanik et&nbsp;al. (2018) &middot; 16-hour shifts, around the clock &mdash; WFSB, NBC, CT&nbsp;Mirror.</p>
+        </div>
+      </details>
       <div class="kpis">
         <div class="kpi"><span class="kl">Out now</span><span class="kv acc" id="kNow">--</span></div>
         <div class="kpi"><span class="kl">Outages</span><span class="kv" id="kN">--</span></div>
@@ -774,9 +797,9 @@ svg#pulse{width:100%;aspect-ratio:300/150;height:auto;min-height:118px;display:b
         <input type="range" id="crews" min="100" max="1500" step="10" value="702"><span class="fhint">disclosed 702 &middot; slack in a 3-day event &mdash; try it, restoration barely moves</span></div>
       <div class="field"><div class="frow"><span class="flabel">Mobilization ramp</span><span class="fval" id="vRamp">200</span></div>
         <input type="range" id="ramp" min="50" max="600" step="25" value="200"><span class="fhint">crews brought online per day &middot; <b>the binding lever</b> &mdash; this is what moves the curve</span></div>
-      <div class="field"><div class="frow"><span class="flabel">Fix-rate</span><span class="fval" id="vRate">2.7</span></div>
-        <input type="range" id="rate" min="1" max="4" step="0.1" value="2.7"><span class="fhint">outages/crew/day (Wanik fix-rate percentiles)</span>
-        <div class="presets"><button class="pbtn" data-r="1.5">P25 &middot; 1.5</button><button class="pbtn" data-r="2.3">P50 &middot; 2.3</button><button class="pbtn" data-r="3.1">P75 &middot; 3.1</button></div></div>
+      <div class="field"><div class="frow"><span class="flabel">Fix-rate</span><span class="fval" id="vRate">2.33</span></div>
+        <input type="range" id="rate" min="1" max="4" step="0.01" value="2.33"><span class="fhint">outages fixed per crew per day &middot; digitized from Wanik et&nbsp;al. (2018) Fig&nbsp;3b</span>
+        <div class="presets"><button class="pbtn" data-r="1.81">P25 &middot; 1.81</button><button class="pbtn on" data-r="2.33">P50 &middot; 2.33</button><button class="pbtn" data-r="2.88">P75 &middot; 2.88</button></div></div>
       <div class="field"><div class="frow"><span class="flabel">PCAO</span><span class="fval" id="vPcao">30</span></div>
         <input type="range" id="pcao" min="15" max="50" step="1" value="30"><span class="fhint">peak customers per outage &middot; July 4 &asymp; 30</span></div>
 
@@ -911,8 +934,8 @@ function run(S){
   let etr=NaN;for(let i=0;i<hs.length;i++){if(hs[i]>=PEAK_H&&cust[i]<=0.01*PCA){etr=hs[i];break;}}
   let total=tmax;for(let i=0;i<hs.length;i++){if(hs[i]>=PEAK_H&&cust[i]<=1){total=hs[i];break;}}
   let se=0;for(const p of OBSD){se+=(interp(hs,cust,p[0])-p[1])**2;}
-  const custHi=curveAt(S.rate*1.5/2.3,cumSize,N,S.crews,S.ramp);   // P25 slow -> more still out (upper)
-  const custLo=curveAt(S.rate*3.1/2.3,cumSize,N,S.crews,S.ramp);   // P75 fast -> fewer still out (lower)
+  const custHi=curveAt(S.rate*1.81/2.33,cumSize,N,S.crews,S.ramp);   // P25 slow -> more still out (upper)
+  const custLo=curveAt(S.rate*2.88/2.33,cumSize,N,S.crews,S.ramp);   // P75 fast -> fewer still out (lower)
   return {N,outs,hs,cust,custLo,custHi,etr,total,rmse:Math.sqrt(se/OBSD.length),wfield:bc.w,wmax,skill};
 }
 function interp(hs,cust,h){let i=0;while(i<hs.length-1&&hs[i+1]<h)i++;const t0=hs[i],t1=hs[Math.min(i+1,hs.length-1)],c0=cust[i],c1=cust[Math.min(i+1,cust.length-1)];return t1===t0?c0:c0+(c1-c0)*(h-t0)/(t1-t0);}
@@ -955,8 +978,8 @@ function drawOv(){
   if(state.subs){octx.fillStyle=css("--sub");for(const p of DATA.subs){const q=map.latLngToContainerPoint([p[0],p[1]]);octx.fillRect(q.x-1.5,q.y-1.5,3,3);}}
   // modeled outages (canvas dots): drawn in every mode; restored ones vanish as the scrubber advances
   {octx.fillStyle=css("--accent");octx.globalAlpha=.55;
-    const R=state.R,t=state.t;
-    for(let i=0;i<R.outs.length;i++){const o=R.outs[i];if(o.rt>t){const q=map.latLngToContainerPoint([o.lat,o.lon]);octx.beginPath();octx.arc(q.x,q.y,2,0,6.283);octx.fill();}}
+    const R=state.R,t=state.t,bnd=map.getBounds().pad(0.15);   // viewport-cull: skip off-screen dots
+    for(let i=0;i<R.outs.length;i++){const o=R.outs[i];if(o.rt>t&&bnd.contains([o.lat,o.lon])){const q=map.latLngToContainerPoint([o.lat,o.lon]);octx.beginPath();octx.arc(q.x,q.y,2,0,6.283);octx.fill();}}
     octx.globalAlpha=1;}
 }
 let ovRaf=0;const schedOv=()=>{if(ovRaf)cancelAnimationFrame(ovRaf);ovRaf=requestAnimationFrame(drawOv);};
@@ -1008,7 +1031,7 @@ function drawPulse(){
 }
 
 // ---- state + wiring ----
-const state={crews:702,ramp:200,rate:2.7,pcao:30,useModel:false,wWind:1.0,wRep:0,rc:0.5,hc:0.6,impact:1,view:"peak",heat:false,townTog:true,subs:false,grid:false,t:PEAK_H,R:null};
+const state={crews:702,ramp:200,rate:2.33,pcao:30,useModel:false,wWind:1.0,wRep:0,rc:0.5,hc:0.6,impact:1,view:"peak",heat:false,townTog:true,subs:false,grid:false,t:PEAK_H,R:null};
 function recompute(){
   state.R=run(state);
   const maxT=Math.max(24,Math.ceil(state.R.total));
