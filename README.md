@@ -21,8 +21,8 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
 
 | Capability | How |
 |---|---|
-| Real statewide Connecticut distribution grid | 299 HIFLD substations across all 8 counties, branching feeders + laterals, census-tract-weighted demand (883 tracts) |
-| Weather/customer-weighted outage locations | Browser Worker combines HRRR wind and rain, census customer exposure, Gaussian smoothing, and the live network; the UI converts each selected network segment to a geography-derived estimated account impact |
+| Real statewide Connecticut distribution grid | 299 HIFLD substations across all 8 counties, branching feeders + laterals, and 2020 Census-block-derived demand on the HRRR grid |
+| Weather/customer-weighted outage locations | Browser Worker combines HRRR wind and rain, Census-block customer exposure, optional population smoothing, 10 km impact regularization, and the live network |
 | Realistic-mode scheduler with seven factors | assessment delay, log-normal repair, discovery ramp, mutual-aid waves, road proxy, workday clamp, critical priority |
 | Real critical facilities (HIFLD/EPA) | 1,143 hospitals, fire stations, EMS, water plants statewide — outages near real facilities get priority-1 restoration |
 | NLCD tree canopy per substation | USGS 30m canopy cover (live-computed 1km buffer mean per substation) replaces the distance-based urban/suburban/rural heuristic |
@@ -30,7 +30,7 @@ The server backend at `hartford-grid-server.onrender.com` is auto-detected by th
 | Statewide HRRR wind/rain grid | 41×65 grid (~3km resolution) for 8 cached events; sourced from the NOAA AWS archive |
 | Curated hourly storm playback | 24 hourly Isaias HRRR frames drive both the animated Wind/Rain/Impact overlay and timestamped outage placement |
 | DOE OE-417 disturbance database | 8 real CT outage events for calibrating simulated vs. actual restoration timelines |
-| Census tract population | 883 tracts (2020 Census P.L. 94-171) for much finer demand placement than the 169-town model |
+| Census block population | All 49,926 Connecticut blocks (2020 Census P.L. 94-171), bilinearly allocated from Census internal points to the fixed 41×65 HRRR grid |
 | Customer-impact-weighted dispatch | scheduler can favor outages serving more customers, not just nearest |
 | Crew specialization (line vs tree) | 80/20 fleet split, 30% tree-blocked outages, parallel subsystems |
 | Optimal-crew-count recommendation | server-side binary search via Numba (10 s at 250 k outages) |
@@ -155,7 +155,8 @@ UI controls to source functions, see
 ├── 08_fetch_substations.py        # cache 299 real HIFLD substations statewide
 ├── 09_fetch_critical_facilities.py # cache 1,143 real HIFLD/EPA critical facilities statewide
 ├── 10_fetch_tree_canopy.py        # live-compute NLCD tree canopy per substation (1km buffer)
-├── 11_fetch_census_tracts.py      # cache 883 real census tracts + 169 town populations (keyless)
+├── 11_fetch_census_population.py # cache all 49,926 Census blocks + 169 towns
+├── 11_build_census_population_grid.js # reproducible block → HRRR-grid preprocessing
 ├── 12_fetch_hrrr_storm_wind.py    # builds curated hourly HRRR weather + offline legacy cache
 ├── 13_fetch_flood_corridors.py    # 12 real USGS NHD river corridors for the other 7 counties
 ├── scheduler_fast.py              # NumPy-vectorized fallback scheduler
@@ -166,8 +167,9 @@ UI controls to source functions, see
 ├── data/                          # real-data inputs (HIFLD, EPA, NLCD, Census, NOAA, DOE, USGS)
 │   ├── connecticut_substations.json    #   299 real HIFLD substations statewide
 │   ├── connecticut_critical_facilities.js # 1,143 HIFLD/EPA hospitals/fire/EMS/water
-│   ├── connecticut_census_tracts.js    #   883 real census tract centroids + populations
-│   ├── connecticut_towns_population.js #   169 real town populations + centroids
+│   ├── connecticut_census_blocks.json  #   auditable block populations + internal points
+│   ├── connecticut_census_population_grid.js # production 41×65 unsmoothed population grid
+│   ├── connecticut_towns_population.js #   169 town populations + Census internal points
 │   ├── connecticut_tree_canopy.js      #   live-computed NLCD canopy per substation
 │   ├── connecticut_storm_wind.js       #   legacy peak-hour cache for offline regression only
 │   ├── connecticut_storm_timelines.js  #   24 hourly Isaias wind/rain frames
@@ -295,13 +297,13 @@ Repository documentation covers the implementation, data, and research context:
 - **`Hartford_Grid_Dev_Journal.docx`** — same content as a Word document for upload to Google Docs (drag into `drive.google.com` → right-click → Open with Google Docs → auto-converts). Regenerate with `python build_docx.py`.
 - **`Hartford_Grid_Research_Context.docx`** — 19 cited research papers across 6 themes (each with author/title/venue + "Why it matters" + "What it does" + "Key terms" vocab), niche analysis, sketch of paper introduction, open research questions, and PURA / Eversource data sources to pursue.
 - **`ROADMAP.md`** — advisor-feedback incorporation plan: the feedback organized by theme, a prioritized track-by-track implementation plan, and the data/links to collect.
-- **`DATA_SOURCES.md`** — provenance file for every real-world dataset the simulation uses (Connecticut state boundary, 169 towns, 299 real HIFLD substations, 1,143 critical facilities, 883 census tracts, statewide HRRR wind grid, 17 flood corridors) plus planned sources (ISO-NE, DW crew curves, Eversource outage data). Source URLs, fetch scripts, licenses, refresh commands, and honest coverage notes for each.
+- **`DATA_SOURCES.md`** — provenance file for every real-world dataset the simulation uses (Connecticut boundaries, 169 towns, 299 real HIFLD substations, 1,143 critical facilities, 49,926 Census blocks, statewide HRRR weather grid, and flood corridors). Source URLs, preprocessing scripts, licenses, refresh commands, and coverage notes are recorded there.
 
 ---
 
 ## Status & roadmap
 
-**Engineering side:** the grid, critical facilities, census tracts, towns, tree canopy, HRRR wind grid, and flood corridors are all real data covering the entire state of Connecticut (8 counties). Territory/feeder rendering is canvas-batched and the territory-coloring pass runs in a Web Worker; the FastAPI backend disk-caches expensive `/api/schedule` and `/api/monte_carlo` results. Calibration framework is ready, multi-server batch is ready, all toggles work at max settings.
+**Engineering side:** the grid, critical facilities, Census blocks, towns, tree canopy, HRRR weather grid, and flood corridors use statewide Connecticut data. Census blocks are preprocessed to the model grid so the browser does not load or transfer tens of thousands of records on every run. Territory/feeder rendering is canvas-batched and the outage-placement calculation runs in a Web Worker.
 
 **The Realism Fix (done):** three composable realism phases shipped and tested —
 **Phase 1** hierarchical restoration (laterals can't energize until their feeder is back),

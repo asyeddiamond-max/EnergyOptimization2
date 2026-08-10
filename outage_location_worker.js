@@ -20,7 +20,7 @@
   let yieldToMessages;
 
   if (typeof importScripts === "function" && typeof self !== "undefined") {
-    importScripts("outage_location_model.js?v=4");
+    importScripts("outage_location_model.js?v=5");
     model = self.OutageLocationModel;
     send = (message, transfer = []) => self.postMessage(message, transfer);
     subscribe = (handler) => self.addEventListener("message", (event) => handler(event.data));
@@ -246,7 +246,7 @@
     );
     const totalSegmentWeight = segments.reduce((sum, segment) => sum + segment.weight, 0);
     return {
-      placementModel: `${scenario.methodology.placementMode}_snapshot_v2`,
+      placementModel: `${scenario.methodology.placementMode}_snapshot_v3`,
       placementMode: scenario.methodology.placementMode,
       candidateSegments: segments.length,
       feederCandidateSegments,
@@ -431,7 +431,7 @@
         runId, timingsMs, currentStage, 0.12, "Allocating and smoothing customer exposure…",
         () => model.buildCustomerExposureSurface(
           input.boundary,
-          input.censusTracts,
+          model.populationSourceFromInput(input),
           validated.weather.latitudes,
           validated.weather.longitudes,
           {

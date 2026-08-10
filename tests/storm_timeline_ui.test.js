@@ -38,15 +38,18 @@ test("research UI sends the curated timeline to the existing Worker", () => {
   assert.match(html, /mode:'timeline'/);
   assert.match(html, /weatherTimeline:\{/);
   assert.match(html, /CONNECTICUT_STORM_TIMELINES/);
-  assert.match(html, /outage_location_worker\.js\?v=4/);
-  assert.match(html, /outage_location_model\.js\?v=4/);
+  assert.match(html, /data\/connecticut_census_population_grid\.js/);
+  assert.match(html, /populationGrid:window\.CONNECTICUT_CENSUS_POPULATION_GRID/);
+  assert.doesNotMatch(html, /script src="\.\/data\/connecticut_census_blocks/);
+  assert.match(html, /outage_location_worker\.js\?v=5/);
+  assert.match(html, /outage_location_model\.js\?v=5/);
   assert.match(html, /id="modelRiskObjective"/);
   assert.match(html, /value="failure_oriented"/);
   assert.match(html, /candidateSegmentLengthKm:'modelCandidateLength'/);
   assert.match(html, /lineIntegrationStepKm:'modelIntegrationStep'/);
   assert.doesNotMatch(
     html,
-    /CONNECTICUT_CENSUS_TRACTS\s*=\s*window\.CONNECTICUT_CENSUS_TRACTS\.map/,
+    /CONNECTICUT_CENSUS_BLOCKS\s*=\s*window\.CONNECTICUT_CENSUS_BLOCKS\.map/,
   );
   assert.doesNotMatch(
     html,

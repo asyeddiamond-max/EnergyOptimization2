@@ -394,7 +394,7 @@
           <label for="modelRainCap">Rain-score cap</label><input id="modelRainCap" type="number" min="0.1" step="0.1" />
           <div class="tuning-group">Customer exposure and smoothing</div>
           <label for="modelExposureExponent">Exposure exponent</label><input id="modelExposureExponent" type="number" min="0.1" step="0.1" />
-          <label for="modelCustomerSmoothing">Customer smoothing (km)</label><input id="modelCustomerSmoothing" type="number" min="0.1" step="0.5" />
+          <label for="modelCustomerSmoothing">Population smoothing (km)</label><input id="modelCustomerSmoothing" type="number" min="0" step="0.5" />
           <label for="modelRuralBaseline">Rural baseline fraction</label><input id="modelRuralBaseline" type="number" min="0" step="0.01" />
           <label for="modelGaussianBandwidth">Impact bandwidth (km)</label><input id="modelGaussianBandwidth" type="number" min="0.1" step="0.5" />
           <div class="tuning-group">Network and numerical controls</div>
@@ -660,8 +660,8 @@
           <div class="rf-desc">Real HIFLD hospitals, fire stations, EMS, water plants shown on map. Outages near these are priority-1 for restoration. <span id="critFacilityCount"></span></div>
         </div>
         <div class="rf-item">
-          <label class="rf-label"><input type="checkbox" id="useCensusTracts" checked /><span class="rf-name">Census tract demand</span></label>
-          <div class="rf-desc">883 tracts (2020 Census) for much finer customer-count placement than the 169-town model. <span id="censusTractCount"></span></div>
+          <label class="rf-label"><input type="checkbox" id="useCensusBlocks" checked /><span class="rf-name">Census block demand</span></label>
+          <div class="rf-desc">2020 Census blocks, preallocated to the fixed HRRR grid for detailed demand placement without loading tens of thousands of browser points. <span id="censusBlockCount"></span></div>
         </div>
         <div class="rf-item">
           <label class="rf-label"><input type="checkbox" id="showStormTrack" checked /><span class="rf-name">NOAA storm track</span></label>
@@ -694,7 +694,7 @@
 <script src="./data/connecticut_towns_population.js"></script>
 <script src="./data/connecticut_substations.js"></script>
 <script src="./data/connecticut_critical_facilities.js"></script>
-<script src="./data/connecticut_census_tracts.js"></script>
+<script src="./data/connecticut_census_population_grid.js"></script>
 <script src="./data/connecticut_tree_canopy.js"></script>
 <script src="./data/hartford_storm_tracks.js"></script>
 <script src="./data/hartford_doe_oe417.js"></script>
@@ -705,12 +705,12 @@
      here just means the fetch script hasn't been run yet; live mode shows
      instructions instead of data. -->
 <script src="./data/connecticut_live_outages.js"></script>
-<script src="./outage_location_model.js?v=4"></script>
+<script src="./outage_location_model.js?v=5"></script>
 <script src="./outage_restoration_adapter.js"></script>
 <script>
-// Real Connecticut town population + centroid (169 towns), from the 2020
-// Census P.L. 94-171 Redistricting Data (11_fetch_census_tracts.py). Used as
-// the demand-point fallback when census-tract data is toggled off.
+// Real Connecticut town population + Census internal points (169 towns), from
+// 2020 P.L. 94-171 data (11_fetch_census_population.py). Used as
+// the demand-point fallback when Census-block-derived demand is toggled off.
 //
 // Population != customer accounts: CT's 2020 census population is 3,605,944,
 // but Eversource (~1.3M) + United Illuminating (~333,000) together report
@@ -720,7 +720,7 @@
 // household"). Every "customers without power" figure this tool shows is
 // compared directly against utility-reported customer counts (DOE OE-417
 // panel, PURA filings, news coverage), so demand weight is converted to
-// Raw town and tract values remain in persons throughout grid construction.
+// Raw town and Census-block-derived grid values remain in persons.
 // Conversion to estimated customer accounts occurs only where an account-valued
 // output is explicitly needed.
 const POP_TO_CUSTOMER_RATIO = 1633000 / 3605944; // ≈ 0.4529
@@ -1664,23 +1664,24 @@ function starSVG(color,size=14){return `<svg xmlns="http://www.w3.org/2000/svg" 
 // --- Step 1: Substation placement via weighted k-means on demand points ---
 function buildDemandPoints(rnd){
   const pts=[];
-  const useTracts = document.getElementById('useCensusTracts')
-                    && document.getElementById('useCensusTracts').checked
-                    && window.CONNECTICUT_CENSUS_TRACTS
-                    && window.CONNECTICUT_CENSUS_TRACTS.length > 0;
-  if (useTracts){
-    // Census-tract-level demand (883 tracts, much finer than the 169-town model).
-    const tracts = window.CONNECTICUT_CENSUS_TRACTS;
-    tracts.forEach(t=>{
-      const n = Math.max(3, Math.round(Math.sqrt(t.pop)/3));
-      const w = t.pop/n;
-      for (let i=0;i<n;i++){
-        const r=0.002+rnd()*0.006, a=rnd()*Math.PI*2;
-        pts.push({lat:t.lat+Math.sin(a)*r*0.85,lon:t.lon+Math.cos(a)*r,w});
+  const blockGrid=window.CONNECTICUT_CENSUS_POPULATION_GRID;
+  const useBlocks=document.getElementById('useCensusBlocks')
+                  && document.getElementById('useCensusBlocks').checked
+                  && blockGrid
+                  && Array.isArray(blockGrid.populationPersons);
+  if (useBlocks){
+    // The expensive 49,926-block bilinear allocation is performed once by
+    // 11_build_census_population_grid.js. Weighted k-means needs only the
+    // positive HRRR nodes (at most 2,665), not jittered copies of every block.
+    const lats=blockGrid.grid.latitudes, lons=blockGrid.grid.longitudes;
+    const cols=blockGrid.grid.columns;
+    blockGrid.populationPersons.forEach((population,index)=>{
+      if (population>0){
+        pts.push({lat:lats[Math.floor(index/cols)],lon:lons[index%cols],w:population});
       }
     });
   } else {
-    // Fallback: 169-town centroid model.
+    // Fallback: 169-town internal-point model with synthetic local jitter.
     TOWNS.forEach(t=>{
       const n=Math.max(8,Math.round(Math.sqrt(t.pop)/2));
       const w=t.pop/n;
@@ -2013,7 +2014,7 @@ const MODEL_CONTROL_HELP = Object.freeze({
   modelExposureExponent:
     'Controls how strongly customer density affects impact-weighted placement. It is ignored by the failure-oriented objective.',
   modelCustomerSmoothing:
-    'Gaussian standard deviation used to map Census population onto the analysis grid. Larger values spread customer exposure farther.',
+    'Optional Gaussian smoothing after Census-block population is allocated to the HRRR grid. Zero retains the block-derived grid; larger values spread exposure farther.',
   modelRuralBaseline:
     'Adds a uniform synthetic exposure equal to this fraction of statewide population. The paper default is zero; nonzero values are sensitivity scenarios.',
   modelGaussianBandwidth:
@@ -2327,7 +2328,7 @@ function makeWorkerRequestInput(config,mode){
     ...base,
     mode:'timeline',
     boundary:simplifiedBoundaryForModel(),
-    censusTracts:window.CONNECTICUT_CENSUS_TRACTS||[],
+    populationGrid:window.CONNECTICUT_CENSUS_POPULATION_GRID,
     weatherTimeline:{
       grid:weatherData.grid,
       storm:{storm_id:config.stormId,...weatherData.storms[config.stormId]},
@@ -2723,7 +2724,7 @@ function initializeOutageModelWorker(){
     setModelAvailability('warn','Starting outage generator…');
     document.getElementById('simStorm').disabled=true;
     const attempt=++outageModelWorkerAttempt;
-    outageModelWorker=new Worker('./outage_location_worker.js?v=4');
+    outageModelWorker=new Worker('./outage_location_worker.js?v=5');
     outageModelWorker.onmessage=handleOutageWorkerMessage;
     outageModelWorker.onerror=(event)=>{
       if (outageModelWorkerStartupTimer){clearTimeout(outageModelWorkerStartupTimer);outageModelWorkerStartupTimer=null;}
@@ -5296,11 +5297,14 @@ document.getElementById('showCriticalFacilities').onchange = function(){
   renderCriticalFacilities();
 };
 
-// --- Census tract count display ---
+// --- Census block/grid count display ---
 (function(){
-  const el = document.getElementById('censusTractCount');
-  const tracts = window.CONNECTICUT_CENSUS_TRACTS || [];
-  if (el) el.textContent = tracts.length ? ` (${tracts.length} tracts loaded)` : '';
+  const el=document.getElementById('censusBlockCount');
+  const populationGrid=window.CONNECTICUT_CENSUS_POPULATION_GRID;
+  if (el&&populationGrid){
+    const source=populationGrid.source, grid=populationGrid.grid;
+    el.textContent=` (${source.blockCount.toLocaleString()} blocks → ${grid.rows}×${grid.columns} grid)`;
+  }
 })();
 
 // --- NOAA Storm Track Overlay ---

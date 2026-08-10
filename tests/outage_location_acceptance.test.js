@@ -20,11 +20,13 @@ let cachedFullInputs = null;
 function loadFullInputs() {
   if (cachedFullInputs) return cachedFullInputs;
   const boundary = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "connecticut_boundary.json"), "utf8"));
-  const censusTracts = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "connecticut_census_tracts.json"), "utf8"));
+  const populationGrid = JSON.parse(fs.readFileSync(
+    path.join(ROOT, "data", "connecticut_census_population_grid.json"), "utf8",
+  ));
   const weatherText = fs.readFileSync(path.join(ROOT, "data", "connecticut_storm_wind.js"), "utf8");
   const weatherData = JSON.parse(weatherText.slice(weatherText.indexOf("=") + 1).trim().replace(/;$/, ""));
   const network = buildReviewNetwork(model, boundary, weatherData.grid);
-  cachedFullInputs = { boundary, censusTracts, weatherData, network };
+  cachedFullInputs = { boundary, populationGrid, weatherData, network };
   return cachedFullInputs;
 }
 
@@ -49,7 +51,7 @@ function smallScenario(configOverrides = {}, weatherTransform = (weather) => wea
   return model.generateOutageScenario({
     config: { ...source.config, ...configOverrides },
     boundary: source.boundary,
-    censusTracts: source.census_tracts,
+    censusBlocks: source.census_tracts,
     weather,
     network: source.network,
   });
@@ -86,10 +88,10 @@ test("scientific controls and seed have measurable, interpretable effects", () =
 });
 
 test("default Isaias output satisfies exact geography, uniqueness, network, and customer contracts", { timeout: 120000 }, () => {
-  const { boundary, censusTracts, weatherData, network } = loadFullInputs();
+  const { boundary, populationGrid, weatherData, network } = loadFullInputs();
   const config = { ...model.DEFAULT_CONFIG, stormId: "isaias_2020" };
   const weather = weatherFor(weatherData, config.stormId);
-  const result = model.generateOutageScenario({ config, boundary, censusTracts, weather, network });
+  const result = model.generateOutageScenario({ config, boundary, populationGrid, weather, network });
   const normalizedNetwork = model.normalizeNetwork(network);
 
   assert.equal(result.outages.length, 2000);
@@ -115,7 +117,7 @@ test("default Isaias output satisfies exact geography, uniqueness, network, and 
 });
 
 test("every complete HRRR storm is validated under the default scientific threshold", { timeout: 120000 }, () => {
-  const { boundary, censusTracts, weatherData, network } = loadFullInputs();
+  const { boundary, populationGrid, weatherData, network } = loadFullInputs();
   const expectedDefaultNoDamage = new Set(["july2026"]);
   const observedDefaultNoDamage = new Set();
 
@@ -123,7 +125,7 @@ test("every complete HRRR storm is validated under the default scientific thresh
     const weather = weatherFor(weatherData, stormId);
     const config = { ...model.DEFAULT_CONFIG, stormId, nOutages: 50 };
     try {
-      const result = model.generateOutageScenario({ config, boundary, censusTracts, weather, network });
+      const result = model.generateOutageScenario({ config, boundary, populationGrid, weather, network });
       assert.equal(result.outages.length, 50, stormId);
       assert.equal(result.totalCustomers, 2500, stormId);
       assert.ok(result.outages.every((outage) => outage.popLoss === 50), stormId);
@@ -137,7 +139,7 @@ test("every complete HRRR storm is validated under the default scientific thresh
   const lowerThresholdResult = model.generateOutageScenario({
     config: { ...model.DEFAULT_CONFIG, stormId: "july2026", nOutages: 50, windThresholdMph: 20 },
     boundary,
-    censusTracts,
+    populationGrid,
     weather: weatherFor(weatherData, "july2026"),
     network,
   });

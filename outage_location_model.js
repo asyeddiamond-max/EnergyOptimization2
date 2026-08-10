@@ -17,7 +17,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function buildModule() {
   "use strict";
 
-  const SCHEMA_VERSION = 2;
+  const SCHEMA_VERSION = 3;
   const POPULATION_TO_CUSTOMER_RATIO = 1633000 / 3605944;
   const EARTH_RADIUS_KM = 6371.0088;
 
@@ -33,9 +33,10 @@
     rainReferenceIn: 1,
     rainScoreCap: 2,
     exposureExponent: 1,
-    // Prespecified regularization: tract/block sensitivity is negligible at
-    // this bandwidth on the 3 km analysis grid. It is not a fitted parameter.
-    customerSmoothingKm: 6,
+    // Population-surface regularization on the approximately 3 km analysis
+    // grid. Zero is valid and means that bilinear allocation is the only
+    // spatial spreading applied before exposure normalization.
+    customerSmoothingKm: 0,
     // No synthetic uniform exposure is added by default. A nonzero value
     // remains available for sensitivity experiments, but requires an explicit
     // scenario choice.
@@ -131,13 +132,16 @@
     }
     for (const key of [
       "windExcessScaleMph", "windExponent", "rainReferenceIn", "rainScoreCap",
-      "exposureExponent", "customerSmoothingKm", "gaussianBandwidthKm",
+      "exposureExponent", "gaussianBandwidthKm",
       "candidateSegmentLengthKm", "lineIntegrationStepKm",
       "feederSusceptibility", "lateralSusceptibility",
     ]) {
       if (finiteNumber(config[key], key) <= 0) {
         throw new InputValidationError(`${key} must be > 0`);
       }
+    }
+    if (finiteNumber(config.customerSmoothingKm, "customerSmoothingKm") < 0) {
+      throw new InputValidationError("customerSmoothingKm must be >= 0");
     }
     if (config.windThresholdMph >= 250) {
       throw new InputValidationError("windThresholdMph must be within [0, 250)");
@@ -292,33 +296,33 @@
     return best;
   }
 
-  function normalizeCensusTracts(tracts) {
-    if (!Array.isArray(tracts) || !tracts.length) {
-      throw new InputValidationError("censusTracts must be a non-empty array");
+  function normalizePopulationPoints(points) {
+    if (!Array.isArray(points) || !points.length) {
+      throw new InputValidationError("Census population points must be a non-empty array");
     }
-    return tracts.map((tract, index) => {
-      if (!tract || typeof tract !== "object") {
-        throw new InputValidationError(`censusTracts[${index}] must be an object`);
+    return points.map((point, index) => {
+      if (!point || typeof point !== "object") {
+        throw new InputValidationError(`populationPoints[${index}] must be an object`);
       }
-      const population = finiteNumber(tract.pop ?? tract.population, `censusTracts[${index}].pop`);
-      const latitude = finiteNumber(tract.lat ?? tract.latitude, `censusTracts[${index}].lat`);
-      const longitude = finiteNumber(tract.lon ?? tract.longitude, `censusTracts[${index}].lon`);
-      if (population < 0) throw new InputValidationError(`censusTracts[${index}].pop must be >= 0`);
+      const population = finiteNumber(point.pop ?? point.population, `populationPoints[${index}].pop`);
+      const latitude = finiteNumber(point.lat ?? point.latitude, `populationPoints[${index}].lat`);
+      const longitude = finiteNumber(point.lon ?? point.longitude, `populationPoints[${index}].lon`);
+      if (population < 0) throw new InputValidationError(`populationPoints[${index}].pop must be >= 0`);
       if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-        throw new InputValidationError(`censusTracts[${index}] is outside valid longitude/latitude bounds`);
+        throw new InputValidationError(`populationPoints[${index}] is outside valid longitude/latitude bounds`);
       }
-      return { geoid: String(tract.geoid ?? tract.GEOID ?? index), population, latitude, longitude };
+      return { geoid: String(point.geoid ?? point.GEOID ?? index), population, latitude, longitude };
     });
   }
 
-  function rasterizePopulationPersons(censusTracts, latitudes, longitudes, mask) {
-    const tracts = normalizeCensusTracts(censusTracts);
+  function rasterizePopulationPersons(populationPoints, latitudes, longitudes, mask) {
+    const points = normalizePopulationPoints(populationPoints);
     const rows = latitudes.length;
     const columns = longitudes.length;
     const grid = Array.from({ length: rows }, () => Array(columns).fill(0));
-    for (const tract of tracts) {
-      const [row0, row1, rowFraction] = bracketingIndices(latitudes, tract.latitude);
-      const [column0, column1, columnFraction] = bracketingIndices(longitudes, tract.longitude);
+    for (const point of points) {
+      const [row0, row1, rowFraction] = bracketingIndices(latitudes, point.latitude);
+      const [column0, column1, columnFraction] = bracketingIndices(longitudes, point.longitude);
       const candidates = new Map();
       for (const [row, rowWeight] of [[row0, 1 - rowFraction], [row1, rowFraction]]) {
         for (const [column, columnWeight] of [[column0, 1 - columnFraction], [column1, columnFraction]]) {
@@ -331,7 +335,7 @@
       }
       let totalWeight = [...candidates.values()].reduce((sum, value) => sum + value, 0);
       if (totalWeight <= 0) {
-        const [row, column] = nearestValidCell(mask, latitudes, longitudes, tract.latitude, tract.longitude);
+        const [row, column] = nearestValidCell(mask, latitudes, longitudes, point.latitude, point.longitude);
         candidates.clear();
         candidates.set(row * columns + column, 1);
         totalWeight = 1;
@@ -339,7 +343,7 @@
       for (const [key, weight] of candidates) {
         const row = Math.floor(key / columns);
         const column = key % columns;
-        grid[row][column] += tract.population * weight / totalWeight;
+        grid[row][column] += point.population * weight / totalWeight;
       }
     }
     return grid;
@@ -349,9 +353,9 @@
     return grid.map((row) => row.map((value) => value * scalar));
   }
 
-  function rasterizeCustomerAccounts(censusTracts, latitudes, longitudes, mask) {
+  function rasterizeCustomerAccounts(populationPoints, latitudes, longitudes, mask) {
     return scaleGrid(
-      rasterizePopulationPersons(censusTracts, latitudes, longitudes, mask),
+      rasterizePopulationPersons(populationPoints, latitudes, longitudes, mask),
       POPULATION_TO_CUSTOMER_RATIO,
     );
   }
@@ -448,13 +452,109 @@
     return total;
   }
 
+  function coordinatesMatch(actual, expected) {
+    return (Array.isArray(actual) || ArrayBuffer.isView(actual))
+      && actual.length === expected.length
+      && actual.every((value, index) => Number.isFinite(value)
+        && Math.abs(value - expected[index]) <= 1e-12);
+  }
+
+  function reshapeFlatGrid(values, rows, columns, label) {
+    if (!Array.isArray(values) && !ArrayBuffer.isView(values)) {
+      throw new InputValidationError(`${label} must be an array or typed array`);
+    }
+    if (values.length !== rows * columns) {
+      throw new InputValidationError(`${label} must contain exactly ${rows * columns} values`);
+    }
+    return Array.from({ length: rows }, (_, row) =>
+      Array.from(values.slice(row * columns, (row + 1) * columns)));
+  }
+
+  function normalizeStoredMask(populationGrid, rows, columns) {
+    const stored = populationGrid.connecticutMask
+      ?? populationGrid.connecticut_mask
+      ?? populationGrid.mask;
+    if (stored === undefined) return null;
+    let grid;
+    if (Array.isArray(stored[0])) {
+      if (stored.length !== rows
+          || stored.some((row) => !Array.isArray(row) || row.length !== columns)) {
+        throw new InputValidationError(
+          `populationGrid.connecticutMask shape must be ${rows} x ${columns}`,
+        );
+      }
+      grid = stored;
+    } else {
+      grid = reshapeFlatGrid(stored, rows, columns, "populationGrid.connecticutMask");
+    }
+    const mask = grid.map((row) => row.map((value) => {
+      if (value !== 0 && value !== 1 && value !== false && value !== true) {
+        throw new InputValidationError("populationGrid.connecticutMask values must be Boolean or 0/1");
+      }
+      return Boolean(value);
+    }));
+    if (!mask.some((row) => row.some(Boolean))) {
+      throw new InputValidationError("populationGrid.connecticutMask contains no in-state nodes");
+    }
+    return mask;
+  }
+
+  function normalizePrecomputedPopulationGrid(populationGrid, latitudes, longitudes, fallbackMask) {
+    if (!populationGrid || typeof populationGrid !== "object" || Array.isArray(populationGrid)) {
+      throw new InputValidationError("populationGrid must be an object");
+    }
+    const metadata = populationGrid.grid || populationGrid;
+    const sourceLatitudes = metadata.latitudes ?? metadata.lats;
+    const sourceLongitudes = metadata.longitudes ?? metadata.lons;
+    if (!coordinatesMatch(sourceLatitudes, latitudes)
+        || !coordinatesMatch(sourceLongitudes, longitudes)) {
+      throw new InputValidationError("populationGrid coordinates must exactly match the weather grid");
+    }
+    const rows = latitudes.length;
+    const columns = longitudes.length;
+    const storedMask = normalizeStoredMask(populationGrid, rows, columns);
+    const mask = storedMask || fallbackMask;
+    const storedValues = populationGrid.populationPersons
+      ?? populationGrid.population_persons
+      ?? populationGrid.values;
+    const values = Array.isArray(storedValues?.[0])
+      ? validateGrid(storedValues, rows, columns, "populationGrid.populationPersons")
+      : reshapeFlatGrid(storedValues, rows, columns, "populationGrid.populationPersons");
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        const value = finiteNumber(values[row][column], `populationGrid[${row}][${column}]`);
+        if (value < 0) throw new InputValidationError("populationGrid values must be nonnegative");
+        if (!mask[row][column] && value !== 0) {
+          throw new InputValidationError("populationGrid must contain zero population outside its Connecticut mask");
+        }
+      }
+    }
+    const actualTotal = gridTotal(values);
+    const declaredTotal = populationGrid.source?.totalPopulationPersons;
+    if (declaredTotal !== undefined) {
+      const expectedTotal = finiteNumber(
+        declaredTotal, "populationGrid.source.totalPopulationPersons",
+      );
+      if (Math.abs(actualTotal - expectedTotal) > 1e-6) {
+        throw new InputValidationError(
+          "populationGrid total does not match source.totalPopulationPersons",
+        );
+      }
+    }
+    return {
+      mask,
+      values: values.map((row) => row.slice()),
+      metadata: populationGrid.source || {},
+    };
+  }
+
   function boundaryAwareGaussianSmooth(values, mask, options) {
     const smoothingKm = finiteNumber(options.smoothingKm, "smoothingKm");
     const latitudeCellKm = finiteNumber(options.latitudeCellKm, "latitudeCellKm");
     const longitudeCellKm = finiteNumber(options.longitudeCellKm, "longitudeCellKm");
     const preserveTotal = options.preserveTotal !== false;
-    if (smoothingKm <= 0 || latitudeCellKm <= 0 || longitudeCellKm <= 0) {
-      throw new InputValidationError("smoothing and grid-cell spacing must be positive");
+    if (smoothingKm < 0 || latitudeCellKm <= 0 || longitudeCellKm <= 0) {
+      throw new InputValidationError("smoothing must be nonnegative and grid-cell spacing must be positive");
     }
     const rows = mask.length;
     const columns = mask[0]?.length || 0;
@@ -468,6 +568,7 @@
       }
     }
     if (preserveTotal && total <= 0) throw new InputValidationError("Gaussian input has no positive in-state mass");
+    if (smoothingKm === 0) return grid.map((row) => row.slice());
     const maskValues = mask.map((row) => row.map((cell) => cell ? 1 : 0));
     const sigmaRows = smoothingKm / latitudeCellKm;
     const sigmaColumns = smoothingKm / longitudeCellKm;
@@ -486,7 +587,21 @@
     return result;
   }
 
-  function buildCustomerExposureSurface(boundary, censusTracts, latitudes, longitudes, options = {}) {
+  function populationSourceFromInput(input) {
+    const source = input.populationGrid
+      ?? input.population_grid
+      ?? input.censusBlocks
+      ?? input.census_blocks
+      // Compatibility for saved version-2 requests and compact test fixtures.
+      ?? input.censusTracts
+      ?? input.census_tracts;
+    if (source === undefined) {
+      throw new InputValidationError("model input requires populationGrid or censusBlocks");
+    }
+    return source;
+  }
+
+  function buildCustomerExposureSurface(boundary, populationSource, latitudes, longitudes, options = {}) {
     const smoothingKm = options.smoothingKm ?? DEFAULT_CONFIG.customerSmoothingKm;
     const ruralBaselineFraction = options.ruralBaselineFraction ?? DEFAULT_CONFIG.ruralBaselineFraction;
     if (finiteNumber(ruralBaselineFraction, "ruralBaselineFraction") < 0) {
@@ -494,8 +609,30 @@
     }
     const lats = validateCoordinates(latitudes, "latitudes");
     const lons = validateCoordinates(longitudes, "longitudes");
-    const mask = buildConnecticutMask(boundary, lats, lons);
-    const rawPopulationPersons = rasterizePopulationPersons(censusTracts, lats, lons, mask);
+    const boundaryMask = buildConnecticutMask(boundary, lats, lons);
+    let mask = boundaryMask;
+    let rawPopulationPersons;
+    let sourceMetadata;
+    let inputRepresentation;
+    if (Array.isArray(populationSource)) {
+      rawPopulationPersons = rasterizePopulationPersons(populationSource, lats, lons, mask);
+      const looksLikeBlocks = populationSource.length > 0
+        && populationSource.every((point) => String(point.geoid ?? point.GEOID ?? "").length === 15);
+      sourceMetadata = {
+        geography: looksLikeBlocks ? "Census block" : "Census population point",
+        coordinateRepresentation: "provided point coordinates",
+        recordCount: populationSource.length,
+      };
+      inputRepresentation = "population_points_rasterized_at_runtime";
+    } else {
+      const normalizedGrid = normalizePrecomputedPopulationGrid(
+        populationSource, lats, lons, boundaryMask,
+      );
+      mask = normalizedGrid.mask;
+      rawPopulationPersons = normalizedGrid.values;
+      sourceMetadata = normalizedGrid.metadata;
+      inputRepresentation = "precomputed_unsmoothed_population_grid";
+    }
     const spacing = gridCellSpacingKm(lats, lons);
     const smoothedPopulationPersons = boundaryAwareGaussianSmooth(rawPopulationPersons, mask, {
       smoothingKm, ...spacing,
@@ -527,7 +664,7 @@
     const totalCustomerAccounts = totalPopulationPersons * POPULATION_TO_CUSTOMER_RATIO;
     return {
       schemaVersion: SCHEMA_VERSION,
-      schema: "connecticut_customer_exposure_v2",
+      schema: "connecticut_customer_exposure_v3",
       sourceQuantity: "census_population_persons",
       accountEstimateMethod: "uniform_statewide_population_ratio",
       populationToCustomerAccountRatio: POPULATION_TO_CUSTOMER_RATIO,
@@ -545,15 +682,30 @@
       ...spacing,
       spatialMethod: {
         ...spatialGridMetadata(lats, lons),
-        sourceQuantity: "2020 Census population persons at tract internal points",
+        sourceQuantity: sourceMetadata.dataset
+          ? `${sourceMetadata.dataset} population persons`
+          : "Census population persons",
+        sourceGeography: sourceMetadata.geography || "Census population point",
+        sourceCoordinateRepresentation:
+          sourceMetadata.coordinateRepresentation || "provided point coordinates",
+        boundarySource: sourceMetadata.boundaryMask || "runtime boundary input",
+        sourceRecordCount: sourceMetadata.blockCount
+          ?? sourceMetadata.recordCount
+          ?? null,
+        inputRepresentation,
         populationAllocation:
           "bilinear allocation to four surrounding valid nodes, renormalized at boundary; nearest valid node fallback",
         smoothing: {
-          kernel: "separable Gaussian",
+          applied: smoothingKm > 0,
+          kernel: smoothingKm > 0 ? "separable Gaussian" : "none",
           standardDeviationKm: smoothingKm,
-          nominalTruncationStandardDeviations: 4,
-          boundaryCorrection: "normalized convolution by binary in-state node mask",
-          massPreservation: "rescaled to the exact pre-smoothing in-state population total",
+          nominalTruncationStandardDeviations: smoothingKm > 0 ? 4 : 0,
+          boundaryCorrection: smoothingKm > 0
+            ? "normalized convolution by binary in-state node mask"
+            : "not applicable",
+          massPreservation: smoothingKm > 0
+            ? "rescaled to the exact pre-smoothing in-state population total"
+            : "identity operation; total unchanged",
         },
         uniformExposureBaselineFraction: ruralBaselineFraction,
         accountConversion:
@@ -1409,7 +1561,7 @@
     });
     return {
       schemaVersion: SCHEMA_VERSION,
-      schema: "connecticut_outage_scenario_v2",
+      schema: "connecticut_outage_scenario_v3",
       scenarioId: `${config.stormId}_seed${config.seed}`,
       config,
       inputs: { ...inputs },
@@ -1451,7 +1603,7 @@
       throw new InputValidationError(`config stormId ${config.stormId} does not match weather stormId ${weather.stormId}`);
     }
     const customerSurface = buildCustomerExposureSurface(
-      input.boundary, input.censusTracts, weather.latitudes, weather.longitudes,
+      input.boundary, populationSourceFromInput(input), weather.latitudes, weather.longitudes,
       { smoothingKm: config.customerSmoothingKm, ruralBaselineFraction: config.ruralBaselineFraction },
     );
     const weatherSurface = buildWeatherSeveritySurface(input.weather, customerSurface.connecticutMask, config);
@@ -1463,7 +1615,7 @@
       ...scenario,
       surfaces: { customer: customerSurface, weather: weatherSurface, impact: impactSurface },
       summary: {
-        placementModel: `${config.placementMode}_snapshot_v2`,
+        placementModel: `${config.placementMode}_snapshot_v3`,
         placementMode: config.placementMode,
         candidateSegments: weightedSegments.length,
         feederCandidateSegments: weightedSegments.filter((segment) => segment.networkKind === "feeder").length,
@@ -1668,7 +1820,7 @@
 
     return {
       ...baseScenario,
-      schema: "connecticut_timeline_outage_scenario_v2",
+      schema: "connecticut_timeline_outage_scenario_v3",
       scenarioId: `${config.stormId}_timeline_seed${config.seed}`,
       outages,
       frameOutageCounts,
@@ -1686,7 +1838,7 @@
     }
     const customerSurface = buildCustomerExposureSurface(
       input.boundary,
-      input.censusTracts,
+      populationSourceFromInput(input),
       timeline.latitudes,
       timeline.longitudes,
       { smoothingKm: config.customerSmoothingKm, ruralBaselineFraction: config.ruralBaselineFraction },
@@ -1725,7 +1877,7 @@
         },
       },
       summary: {
-        placementModel: `${config.placementMode}_curated_hourly_timeline_v2`,
+        placementModel: `${config.placementMode}_curated_hourly_timeline_v3`,
         placementMode: config.placementMode,
         candidateSegments: weightedSegments.length,
         feederCandidateSegments: weightedSegments.filter(
@@ -1774,6 +1926,7 @@
     rasterizeCustomerAccounts,
     boundaryAwareGaussianSmooth,
     spatialGridMetadata,
+    populationSourceFromInput,
     buildCustomerExposureSurface,
     weatherSeverityScore,
     normalizeWeather,

@@ -24,13 +24,13 @@ function loadInputs() {
   );
   const data = context.window.CONNECTICUT_STORM_TIMELINES;
   const boundary = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "connecticut_boundary.json"), "utf8"));
-  const censusTracts = JSON.parse(
-    fs.readFileSync(path.join(ROOT, "data", "connecticut_census_tracts.json"), "utf8"),
+  const populationGrid = JSON.parse(
+    fs.readFileSync(path.join(ROOT, "data", "connecticut_census_population_grid.json"), "utf8"),
   );
   return {
     config: model.DEFAULT_CONFIG,
     boundary,
-    censusTracts,
+    populationGrid,
     weatherTimeline: { grid: data.grid, storm: data.storms.isaias_2020 },
     network: buildReviewNetwork(model, boundary, data.grid),
   };
@@ -63,11 +63,11 @@ test("full Isaias timeline produces exactly 2,000 unique timestamped outages", (
   const result = model.generateTimelineOutageScenario(input);
   const validTimes = new Set(result.surfaces.timeline.frames.map((frame) => frame.validTime));
 
-  assert.equal(result.schemaVersion, 2);
-  assert.equal(result.schema, "connecticut_timeline_outage_scenario_v2");
+  assert.equal(result.schemaVersion, 3);
+  assert.equal(result.schema, "connecticut_timeline_outage_scenario_v3");
   assert.equal(
     result.summary.placementModel,
-    "impact_weighted_curated_hourly_timeline_v2",
+    "impact_weighted_curated_hourly_timeline_v3",
   );
   assert.equal(result.summary.placementMode, "impact_weighted");
   assert.equal(result.summary.timelineFrames, 24);
@@ -125,7 +125,7 @@ test("failure-oriented timeline mode excludes Census exposure from placement wei
   });
   assert.equal(
     failure.summary.placementModel,
-    "failure_oriented_curated_hourly_timeline_v2",
+    "failure_oriented_curated_hourly_timeline_v3",
   );
   assert.equal(failure.methodology.placementMode, "failure_oriented");
   assert.equal(failure.summary.totalSegmentWeight, failure.summary.totalFailureOrientedWeight);
@@ -146,7 +146,7 @@ test("hourly timeline remains comparable to but meaningfully differs from the ol
   const snapshot = model.generateOutageScenario({
     config: { ...input.config, stormId: "isaias_2020" },
     boundary: input.boundary,
-    censusTracts: input.censusTracts,
+    populationGrid: input.populationGrid,
     weather: loadSnapshotWeather(),
     network: input.network,
   });
@@ -159,6 +159,6 @@ test("hourly timeline remains comparable to but meaningfully differs from the ol
   assert.equal(timeline.totalCustomers, 100000);
   assert.ok(snapshot.outages.every((outage) => outage.occurredAt == null));
   assert.ok(timeline.outages.every((outage) => outage.occurredAt != null));
-  assert.equal(overlap, 1587);
-  assert.ok(overlap > 0 && overlap < timeline.outages.length);
+  const overlapFraction = overlap / timeline.outages.length;
+  assert.ok(overlapFraction > 0.7 && overlapFraction < 0.95);
 });

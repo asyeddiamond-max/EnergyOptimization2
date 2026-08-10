@@ -51,6 +51,7 @@ function smallSurfaces() {
 test("configuration has frozen defaults and rejects invalid inputs", () => {
   assert.equal(model.DEFAULT_CONFIG.nOutages, 2000);
   assert.equal(model.DEFAULT_CONFIG.customersPerOutage, 50);
+  assert.equal(model.DEFAULT_CONFIG.customerSmoothingKm, 0);
   assert.equal(model.DEFAULT_CONFIG.ruralBaselineFraction, 0);
   assert.equal(model.DEFAULT_CONFIG.placementMode, "impact_weighted");
   assert.equal(model.DEFAULT_CONFIG.candidateSegmentLengthKm, 1);
@@ -59,6 +60,8 @@ test("configuration has frozen defaults and rejects invalid inputs", () => {
   assert.equal(model.validateConfig({ n_outages: 3 }).nOutages, 3);
   assert.throws(() => model.validateConfig({ customersPerOutage: 49 }), model.InputValidationError);
   assert.throws(() => model.validateConfig({ gaussianBandwidthKm: 0 }), model.InputValidationError);
+  assert.equal(model.validateConfig({ customerSmoothingKm: 0 }).customerSmoothingKm, 0);
+  assert.throws(() => model.validateConfig({ customerSmoothingKm: -0.1 }), model.InputValidationError);
   assert.throws(() => model.validateConfig({ placementMode: "probability" }), model.InputValidationError);
   assert.throws(() => model.validateConfig({ typoBandwidthKm: 10 }), model.InputValidationError);
 });
@@ -96,6 +99,66 @@ test("small customer allocation, Gaussian smoothing, rural floor, and conservati
   assert.equal(customer.spatialMethod.coordinateReferenceSystem, "EPSG:4326");
   assert.equal(customer.spatialMethod.smoothing.standardDeviationKm, small.input.config.customer_smoothing_km);
   assert.match(customer.spatialMethod.populationAllocation, /bilinear/);
+});
+
+test("zero population smoothing is an exact mass-preserving identity", () => {
+  const input = small.input;
+  const weather = model.normalizeWeather(input.weather);
+  const customer = model.buildCustomerExposureSurface(
+    input.boundary,
+    input.census_tracts,
+    weather.latitudes,
+    weather.longitudes,
+    { smoothingKm: 0, ruralBaselineFraction: 0 },
+  );
+  compareGrid(customer.smoothedPopulationPersons, customer.rawPopulationPersons);
+  tolerance(customer.summary.rawPopulationTotal, customer.summary.smoothedPopulationTotal);
+  assert.equal(customer.spatialMethod.smoothing.applied, false);
+  assert.equal(customer.spatialMethod.smoothing.kernel, "none");
+});
+
+test("production block grid exactly reproduces runtime bilinear allocation", { timeout: 120000 }, () => {
+  const blocks = JSON.parse(fs.readFileSync(
+    path.join(ROOT, "data", "connecticut_census_blocks.json"), "utf8",
+  ));
+  const stored = JSON.parse(fs.readFileSync(
+    path.join(ROOT, "data", "connecticut_census_population_grid.json"), "utf8",
+  ));
+  const { rows, columns, latitudes, longitudes } = stored.grid;
+  const mask = Array.from({ length: rows }, (_, row) =>
+    stored.connecticutMask.slice(row * columns, (row + 1) * columns).map(Boolean));
+  const expected = Array.from({ length: rows }, (_, row) =>
+    stored.populationPersons.slice(row * columns, (row + 1) * columns));
+  const rerasterized = model.rasterizePopulationPersons(blocks, latitudes, longitudes, mask);
+  const boundary = JSON.parse(fs.readFileSync(
+    path.join(ROOT, "data", "connecticut_land_boundary.json"), "utf8",
+  ));
+  const customer = model.buildCustomerExposureSurface(
+    boundary, stored, latitudes, longitudes, { smoothingKm: 0, ruralBaselineFraction: 0 },
+  );
+
+  assert.equal(blocks.length, 49926);
+  assert.equal(stored.source.populatedBlockCount, 42008);
+  assert.equal(stored.source.zeroPopulationBlockCount, 7918);
+  assert.equal(stored.source.totalPopulationPersons, 3605944);
+  assert.equal(new Set(blocks.map((block) => block.geoid)).size, blocks.length);
+  assert.ok(blocks.every((block) => /^09\d{13}$/.test(block.geoid)));
+  tolerance(rerasterized.flat().reduce((sum, value) => sum + value, 0), 3605944, 1e-12, 1e-6);
+  compareGrid(rerasterized, expected, 1e-12);
+  tolerance(customer.summary.rawPopulationTotal, 3605944, 1e-12, 1e-6);
+  assert.equal(customer.summary.validCellCount, stored.connecticutMask.reduce((a, b) => a + b, 0));
+  assert.equal(customer.spatialMethod.sourceGeography, "Census block");
+  assert.equal(customer.spatialMethod.boundarySource, "data/connecticut_land_boundary.json");
+  assert.throws(
+    () => model.buildCustomerExposureSurface(
+      boundary,
+      { ...stored, source: { ...stored.source, totalPopulationPersons: 3605945 } },
+      latitudes,
+      longitudes,
+      { smoothingKm: 0, ruralBaselineFraction: 0 },
+    ),
+    /total does not match/,
+  );
 });
 
 test("wind threshold and rain amplification preserve all weather components", () => {

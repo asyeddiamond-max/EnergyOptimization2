@@ -25,7 +25,7 @@ on coverage gaps go at the bottom of each entry.
 | **License** | © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright) |
 | **Refresh** | `python 01_fetch_county_boundary.py` — only needed if OSM updates the boundary |
 
-**History**: originally scoped to Hartford County only (`data/hartford_boundary.json`, still present but unused); replaced with the statewide polygon so every downstream dataset (towns, substations, tracts) could cover all 8 counties instead of one.
+**History**: originally scoped to Hartford County only (`data/hartford_boundary.json`, still present but unused); replaced with the statewide polygon so every downstream dataset could cover all 8 counties instead of one.
 
 ---
 
@@ -192,23 +192,29 @@ fit.
 
 ---
 
-## 9 · Census tract population and town population (2020 Census P.L. 94-171)
+## 9 · Census block and town population (2020 Census P.L. 94-171)
 
 | | |
 |---|---|
-| **What** | Census tract centroids + population (883 tracts) and town-level (county subdivision) population + centroids (169 towns), statewide |
-| **Source** | US Census Bureau, 2020 Census **P.L. 94-171 Redistricting Data** — a keyless static flat-file download, not the api.census.gov API (which requires a free key) |
+| **What** | Census block population and internal points, plus town-level population and internal points, statewide |
+| **Source** | U.S. Census Bureau, 2020 Census **P.L. 94-171 Redistricting Data** geographic header |
 | **URL** | `www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Connecticut/ct2020.pl.zip` |
-| **Fetch script** | [`11_fetch_census_tracts.py`](11_fetch_census_tracts.py) |
-| **Cached files** | [`data/connecticut_census_tracts.js`](data/connecticut_census_tracts.js), [`data/connecticut_towns_population.js`](data/connecticut_towns_population.js) |
-| **Used by** | `buildDemandPoints()` — census-tract-level demand (883 tracts) when the toggle is on, falling back to the 169-town centroid model otherwise. `05_generate_artifacts.py` also loads the town file for `TOTAL_POP` and demand-point generation. |
-| **Record count** | 883 tracts; 169 towns, total population 3,605,944 (verified exact match to CT's real 2020 Census population) |
+| **Fetch/preprocessing** | [`11_fetch_census_population.py`](11_fetch_census_population.py), then [`11_build_census_population_grid.js`](11_build_census_population_grid.js) |
+| **Cached files** | [`data/connecticut_census_blocks.json`](data/connecticut_census_blocks.json), [`data/connecticut_census_population_grid.json`](data/connecticut_census_population_grid.json), browser copy [`data/connecticut_census_population_grid.js`](data/connecticut_census_population_grid.js), and [`data/connecticut_towns_population.js`](data/connecticut_towns_population.js) |
+| **Used by** | The outage model consumes the precomputed unsmoothed 41×65 population grid. `buildDemandPoints()` uses its positive grid nodes as weighted clustering inputs, avoiding tens of thousands of runtime points. Towns remain the explicit UI fallback. |
+| **Record count** | 49,926 blocks: 42,008 populated and 7,918 with zero population; 169 towns; statewide population 3,605,944 |
 | **License** | Public domain (U.S. government work) |
 
+**Allocation and validation**
+- Each block's `POP100` is located at the Census-provided `INTPTLAT`/`INTPTLON` internal point and bilinearly divided among its four surrounding HRRR nodes. Weights that fall outside the land mask are removed and the remaining weights are renormalized; a nearest-valid-node fallback handles a point with no valid surrounding node.
+- The production asset stores the resulting unsmoothed grid, not the 49,926 records, so preprocessing and runtime use the same authoritative JavaScript allocation code while avoiding repeated browser work.
+- Automated checks require unique 15-digit Connecticut block GEOIDs, valid coordinates, nonnegative counts, the official record count, and exact statewide population conservation before and after gridding.
+
 **Honest coverage notes**
-- Centroids (`INTPTLAT`/`INTPTLON`) are the Census Bureau's own internal points, not simple geometric centroids.
-- Population is total population (POP100, the 100% count), not households or electric customers.
-- **History**: the original Hartford-only `hartford_census_tracts.js` (148 records) had 10-digit "GEOIDs" — real Census tract GEOIDs are 11 digits — and an embedded county-FIPS substring that didn't match Hartford County's real FIPS code (003). Both are strong evidence it was hand-typed rather than pulled from a real API. The statewide file's GEOIDs are verified correctly formatted (e.g. `09001010101` = state 09, county 001, tract 010101) and cross-checked against known real town populations (Bridgeport 148,654; Greenwich 63,518).
+- Census internal points are guaranteed representations supplied for each geography; they are not geometric or population-weighted centroids and do not reveal household locations.
+- Population is total population (`POP100`), not households or electric accounts. The separate statewide person-to-account ratio is applied only where an account-valued output is required.
+- The block-derived grid uses the land-only Connecticut mask from `connecticut_land_boundary.json`; the map can still display the broader legal state outline, including its maritime jurisdiction.
+- The former 883-tract files are retained only for version-2 regression comparison. They are not loaded by the production UI or Worker.
 
 ---
 

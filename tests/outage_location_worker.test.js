@@ -35,7 +35,7 @@ function smallInput(seed = 17) {
   return {
     config: { ...source.config, seed },
     boundary: source.boundary,
-    censusTracts: source.census_tracts,
+    censusBlocks: source.census_tracts,
     weather: source.weather,
     network: source.network,
     inputs: { fixture: "small-worker" },
@@ -45,14 +45,16 @@ function smallInput(seed = 17) {
 function fullInput() {
   const config = fixture.full_isaias_reference.config;
   const boundary = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "connecticut_boundary.json"), "utf8"));
-  const censusTracts = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "connecticut_census_tracts.json"), "utf8"));
+  const populationGrid = JSON.parse(fs.readFileSync(
+    path.join(ROOT, "data", "connecticut_census_population_grid.json"), "utf8",
+  ));
   const weatherText = fs.readFileSync(path.join(ROOT, "data", "connecticut_storm_wind.js"), "utf8");
   const weatherData = JSON.parse(weatherText.slice(weatherText.indexOf("=") + 1).trim().replace(/;$/, ""));
   const network = buildPerformanceNetwork(model, boundary, weatherData.grid);
   return {
     config,
     boundary,
-    censusTracts,
+    populationGrid,
     weather: {
       grid: weatherData.grid,
       storm: { storm_id: config.storm_id, ...weatherData.storms[config.storm_id] },
@@ -64,7 +66,9 @@ function fullInput() {
 
 function timelineInput() {
   const boundary = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "connecticut_boundary.json"), "utf8"));
-  const censusTracts = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "connecticut_census_tracts.json"), "utf8"));
+  const populationGrid = JSON.parse(fs.readFileSync(
+    path.join(ROOT, "data", "connecticut_census_population_grid.json"), "utf8",
+  ));
   const timelineText = fs.readFileSync(
     path.join(ROOT, "data", "connecticut_storm_timelines.js"),
     "utf8",
@@ -76,7 +80,7 @@ function timelineInput() {
     mode: "timeline",
     config: model.DEFAULT_CONFIG,
     boundary,
-    censusTracts,
+    populationGrid,
     weatherTimeline: {
       grid: timelineData.grid,
       storm: timelineData.storms.isaias_2020,
@@ -198,7 +202,7 @@ test("Worker returns 24 transferable Isaias frames and 2,000 timestamped outages
   ]);
   assert.equal(
     result.summary.placementModel,
-    "impact_weighted_curated_hourly_timeline_v2",
+    "impact_weighted_curated_hourly_timeline_v3",
   );
   assert.equal(result.summary.placementMode, "impact_weighted");
   assert.equal(result.outages.length, 2000);
@@ -265,7 +269,7 @@ test("explicit basic mode succeeds without weather surfaces and labels itself cl
   const input = smallInput();
   input.mode = "basic";
   delete input.boundary;
-  delete input.censusTracts;
+  delete input.censusBlocks;
   delete input.weather;
   worker.postMessage(request("basic", input));
   const message = await waitFor(worker, (value) => value.type === "result" && value.runId === "basic");
@@ -324,7 +328,7 @@ test("full Isaias generation runs off-thread on a 100k-segment test network", { 
   assert.equal(message.result.summary.representedCustomers, 100000);
   assert.equal(
     message.result.summary.surface.validConnecticutCells,
-    fixture.full_isaias_reference.expected.valid_connecticut_cells,
+    input.populationGrid.connecticutMask.reduce((sum, inside) => sum + inside, 0),
   );
   assert.equal(message.result.surfaces.mask.length, 41 * 65);
   assert.equal(message.result.surfaces.smoothedImpact.length, 41 * 65);
