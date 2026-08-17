@@ -50,13 +50,16 @@ function smallSurfaces() {
 
 test("configuration has frozen defaults and rejects invalid inputs", () => {
   assert.equal(model.DEFAULT_CONFIG.nOutages, 2000);
-  assert.equal(model.DEFAULT_CONFIG.customersPerOutage, 50);
+  assert.equal(model.DEFAULT_CONFIG.customersPerOutage, undefined);
   assert.equal(model.DEFAULT_CONFIG.customerSmoothingKm, 0);
   assert.equal(model.DEFAULT_CONFIG.ruralBaselineFraction, 0);
   assert.equal(model.DEFAULT_CONFIG.placementMode, "impact_weighted");
-  assert.equal(model.DEFAULT_CONFIG.candidateSegmentLengthKm, 1);
+  assert.equal(model.DEFAULT_CONFIG.candidateSegmentLengthKm, 0.25);
   assert.equal(model.DEFAULT_CONFIG.lineIntegrationStepKm, 0.25);
   assert.equal(model.DEFAULT_CONFIG.lateralSusceptibility, 1);
+  assert.equal(model.DEFAULT_CONFIG.feederSusceptibility, 0.1);
+  assert.equal(model.DEFAULT_CONFIG.serviceFailureWeight, 0.75);
+  assert.equal(model.DEFAULT_CONFIG.serviceGroupMaximumCustomers, 15);
   assert.equal(model.validateConfig({ n_outages: 3 }).nOutages, 3);
   assert.throws(() => model.validateConfig({ customersPerOutage: 49 }), model.InputValidationError);
   assert.throws(() => model.validateConfig({ gaussianBandwidthKm: 0 }), model.InputValidationError);
@@ -245,15 +248,24 @@ test("segment-keyed sampling is deterministic, order-invariant, unique, and rest
   });
   assert.deepEqual(first.outages, second.outages);
   assert.equal(first.outages.length, 3);
-  assert.equal(first.totalCustomers, 150);
-  assert.deepEqual(first.samplingDesign, {
-    algorithm: "segment_keyed_exponential_random_key_without_replacement",
-    keyEquation: "log(U_s) / W_s",
-    uniformKey: "FNV-1a-derived 32-bit hash of seed, stream, segment ID, and counter",
-    stableUnderCandidateReordering: true,
-    conditionedOnOutageCount: 3,
-    normalizedScoresAreInclusionProbabilities: false,
-  });
+  assert.equal(first.schemaVersion, 4);
+  assert.equal(first.schema, "connecticut_outage_scenario_v4");
+  assert.equal(
+    first.totalCustomers,
+    first.outages.reduce((sum, outage) => sum + outage.customers, 0),
+  );
+  assert.equal(first.methodology.networkTopology.customerLoadsAssigned, true);
+  assert.equal(first.methodology.networkTopology.overlappingOutagePreventionApplied, true);
+  assert.equal(
+    first.customerAllocation.summary.allocatedCustomerAccounts,
+    first.customerAllocation.summary.targetIntegerCustomerAccounts,
+  );
+  assert.equal(
+    first.samplingDesign.algorithm,
+    "segment_keyed_exponential_random_key_without_replacement",
+  );
+  assert.equal(first.samplingDesign.stableUnderCandidateReordering, true);
+  assert.equal(first.samplingDesign.overlappingCustomerSubtrees, 0);
   const { config, customer, severity, impact } = smallSurfaces();
   const segments = model.buildWeightedNetworkSegments(
     small.input.network, customer, severity, impact, config,
@@ -263,12 +275,15 @@ test("segment-keyed sampling is deterministic, order-invariant, unique, and rest
   assert.deepEqual(reversed.outages, forward.outages);
   assert.equal(new Set(first.outages.map((outage) => outage.networkSegmentId)).size, 3);
   first.outages.forEach((outage) => {
-    assert.equal(outage.popLoss, 50);
-    assert.equal(outage.customers, 50);
+    assert.ok(Number.isInteger(outage.customers) && outage.customers > 0);
+    assert.equal(outage.popLoss, outage.customers);
+    assert.equal(outage.downstreamCustomers, outage.customers);
     assert.ok(Number.isInteger(outage.fi));
     assert.ok(outage.kind === "f" || Number.isInteger(outage.li));
     assert.ok(outage.is_feeder === 0 || outage.is_feeder === 1);
     assert.equal(outage.sub_id, 0);
+    assert.ok(Number.isInteger(outage.networkDirectCustomerAccounts));
+    assert.ok(Number.isInteger(outage.networkDownstreamCustomerAccounts));
   });
 });
 

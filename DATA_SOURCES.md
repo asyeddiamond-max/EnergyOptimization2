@@ -455,7 +455,44 @@ animates those exact arrays with hourly playback and cumulative outage markers.
 
 ---
 
-## 22 · Planned / pending data sources
+## 22 · National Grid D.P.U. 24-41 storm-job size targets
+
+| Field | Value |
+|---|---|
+| **What** | Aggregate customer-count distribution for 2,377 National Grid storm jobs: 13 size bins plus eight percentile checkpoints |
+| **Underlying source** | National Grid regulatory filing, D.P.U. 24-41 |
+| **Received from** | Dr. Dave Wanik by email on 2026-08-13 |
+| **Cached files** | [`data/validation/dpu31_size_target_bins.csv`](data/validation/dpu31_size_target_bins.csv), [`data/validation/dpu31_size_target_quantiles.csv`](data/validation/dpu31_size_target_quantiles.csv) |
+| **Provenance note** | [`data/validation/README.md`](data/validation/README.md) records definitions, received-file checksums, integrity totals, and the pre-change fixed-50 baseline |
+| **Used by** | Automated target-integrity tests, `evaluateDpu31SizeDistribution`, the reproducible topology calibration script, and browser target-versus-simulated diagnostics |
+| **Records** | 13 size-bin rows and 8 quantile rows, summarizing 2,377 jobs and 306,020 customer-job impacts |
+| **License/status** | Regulatory-filing-derived aggregate tables supplied by the project advisor for research; redistribution status of the underlying row-level filing extract has not been independently determined |
+
+**Target interpretation and checks**
+
+- Size bins use half-open intervals `[lo, hi)`. The first two bins therefore
+  represent one- and two-customer jobs, consistent with the supplied 25th
+  percentile of two.
+- Job shares and customer shares each sum to exactly one within floating-point
+  precision.
+- The target mean is 128.742 customers per job and the median is 16.
+- The 13 job-count shares are the primary calibration target. Customer shares,
+  quantiles, mean, and tail concentration remain validation outputs.
+- PCAO is not a calibration target.
+
+**Honest coverage notes**
+
+- The original 2,377-row job list referenced by the advisor was not included in
+  the files received by the repository. The aggregate targets can be validated
+  internally but not regenerated independently from row-level records yet.
+- The dataset describes National Grid storm jobs from one regulatory filing; it
+  is an empirical distribution target, not Connecticut circuit topology.
+- Calibration can test whether the synthetic topology reproduces this aggregate
+  profile. It cannot establish utility-specific circuit fidelity.
+
+---
+
+## 23 · Planned / pending data sources
 
 These are tracked in [`ROADMAP.md`](ROADMAP.md) and listed here so future-you
 (or a reviewer) can see what's not yet integrated. Each one is gated on data

@@ -117,11 +117,19 @@ No Python, backend, JSON import, or downloaded handoff file is required:
 The browser sends the live in-memory feeder/lateral network to
 `outage_location_worker.js`, which calls the same pure
 `outage_location_model.js` used by the automated tests. The default generates
-2,000 unique Connecticut network locations. Before restoration planning, the UI
-assigns each location a geography-derived estimated account impact from its
-served feeder/lateral segment. `outage_restoration_adapter.js` then attaches
+2,000 unique Connecticut failure jobs. The model assigns exact Census-derived
+integer accounts to the rooted network, sizes each job from its non-overlapping
+downstream subtree or compact customer-load group, and emits the variable count as
+authoritative output. `outage_restoration_adapter.js` then attaches
 deterministic critical-facility, tree, flood, callback, switching, underground,
 feeder, and substation metadata without moving a selected point.
+
+The network candidates form a validated upstream-to-downstream rooted forest
+with stable parent/child and subtree metadata. Census accounts are conserved
+exactly on that forest, and ancestor/descendant conflicts are rejected. Snapshot,
+hourly timeline, and Basic placement now emit the v4 variable-customer contract,
+which restoration preserves end to end. See
+[`CUSTOMER_OUTAGE_SIZING_IMPLEMENTATION_PLAN.md`](CUSTOMER_OUTAGE_SIZING_IMPLEMENTATION_PLAN.md).
 
 At a high level, the research placement path constructs separate storm-hazard
 and customer-consequence fields, optionally combines them into an
@@ -251,6 +259,10 @@ there is no exported production-network file or second generator to maintain.
   full-storm timelines.
 - Feeder and lateral topology is synthetic around 299 real HIFLD substations;
   it is not utility GIS topology.
+- Topology-derived customer sizing passes the predeclared held-out D.P.U. bin
+  thresholds after adding generic 1–15-account leaf groups. The match is not
+  exact: the held-out mean and largest-1% concentration remain somewhat high;
+  see [`data/validation/dpu31_topology_calibration_report.md`](data/validation/dpu31_topology_calibration_report.md).
 - The model creates plausible outage locations, but it has not yet been
   validated against restricted EAGLE-I or utility outage-point data.
 - July 2026 has complete cached HRRR arrays but a 27.6 mph in-state maximum,
@@ -293,6 +305,7 @@ History of the speedup at 25k × 5000 over the project:
 Repository documentation covers the implementation, data, and research context:
 
 - **[`OUTAGE_LOCATION_MODEL_GUIDE.md`](OUTAGE_LOCATION_MODEL_GUIDE.md)** — concise code map, equations, tuning-parameter table, resolution handling, and maintainer checklist for the outage-location model.
+- **[`CUSTOMER_OUTAGE_SIZING_IMPLEMENTATION_PLAN.md`](CUSTOMER_OUTAGE_SIZING_IMPLEMENTATION_PLAN.md)** — source-of-truth plan for topology-derived customer counts, D.P.U. 24-41 distribution calibration, non-overlapping downstream impacts, validation gates, and the separate Isaias timing follow-up.
 - **`JOURNAL.html`** — open in any browser. Chapters covering everything from foundations through The Realism Fix, with verbatim user-question quotes, colored category tags, a cross-project "Problems Faced" appendix, and an addendum on the Realism Fix phases + advisor feedback. Browser-viewable and printable.
 - **`Hartford_Grid_Dev_Journal.docx`** — same content as a Word document for upload to Google Docs (drag into `drive.google.com` → right-click → Open with Google Docs → auto-converts). Regenerate with `python build_docx.py`.
 - **`Hartford_Grid_Research_Context.docx`** — 19 cited research papers across 6 themes (each with author/title/venue + "Why it matters" + "What it does" + "Key terms" vocab), niche analysis, sketch of paper introduction, open research questions, and PURA / Eversource data sources to pursue.

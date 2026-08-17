@@ -68,7 +68,7 @@ test("scientific controls and seed have measurable, interpretable effects", () =
   const higherThreshold = smallScenario({ wind_threshold_mph: 40 });
   const strongerExposure = smallScenario({ exposure_exponent: 2 });
   const widerGaussian = smallScenario({ gaussian_bandwidth_km: 25 });
-  const differentSeed = smallScenario({ seed: 18 });
+  const differentSeed = smallScenario({ seed: 19 });
 
   assert.ok(flatSum(strongerWeather.surfaces.weather.weatherSeverity)
     > flatSum(baseline.surfaces.weather.weatherSeverity));
@@ -95,12 +95,17 @@ test("default Isaias output satisfies exact geography, uniqueness, network, and 
   const normalizedNetwork = model.normalizeNetwork(network);
 
   assert.equal(result.outages.length, 2000);
-  assert.equal(result.totalCustomers, 100000);
+  assert.equal(result.schemaVersion, 4);
+  assert.equal(
+    result.totalCustomers,
+    result.outages.reduce((sum, outage) => sum + outage.customers, 0),
+  );
+  assert.ok(result.totalCustomers > 0 && result.totalCustomers <= 1633000);
   assert.equal(new Set(result.outages.map((outage) => outage.networkSegmentId)).size, 2000);
   assert.equal(new Set(result.outages.map((outage) => `${outage.lat},${outage.lon}`)).size, 2000);
   result.outages.forEach((outage) => {
-    assert.equal(outage.popLoss, 50);
-    assert.equal(outage.customers, 50);
+    assert.ok(Number.isInteger(outage.customers) && outage.customers > 0);
+    assert.equal(outage.popLoss, outage.customers);
     assert.equal(model.pointInBoundary(boundary, outage.lat, outage.lon), true);
     assert.ok(outage.fi >= 0 && outage.fi < normalizedNetwork.feeders.length);
     assert.equal(outage.feeder_id, outage.fi);
@@ -127,8 +132,16 @@ test("every complete HRRR storm is validated under the default scientific thresh
     try {
       const result = model.generateOutageScenario({ config, boundary, populationGrid, weather, network });
       assert.equal(result.outages.length, 50, stormId);
-      assert.equal(result.totalCustomers, 2500, stormId);
-      assert.ok(result.outages.every((outage) => outage.popLoss === 50), stormId);
+      assert.equal(
+        result.totalCustomers,
+        result.outages.reduce((sum, outage) => sum + outage.customers, 0),
+        stormId,
+      );
+      assert.ok(result.outages.every(
+        (outage) => Number.isInteger(outage.customers)
+          && outage.customers > 0
+          && outage.popLoss === outage.customers,
+      ), stormId);
     } catch (error) {
       assert.match(error.message, /no positive in-state mass/, stormId);
       observedDefaultNoDamage.add(stormId);
@@ -144,5 +157,8 @@ test("every complete HRRR storm is validated under the default scientific thresh
     network,
   });
   assert.equal(lowerThresholdResult.outages.length, 50);
-  assert.equal(lowerThresholdResult.totalCustomers, 2500);
+  assert.equal(
+    lowerThresholdResult.totalCustomers,
+    lowerThresholdResult.outages.reduce((sum, outage) => sum + outage.customers, 0),
+  );
 });

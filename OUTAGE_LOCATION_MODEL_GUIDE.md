@@ -13,8 +13,12 @@ tuning controls, and authoritative code without making validation claims.
 | How is Census exposure constructed? | [`11_fetch_census_population.py`](11_fetch_census_population.py), [`11_build_census_population_grid.js`](11_build_census_population_grid.js), then `buildCustomerExposureSurface` in [`outage_location_model.js`](outage_location_model.js) |
 | What is the wind/rain equation? | `weatherSeverityScore` and `buildWeatherSeveritySurface` in [`outage_location_model.js`](outage_location_model.js) |
 | How are hazard and customer consequence combined? | `buildCombinedImpactSurface` in [`outage_location_model.js`](outage_location_model.js) |
+| How is the network oriented and validated? | `normalizeNetwork` and `buildRootedNetworkTopology` in [`outage_location_model.js`](outage_location_model.js) |
+| How are Census accounts attached and summed? | `allocateCustomerAccountsToTopology` in [`outage_location_model.js`](outage_location_model.js) |
+| How are non-overlapping topology failures sized? | `selectNonOverlappingTopologyFailures` and `sampleSizedOutageScenario` in [`outage_location_model.js`](outage_location_model.js) |
+| How is D.P.U. size error measured? | `evaluateDpu31SizeDistribution` in [`outage_location_model.js`](outage_location_model.js) |
 | How are network lines discretized and integrated? | `standardizeLineSegments`, `integrateNamedGridsAlongPath`, and `buildWeightedNetworkSegments` in [`outage_location_model.js`](outage_location_model.js) |
-| How are unique locations sampled? | `sampleOutageScenario` and `sampleTimelineOutageScenario` in [`outage_location_model.js`](outage_location_model.js) |
+| How are unique locations sampled? | `sampleSizedOutageScenario` and `sampleSizedTimelineOutageScenario` in [`outage_location_model.js`](outage_location_model.js) |
 | How does the UI map fields to model keys? | `MODEL_PARAMETER_INPUTS` in [`03_grid_simulation.html`](03_grid_simulation.html) |
 | Where are the hover explanations? | `MODEL_CONTROL_HELP` in [`03_grid_simulation.html`](03_grid_simulation.html) |
 | How does work move off the main browser thread? | [`outage_location_worker.js`](outage_location_worker.js) |
@@ -89,6 +93,43 @@ replacement using deterministic segment-keyed exponential random keys, so a
 fixed seed is reproducible and candidate-array reordering cannot perturb
 unrelated random keys.
 
+Before weighting, the same candidates are organized as a rooted forest. Each
+feeder coordinate list is interpreted from substation to feeder end, and each
+lateral coordinate list from its feeder attachment to lateral end. A lateral's
+first candidate records the feeder segment at its attachment chainage as its
+parent; later candidates form an ordered parent/child chain. Stable segment
+IDs, root IDs, depths, and preorder subtree intervals make downstream
+aggregation and ancestor/descendant overlap checks possible. The validator
+rejects missing parents, disconnected lateral anchors, cycles, and ownership
+crossings. This topology is authoritative for the v4 customer-sizing contract.
+
+The unsmoothed Census-derived account inventory is also assigned to this
+forest before research or hourly placement. Each positive source-grid node is
+placed in its nearest substation territory and split by inverse-square distance
+among up to eight nearest distinct lateral candidates there (or explicitly to a
+feeder when the territory has no laterals). Largest-remainder rounding turns
+the fractional estimates into an exact integer inventory. A post-order
+traversal records direct and downstream
+accounts on every segment, and the Worker reports customer-weighted attachment
+distance diagnostics. The v4 scenario contract uses these values as
+authoritative sizing inputs; every public outage has matching positive integer
+`customers` and `popLoss` fields.
+
+The validated sizing selector treats each positive-load feeder/lateral segment
+as a possible network failure whose size is its downstream integer sum. It also
+creates a compact logical partition of each segment's direct accounts into
+disjoint 1–15-account customer-load groups. The deterministic grouping pattern
+is `[1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 5, 8, 12, 15]`, repeated while conserving
+the exact segment inventory. These are generic topology leaf loads, not claimed
+equipment or damage types, and final job sizes are not independently sampled
+from the target CSV. Group random keys are generated lazily from uniform order
+statistics, so only competitive groups are materialized. A candidate is
+rejected when its rooted subtree overlaps a selected ancestor/descendant
+subtree or contains a selected group. This guarantees that summed job sizes
+represent unique accounts. Snapshot, hourly timeline, and Basic placement all
+emit the versioned v4 variable-customer contract, and restoration consumers
+preserve rather than replace those counts.
+
 ## Tuning controls
 
 These are sensitivity controls, not fitted coefficients. The paper reference
@@ -106,14 +147,27 @@ configuration is the frozen `DEFAULT_CONFIG`.
 | Population smoothing | `customerSmoothingKm` | 0 km | Optional Gaussian standard deviation after block-to-grid allocation; zero disables it |
 | Rural baseline fraction | `ruralBaselineFraction` | 0 | Optional synthetic uniform exposure for sensitivity analysis |
 | Impact bandwidth | `gaussianBandwidthKm` | 10 km | Standard deviation for impact-surface regularization |
-| Candidate length | `candidateSegmentLengthKm` | 1 km | Maximum length of a without-replacement network candidate |
+| Candidate length | `candidateSegmentLengthKm` | 0.25 km | Maximum length of a without-replacement network candidate |
 | Line-integration step | `lineIntegrationStepKm` | 0.25 km | Maximum midpoint-quadrature spacing |
-| Feeder susceptibility | `feederSusceptibility` | 1 | Relative feeder candidate multiplier |
+| Feeder susceptibility | `feederSusceptibility` | 0.10 | Calibrated relative feeder candidate multiplier |
 | Lateral susceptibility | `lateralSusceptibility` | 1 | Relative lateral candidate multiplier |
+| Small-group weight | `serviceFailureWeight` | 0.75 | Calibrated relative total failure mass for compact 1–15-account load groups |
 
 The separate **Placement method** UI selector chooses the research model or the
 explicit basic network-length fallback. It is orchestration state rather than a
 scientific coefficient.
+
+The initial two-account representation failed held-out calibration. After
+adding generic 1–15-account topology leaf groups and using 0.25 km candidates,
+the final five-calibration-seed/five-held-out-seed run passed all frozen limits:
+held-out job-share TV 0.1007, maximum bin error 0.0578, and overflow job share
+0.0025. The accepted settings above are now the model defaults. See
+[`data/validation/dpu31_topology_calibration_report.md`](data/validation/dpu31_topology_calibration_report.md).
+PCAO* is displayed separately and is never part of the fitting objective. It
+uses Wanik et al. (2018), Equation 2, but is explicitly provisional: the current
+workflow assumes all generated failures are active before restoration begins,
+so PCAO* equals mean customers per job and cannot yet be compared with the
+historical approximately-37 value.
 
 With a fixed outage count, changing `windExcessScaleMph` alone multiplies every
 positive hazard weight by the same constant. That factor cancels when location

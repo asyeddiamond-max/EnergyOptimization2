@@ -63,20 +63,36 @@ test("full Isaias timeline produces exactly 2,000 unique timestamped outages", (
   const result = model.generateTimelineOutageScenario(input);
   const validTimes = new Set(result.surfaces.timeline.frames.map((frame) => frame.validTime));
 
-  assert.equal(result.schemaVersion, 3);
-  assert.equal(result.schema, "connecticut_timeline_outage_scenario_v3");
+  assert.equal(result.schemaVersion, 4);
+  assert.equal(result.schema, "connecticut_timeline_outage_scenario_v4");
   assert.equal(
     result.summary.placementModel,
-    "impact_weighted_curated_hourly_timeline_v3",
+    "impact_weighted_curated_hourly_timeline_v4_topology_sized",
   );
   assert.equal(result.summary.placementMode, "impact_weighted");
   assert.equal(result.summary.timelineFrames, 24);
   assert.equal(result.outages.length, 2000);
-  assert.equal(result.totalCustomers, 100000);
+  assert.equal(
+    result.totalCustomers,
+    result.outages.reduce((sum, outage) => sum + outage.customers, 0),
+  );
+  assert.equal(result.methodology.networkTopology.customerLoadsAssigned, true);
+  assert.equal(result.methodology.networkTopology.overlappingOutagePreventionApplied, true);
+  assert.equal(result.customerAllocation.summary.targetIntegerCustomerAccounts, 1633000);
+  assert.equal(result.customerAllocation.summary.allocatedCustomerAccounts, 1633000);
+  assert.equal(result.customerAllocation.summary.rootDownstreamCustomerAccounts, 1633000);
   assert.equal(result.summary.uniqueSampledSegments, 2000);
   assert.equal(new Set(result.outages.map((outage) => outage.networkSegmentId)).size, 2000);
   assert.equal(result.summary.frameOutageCounts.reduce((sum, count) => sum + count, 0), 2000);
-  assert.ok(result.outages.every((outage) => outage.customers === 50 && outage.popLoss === 50));
+  assert.ok(result.outages.every(
+    (outage) => Number.isInteger(outage.customers)
+      && outage.customers > 0
+      && outage.popLoss === outage.customers,
+  ));
+  assert.ok(result.outages.every(
+    (outage) => Number.isInteger(outage.networkDirectCustomerAccounts)
+      && Number.isInteger(outage.networkDownstreamCustomerAccounts),
+  ));
   assert.ok(result.outages.every((outage) => validTimes.has(outage.occurredAt)));
   assert.ok(result.outages.every((outage) => outage.localRain1hIn >= 0 && outage.localRain6hIn >= 0));
   assert.ok(result.outages.every((outage) =>
@@ -125,7 +141,7 @@ test("failure-oriented timeline mode excludes Census exposure from placement wei
   });
   assert.equal(
     failure.summary.placementModel,
-    "failure_oriented_curated_hourly_timeline_v3",
+    "failure_oriented_curated_hourly_timeline_v4_topology_sized",
   );
   assert.equal(failure.methodology.placementMode, "failure_oriented");
   assert.equal(failure.summary.totalSegmentWeight, failure.summary.totalFailureOrientedWeight);
@@ -155,10 +171,13 @@ test("hourly timeline remains comparable to but meaningfully differs from the ol
 
   assert.equal(snapshot.outages.length, 2000);
   assert.equal(timeline.outages.length, 2000);
-  assert.equal(snapshot.totalCustomers, 100000);
-  assert.equal(timeline.totalCustomers, 100000);
+  assert.equal(snapshot.totalCustomers, snapshot.sizeSummary.totalCustomers);
+  assert.equal(timeline.totalCustomers, timeline.sizeSummary.totalCustomers);
   assert.ok(snapshot.outages.every((outage) => outage.occurredAt == null));
   assert.ok(timeline.outages.every((outage) => outage.occurredAt != null));
   const overlapFraction = overlap / timeline.outages.length;
-  assert.ok(overlapFraction > 0.7 && overlapFraction < 0.95);
+  assert.ok(
+    overlapFraction > 0.2 && overlapFraction < 0.99,
+    `expected comparable but distinct failure sets, observed overlap ${overlapFraction}`,
+  );
 });

@@ -18,14 +18,20 @@
   "use strict";
 
   const SCHEMA_VERSION = 3;
+  const OUTAGE_SCENARIO_VERSION = 4;
+  const LEGACY_CUSTOMERS_PER_OUTAGE = 50;
   const POPULATION_TO_CUSTOMER_RATIO = 1633000 / 3605944;
   const EARTH_RADIUS_KM = 6371.0088;
+  const NETWORK_TOPOLOGY_VERSION = 1;
+  const CUSTOMER_ALLOCATION_VERSION = 1;
+  const LATERAL_ATTACHMENT_TOLERANCE_KM = 0.05;
+  const CUSTOMER_ALLOCATION_NEARBY_LATERALS = 8;
+  const CUSTOMER_ALLOCATION_DISTANCE_FLOOR_KM = 0.25;
 
   const DEFAULT_CONFIG = Object.freeze({
     stormId: "isaias_2020",
     seed: 42,
     nOutages: 2000,
-    customersPerOutage: 50,
     windThresholdMph: 35,
     windExcessScaleMph: 25,
     windExponent: 2,
@@ -45,13 +51,51 @@
     // sensitivity results rather than represented as a calibrated constant.
     gaussianBandwidthKm: 10,
     placementMode: "impact_weighted",
-    candidateSegmentLengthKm: 1,
+    candidateSegmentLengthKm: 0.25,
     lineIntegrationStepKm: 0.25,
-    // Neutral type multipliers. Non-neutral values require an explicit
-    // sensitivity scenario or empirical calibration.
-    feederSusceptibility: 1,
+    // Component weights frozen by the 2026-08-13 D.P.U. 24-41 calibration.
+    feederSusceptibility: 0.1,
     lateralSusceptibility: 1,
+    serviceFailureWeight: 0.75,
+    serviceGroupMaximumCustomers: 15,
   });
+
+  // A compact, deterministic partition of direct lateral load. The pattern is
+  // repeated as needed, with a segment-keyed starting point for the final
+  // partial cycle. It supplies the small-load resolution missing between an
+  // individual account and a whole lateral subtree without sampling a job size
+  // from the DPU target during a simulation run.
+  const CUSTOMER_LOAD_GROUP_PATTERN = Object.freeze([
+    1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 5, 8, 12, 15,
+  ]);
+
+  const DEFAULT_CUSTOMER_SIZING_CONFIG = Object.freeze({
+    // Relative total failure mass for compact customer groups attached to each
+    // customer-bearing segment. Frozen by the D.P.U. 24-41 calibration.
+    serviceFailureWeight: 0.75,
+    // Direct accounts are partitioned into disjoint small load groups. This is
+    // a generic network-resolution layer; it does not assert an equipment or
+    // damage type for each group.
+    serviceGroupMaximumCustomers: 15,
+  });
+
+  const DPU31_SIZE_TARGET = Object.freeze([
+    [1, 2, 0.2170803533866218, 0.001686164302986733],
+    [2, 3, 0.0344972654606647, 0.0005359126854453957],
+    [3, 5, 0.06226335717290703, 0.0017155741454806875],
+    [5, 8, 0.06436684896928901, 0.002940984249395464],
+    [8, 16, 0.10980227177114009, 0.009460166002222077],
+    [16, 32, 0.11695414387883887, 0.02059669302659957],
+    [32, 64, 0.11358855700462768, 0.04032742957976603],
+    [64, 128, 0.09676062263357173, 0.06828311875040848],
+    [128, 256, 0.06184265881363063, 0.08714789883014182],
+    [256, 512, 0.052166596550273454, 0.14307561597281224],
+    [512, 1024, 0.04080774084981069, 0.23145872818770016],
+    [1024, 2048, 0.023979806478754733, 0.26758381805110776],
+    [2048, 4096, 0.005889777029869584, 0.1251878962159336],
+  ].map(([lo, hi, jobShare, customerShare]) => Object.freeze({
+    lo, hi, jobShare, customerShare,
+  })));
 
   class InputValidationError extends Error {
     constructor(message) {
@@ -79,6 +123,8 @@
     line_integration_step_km: "lineIntegrationStepKm",
     feeder_susceptibility: "feederSusceptibility",
     lateral_susceptibility: "lateralSusceptibility",
+    service_failure_weight: "serviceFailureWeight",
+    service_group_maximum_customers: "serviceGroupMaximumCustomers",
   });
 
   function finiteNumber(value, label) {
@@ -105,6 +151,14 @@
     const normalized = {};
     for (const [key, value] of Object.entries(input)) {
       const normalizedKey = CONFIG_ALIASES[key] || key;
+      if (normalizedKey === "customersPerOutage") {
+        if (value !== LEGACY_CUSTOMERS_PER_OUTAGE) {
+          throw new InputValidationError(
+            "customersPerOutage is a deprecated compatibility field and must be 50 when present; topology sizing determines production counts",
+          );
+        }
+        continue;
+      }
       if (!Object.prototype.hasOwnProperty.call(DEFAULT_CONFIG, normalizedKey)) {
         throw new InputValidationError(`unknown configuration field: ${key}`);
       }
@@ -121,10 +175,6 @@
     }
     integer(config.seed, "seed");
     integer(config.nOutages, "nOutages", 1);
-    integer(config.customersPerOutage, "customersPerOutage", 1);
-    if (config.customersPerOutage !== 50) {
-      throw new InputValidationError("generated outages must represent exactly 50 customers");
-    }
     for (const key of ["windThresholdMph", "rainCoefficient", "ruralBaselineFraction"]) {
       if (finiteNumber(config[key], key) < 0) {
         throw new InputValidationError(`${key} must be >= 0`);
@@ -142,6 +192,18 @@
     }
     if (finiteNumber(config.customerSmoothingKm, "customerSmoothingKm") < 0) {
       throw new InputValidationError("customerSmoothingKm must be >= 0");
+    }
+    if (finiteNumber(config.serviceFailureWeight, "serviceFailureWeight") < 0) {
+      throw new InputValidationError("serviceFailureWeight must be >= 0");
+    }
+    if (integer(
+      config.serviceGroupMaximumCustomers,
+      "serviceGroupMaximumCustomers",
+      1,
+    ) !== 15) {
+      throw new InputValidationError(
+        "serviceGroupMaximumCustomers currently supports the calibrated value 15",
+      );
     }
     if (config.windThresholdMph >= 250) {
       throw new InputValidationError("windThresholdMph must be within [0, 250)");
@@ -1059,6 +1121,37 @@
     };
   }
 
+  function nearestPointOnPath(coordinates, point) {
+    const geometry = pathGeometry(coordinates);
+    let best = null;
+    for (let index = 0; index < coordinates.length - 1; index += 1) {
+      const start = coordinates[index];
+      const end = coordinates[index + 1];
+      const referenceLatitude = (start[1] + end[1] + point[1]) / 3 * Math.PI / 180;
+      const longitudeKm = 111.320 * Math.max(1e-9, Math.cos(referenceLatitude));
+      const latitudeKm = 110.574;
+      const dx = (end[0] - start[0]) * longitudeKm;
+      const dy = (end[1] - start[1]) * latitudeKm;
+      const px = (point[0] - start[0]) * longitudeKm;
+      const py = (point[1] - start[1]) * latitudeKm;
+      const lengthSquared = dx * dx + dy * dy;
+      const fraction = Math.max(0, Math.min(1, lengthSquared > 0
+        ? (px * dx + py * dy) / lengthSquared
+        : 0));
+      const projected = [
+        start[0] + (end[0] - start[0]) * fraction,
+        start[1] + (end[1] - start[1]) * fraction,
+      ];
+      const distanceKm = haversineKm(projected, point);
+      const chainageKm = geometry.cumulativeKm[index]
+        + (geometry.cumulativeKm[index + 1] - geometry.cumulativeKm[index]) * fraction;
+      if (!best || distanceKm < best.distanceKm) {
+        best = { projected, distanceKm, chainageKm, sourceSegmentIndex: index };
+      }
+    }
+    return best;
+  }
+
   function pointAlongPath(pathOrCoordinates, fraction) {
     const geometry = Array.isArray(pathOrCoordinates)
       ? pathGeometry(pathOrCoordinates)
@@ -1188,21 +1281,62 @@
     if (!network || !Array.isArray(network.feeders) || !Array.isArray(network.laterals)) {
       throw new InputValidationError("network must contain feeders and laterals arrays");
     }
-    const feeders = network.feeders.map((feeder, fi) => ({
-      fi,
-      feederId: integer(feeder.feederId ?? feeder.feeder_id ?? fi, `feeders[${fi}].feederId`, 0),
-      subId: integer(feeder.subId ?? feeder.sub_id ?? feeder.subIdx ?? 0, `feeders[${fi}].subId`, 0),
-      coordinates: (feeder.coordinates || feeder.pts || []).map((point, index) =>
+    const substations = Array.isArray(network.substations)
+      ? network.substations.map((substation, index) => {
+        const subId = integer(
+          substation.subId ?? substation.sub_id ?? index,
+          `substations[${index}].subId`,
+          0,
+        );
+        const coordinateValue = substation.coordinate ?? substation.coordinates;
+        const hasLatitude = substation.lat !== undefined || substation.latitude !== undefined;
+        const hasLongitude = substation.lon !== undefined || substation.longitude !== undefined;
+        if (hasLatitude !== hasLongitude) {
+          throw new InputValidationError(
+            `substations[${index}] must provide both latitude and longitude`,
+          );
+        }
+        const coordinate = coordinateValue !== undefined
+          ? assertCoordinate(coordinateValue, `substations[${index}].coordinate`)
+          : hasLatitude
+            ? assertCoordinate([
+              substation.lon ?? substation.longitude,
+              substation.lat ?? substation.latitude,
+            ], `substations[${index}]`)
+            : null;
+        return {
+          subId,
+          name: String(substation.name ?? `Substation ${subId}`),
+          coordinate,
+        };
+      })
+      : [];
+    if (new Set(substations.map((substation) => substation.subId)).size !== substations.length) {
+      throw new InputValidationError("substation subId values must be unique");
+    }
+    const feeders = network.feeders.map((feeder, fi) => {
+      const coordinates = (feeder.coordinates || feeder.pts || []).map((point, index) =>
         feeder.coordinates
           ? assertCoordinate(point, `feeders[${fi}].coordinates[${index}]`)
-          : assertCoordinate([point[1], point[0]], `feeders[${fi}].pts[${index}]`)),
-    }));
+          : assertCoordinate([point[1], point[0]], `feeders[${fi}].pts[${index}]`));
+      if (coordinates.length < 2) {
+        throw new InputValidationError(`feeder ${fi} needs at least two points`);
+      }
+      if (pathGeometry(coordinates).lengthKm <= 0) {
+        throw new InputValidationError(`feeder ${fi} must have positive length`);
+      }
+      return {
+        fi,
+        feederId: integer(feeder.feederId ?? feeder.feeder_id ?? fi, `feeders[${fi}].feederId`, 0),
+        subId: integer(feeder.subId ?? feeder.sub_id ?? feeder.subIdx ?? 0, `feeders[${fi}].subId`, 0),
+        coordinates,
+      };
+    });
     if (new Set(feeders.map((feeder) => feeder.feederId)).size !== feeders.length) {
       throw new InputValidationError("feederId values must be unique");
     }
-    if (Array.isArray(network.substations) && network.substations.length) {
-      const substationIds = new Set(network.substations.map((substation, index) =>
-        integer(substation.subId ?? substation.sub_id ?? index, `substations[${index}].subId`, 0)));
+    if (substations.length) {
+      const substationIds = new Set(substations.map((substation) => substation.subId));
       for (const feeder of feeders) {
         if (!substationIds.has(feeder.subId)) {
           throw new InputValidationError(`feeder ${feeder.feederId} references missing substation ${feeder.subId}`);
@@ -1214,28 +1348,682 @@
       const feederReference = integer(lateral.feederId ?? lateral.feeder_id ?? lateral.feederIdx, `laterals[${li}].feederId`, 0);
       const feeder = feederById.get(feederReference) || feeders[feederReference];
       if (!feeder) throw new InputValidationError(`laterals[${li}] references missing feeder ${feederReference}`);
+      const coordinates = (lateral.coordinates || lateral.pts || []).map((point, index) =>
+        lateral.coordinates
+          ? assertCoordinate(point, `laterals[${li}].coordinates[${index}]`)
+          : assertCoordinate([point[1], point[0]], `laterals[${li}].pts[${index}]`));
+      if (coordinates.length < 2) {
+        throw new InputValidationError(`lateral ${li} needs at least two points`);
+      }
+      if (pathGeometry(coordinates).lengthKm <= 0) {
+        throw new InputValidationError(`lateral ${li} must have positive length`);
+      }
+      const feederGeometry = pathGeometry(feeder.coordinates);
+      const anchorVertexValue = lateral.feederAnchorVertexIndex
+        ?? lateral.feeder_anchor_vertex_index
+        ?? lateral.feederAnchorIndex
+        ?? lateral.feeder_anchor_index;
+      const anchorChainageValue = lateral.feederAnchorChainageKm
+        ?? lateral.feeder_anchor_chainage_km;
+      let feederAnchorVertexIndex = null;
+      let feederAnchorChainageKm = null;
+      let attachmentMethod;
+
+      if (anchorVertexValue !== undefined && anchorVertexValue !== null) {
+        feederAnchorVertexIndex = integer(
+          anchorVertexValue,
+          `laterals[${li}].feederAnchorVertexIndex`,
+          0,
+        );
+        if (feederAnchorVertexIndex >= feeder.coordinates.length) {
+          throw new InputValidationError(
+            `laterals[${li}].feederAnchorVertexIndex references a missing feeder vertex`,
+          );
+        }
+        feederAnchorChainageKm = feederGeometry.cumulativeKm[feederAnchorVertexIndex];
+        attachmentMethod = "explicit_feeder_vertex";
+      }
+
+      if (anchorChainageValue !== undefined && anchorChainageValue !== null) {
+        const explicitChainage = finiteNumber(
+          anchorChainageValue,
+          `laterals[${li}].feederAnchorChainageKm`,
+        );
+        if (explicitChainage < 0 || explicitChainage > feederGeometry.lengthKm + 1e-9) {
+          throw new InputValidationError(
+            `laterals[${li}].feederAnchorChainageKm is outside its feeder`,
+          );
+        }
+        if (feederAnchorChainageKm !== null
+            && Math.abs(feederAnchorChainageKm - explicitChainage) > 1e-6) {
+          throw new InputValidationError(
+            `laterals[${li}] feeder anchor vertex and chainage disagree`,
+          );
+        }
+        feederAnchorChainageKm = Math.min(feederGeometry.lengthKm, explicitChainage);
+        attachmentMethod = feederAnchorVertexIndex === null
+          ? "explicit_feeder_chainage"
+          : "explicit_feeder_vertex_and_chainage";
+      }
+
+      if (feederAnchorChainageKm === null) {
+        const inferred = nearestPointOnPath(feeder.coordinates, coordinates[0]);
+        if (!inferred) {
+          throw new InputValidationError(`laterals[${li}] cannot attach to a zero-length feeder`);
+        }
+        feederAnchorChainageKm = inferred.chainageKm;
+        attachmentMethod = "inferred_from_lateral_origin";
+      }
+
+      const feederAnchorCoordinate = pointAlongPath(
+        feederGeometry,
+        feederGeometry.lengthKm > 0 ? feederAnchorChainageKm / feederGeometry.lengthKm : 0,
+      );
+      const feederAttachmentDistanceKm = haversineKm(
+        feederAnchorCoordinate,
+        coordinates[0],
+      );
+      if (feederAttachmentDistanceKm > LATERAL_ATTACHMENT_TOLERANCE_KM) {
+        throw new InputValidationError(
+          `laterals[${li}] origin is ${feederAttachmentDistanceKm.toFixed(3)} km from its feeder anchor`,
+        );
+      }
+
       return {
         li,
         lateralId: integer(lateral.lateralId ?? lateral.lateral_id ?? li, `laterals[${li}].lateralId`, 0),
         feeder,
-        coordinates: (lateral.coordinates || lateral.pts || []).map((point, index) =>
-          lateral.coordinates
-            ? assertCoordinate(point, `laterals[${li}].coordinates[${index}]`)
-            : assertCoordinate([point[1], point[0]], `laterals[${li}].pts[${index}]`)),
+        coordinates,
+        feederAnchorVertexIndex,
+        feederAnchorChainageKm,
+        feederAnchorCoordinate,
+        feederAttachmentDistanceKm,
+        attachmentMethod,
       };
     });
     if (new Set(laterals.map((lateral) => lateral.lateralId)).size !== laterals.length) {
       throw new InputValidationError("lateralId values must be unique");
     }
-    for (const [label, lines] of [["feeder", feeders], ["lateral", laterals]]) {
-      for (const line of lines) {
-        if (line.coordinates.length < 2) throw new InputValidationError(`${label} ${line.fi ?? line.li} needs at least two points`);
-      }
-    }
-    return { feeders, laterals };
+    return { substations, feeders, laterals };
   }
 
-  function buildWeightedNetworkSegments(network, customerSurface, weatherSurface, impactSurface, options = {}) {
+  function buildRootedNetworkTopology(network, options = {}) {
+    const candidateSegmentLengthKm = options.candidateSegmentLengthKm
+      ?? DEFAULT_CONFIG.candidateSegmentLengthKm;
+    if (finiteNumber(candidateSegmentLengthKm, "candidateSegmentLengthKm") <= 0) {
+      throw new InputValidationError("candidateSegmentLengthKm must be positive");
+    }
+    const normalized = normalizeNetwork(network);
+    const segments = [];
+    const feederSegmentsById = new Map();
+
+    function topologySegment(kind, line, feeder, geometry, parentSegmentId) {
+      const lineId = kind === "feeder" ? feeder.feederId : line.lateralId;
+      const segmentId = `${kind}:${lineId}:${geometry.segmentIndex}`;
+      return {
+        segmentId,
+        topologyVersion: NETWORK_TOPOLOGY_VERSION,
+        componentClass: kind,
+        networkKind: kind,
+        fi: feeder.fi,
+        li: kind === "lateral" ? line.li : null,
+        segmentIndex: geometry.segmentIndex,
+        feederId: feeder.feederId,
+        lateralId: kind === "lateral" ? line.lateralId : null,
+        subId: feeder.subId,
+        parentSegmentId,
+        childSegmentIds: [],
+        topologyRootId: null,
+        topologyDepth: null,
+        subtreeStart: null,
+        subtreeEnd: null,
+        start: geometry.start,
+        end: geometry.end,
+        midpoint: geometry.midpoint,
+        pathCoordinates: geometry.pathCoordinates,
+        lengthKm: geometry.lengthKm,
+        startChainageKm: geometry.startChainageKm,
+        endChainageKm: geometry.endChainageKm,
+        feederAnchorChainageKm: kind === "lateral" ? line.feederAnchorChainageKm : null,
+        feederAttachmentDistanceKm:
+          kind === "lateral" ? line.feederAttachmentDistanceKm : null,
+        attachmentMethod: kind === "lateral" ? line.attachmentMethod : null,
+      };
+    }
+
+    for (const feeder of normalized.feeders) {
+      const standardized = standardizeLineSegments(
+        feeder.coordinates,
+        candidateSegmentLengthKm,
+      );
+      const feederSegments = standardized.map((geometry, index) =>
+        topologySegment(
+          "feeder",
+          feeder,
+          feeder,
+          geometry,
+          index === 0 ? null : `feeder:${feeder.feederId}:${index - 1}`,
+        ));
+      if (!feederSegments.length) {
+        throw new InputValidationError(`feeder ${feeder.feederId} has no topology segments`);
+      }
+      feederSegmentsById.set(feeder.feederId, feederSegments);
+      segments.push(...feederSegments);
+    }
+
+    function feederParentAtChainage(feederSegments, chainageKm) {
+      for (const segment of feederSegments) {
+        if (chainageKm <= segment.endChainageKm + 1e-9) return segment;
+      }
+      return feederSegments[feederSegments.length - 1];
+    }
+
+    for (const lateral of normalized.laterals) {
+      const standardized = standardizeLineSegments(
+        lateral.coordinates,
+        candidateSegmentLengthKm,
+      );
+      if (!standardized.length) {
+        throw new InputValidationError(`lateral ${lateral.lateralId} has no topology segments`);
+      }
+      const feederSegments = feederSegmentsById.get(lateral.feeder.feederId);
+      const feederParent = feederParentAtChainage(
+        feederSegments,
+        lateral.feederAnchorChainageKm,
+      );
+      const lateralSegments = standardized.map((geometry, index) =>
+        topologySegment(
+          "lateral",
+          lateral,
+          lateral.feeder,
+          geometry,
+          index === 0
+            ? feederParent.segmentId
+            : `lateral:${lateral.lateralId}:${index - 1}`,
+        ));
+      segments.push(...lateralSegments);
+    }
+
+    const segmentById = new Map();
+    for (const segment of segments) {
+      if (segmentById.has(segment.segmentId)) {
+        throw new InputValidationError(`duplicate topology segment ID ${segment.segmentId}`);
+      }
+      segmentById.set(segment.segmentId, segment);
+    }
+    for (const segment of segments) {
+      if (segment.parentSegmentId === null) continue;
+      const parent = segmentById.get(segment.parentSegmentId);
+      if (!parent) {
+        throw new InputValidationError(
+          `topology segment ${segment.segmentId} references missing parent ${segment.parentSegmentId}`,
+        );
+      }
+      if (parent.subId !== segment.subId || parent.feederId !== segment.feederId) {
+        throw new InputValidationError(
+          `topology segment ${segment.segmentId} crosses feeder or substation ownership`,
+        );
+      }
+      parent.childSegmentIds.push(segment.segmentId);
+    }
+    for (const segment of segments) segment.childSegmentIds.sort();
+
+    const roots = segments
+      .filter((segment) => segment.parentSegmentId === null)
+      .map((segment) => segment.segmentId)
+      .sort();
+    const visited = new Set();
+    let preorder = 0;
+    let maximumDepth = 0;
+    for (const rootId of roots) {
+      const stack = [{ segmentId: rootId, depth: 0, exiting: false }];
+      while (stack.length) {
+        const frame = stack.pop();
+        const segment = segmentById.get(frame.segmentId);
+        if (frame.exiting) {
+          segment.subtreeEnd = preorder - 1;
+          continue;
+        }
+        if (visited.has(frame.segmentId)) {
+          throw new InputValidationError(`network topology contains a cycle at ${frame.segmentId}`);
+        }
+        visited.add(frame.segmentId);
+        segment.topologyRootId = rootId;
+        segment.topologyDepth = frame.depth;
+        segment.subtreeStart = preorder;
+        preorder += 1;
+        maximumDepth = Math.max(maximumDepth, frame.depth);
+        stack.push({ segmentId: frame.segmentId, depth: frame.depth, exiting: true });
+        for (let index = segment.childSegmentIds.length - 1; index >= 0; index -= 1) {
+          stack.push({
+            segmentId: segment.childSegmentIds[index],
+            depth: frame.depth + 1,
+            exiting: false,
+          });
+        }
+      }
+    }
+    if (visited.size !== segments.length) {
+      throw new InputValidationError(
+        `network topology is not a rooted forest: reached ${visited.size} of ${segments.length} segments`,
+      );
+    }
+
+    const inferredLateralAttachments = normalized.laterals.filter(
+      (lateral) => lateral.attachmentMethod === "inferred_from_lateral_origin",
+    ).length;
+    return {
+      schema: "connecticut_rooted_network_topology_v1",
+      topologyVersion: NETWORK_TOPOLOGY_VERSION,
+      orientation: "feeder and lateral coordinate order is upstream to downstream",
+      normalizedNetwork: normalized,
+      roots,
+      segments,
+      summary: {
+        roots: roots.length,
+        segments: segments.length,
+        feederSegments: segments.filter((segment) => segment.networkKind === "feeder").length,
+        lateralSegments: segments.filter((segment) => segment.networkKind === "lateral").length,
+        maximumDepth,
+        explicitLateralAttachments: normalized.laterals.length - inferredLateralAttachments,
+        inferredLateralAttachments,
+        maximumLateralAttachmentDistanceKm: normalized.laterals.reduce(
+          (maximum, lateral) => Math.max(maximum, lateral.feederAttachmentDistanceKm),
+          0,
+        ),
+      },
+    };
+  }
+
+  function customerTerritoryAnchors(topology) {
+    const anchors = [];
+    const substationsById = new Map(
+      topology.normalizedNetwork.substations.map((substation) => [substation.subId, substation]),
+    );
+    const rootSegments = topology.roots.map((rootId) =>
+      topology.segments.find((segment) => segment.segmentId === rootId));
+    const substationIds = [...new Set(
+      topology.segments.map((segment) => segment.subId),
+    )].sort((left, right) => left - right);
+    for (const subId of substationIds) {
+      const substation = substationsById.get(subId);
+      if (substation && substation.coordinate) {
+        anchors.push({ subId, coordinate: substation.coordinate, source: "substation_coordinate" });
+        continue;
+      }
+      const roots = rootSegments
+        .filter((segment) => segment.subId === subId)
+        .sort((left, right) => left.segmentId.localeCompare(right.segmentId));
+      for (const root of roots) {
+        anchors.push({
+          subId,
+          coordinate: root.start,
+          source: "feeder_root_fallback",
+          rootId: root.segmentId,
+        });
+      }
+    }
+    if (!anchors.length) {
+      throw new InputValidationError("network topology has no customer-territory anchors");
+    }
+    return anchors;
+  }
+
+  function nearestStableCandidate(candidates, point, idKey, distanceAndPoint) {
+    let best = null;
+    for (const candidate of candidates) {
+      const measured = distanceAndPoint(candidate, point);
+      if (!measured || !Number.isFinite(measured.distanceKm)) continue;
+      const candidateId = String(candidate[idKey]);
+      if (!best
+          || measured.distanceKm < best.distanceKm - 1e-12
+          || (Math.abs(measured.distanceKm - best.distanceKm) <= 1e-12
+            && candidateId < best.candidateId)) {
+        best = { candidate, candidateId, ...measured };
+      }
+    }
+    return best;
+  }
+
+  function integerizeLoadPoints(loadPoints, targetCustomerAccounts) {
+    let floorTotal = 0;
+    for (const loadPoint of loadPoints) {
+      loadPoint.customerAccounts = Math.floor(loadPoint.estimatedCustomerAccounts);
+      loadPoint.roundingRemainder =
+        loadPoint.estimatedCustomerAccounts - loadPoint.customerAccounts;
+      floorTotal += loadPoint.customerAccounts;
+    }
+    const remaining = targetCustomerAccounts - floorTotal;
+    if (remaining < 0 || remaining > loadPoints.length) {
+      throw new InputValidationError(
+        `cannot conserve ${targetCustomerAccounts} customer accounts by largest-remainder rounding`,
+      );
+    }
+    const ranked = [...loadPoints].sort((left, right) =>
+      right.roundingRemainder - left.roundingRemainder
+        || left.sourceRow - right.sourceRow
+        || left.sourceColumn - right.sourceColumn
+        || left.loadPointId.localeCompare(right.loadPointId));
+    for (let index = 0; index < remaining; index += 1) {
+      ranked[index].customerAccounts += 1;
+    }
+  }
+
+  function weightedDistanceQuantile(loadPoints, probability) {
+    const ranked = loadPoints
+      .filter((loadPoint) => loadPoint.customerAccounts > 0)
+      .sort((left, right) => left.allocationDistanceKm - right.allocationDistanceKm
+        || left.loadPointId.localeCompare(right.loadPointId));
+    const total = ranked.reduce((sum, loadPoint) => sum + loadPoint.customerAccounts, 0);
+    const threshold = total * probability;
+    let cumulative = 0;
+    for (const loadPoint of ranked) {
+      cumulative += loadPoint.customerAccounts;
+      if (cumulative >= threshold) return loadPoint.allocationDistanceKm;
+    }
+    return ranked.length ? ranked[ranked.length - 1].allocationDistanceKm : 0;
+  }
+
+  function allocateCustomerAccountsToTopology(topology, customerSurface) {
+    if (!topology || topology.schema !== "connecticut_rooted_network_topology_v1"
+        || !Array.isArray(topology.segments) || !topology.segments.length) {
+      throw new InputValidationError("customer allocation requires rooted network topology v1");
+    }
+    if (!customerSurface || typeof customerSurface !== "object") {
+      throw new InputValidationError("customer allocation requires a customer exposure surface");
+    }
+    const latitudes = validateCoordinates(customerSurface.latitudes, "customer latitudes");
+    const longitudes = validateCoordinates(customerSurface.longitudes, "customer longitudes");
+    const rows = latitudes.length;
+    const columns = longitudes.length;
+    const rawCustomerAccounts = validateGrid(
+      customerSurface.rawCustomerAccounts,
+      rows,
+      columns,
+      "rawCustomerAccounts",
+      [0, Number.MAX_VALUE],
+    );
+    const mask = customerSurface.connecticutMask;
+    if (!Array.isArray(mask) || mask.length !== rows
+        || mask.some((row) => !Array.isArray(row) || row.length !== columns
+          || row.some((value) => typeof value !== "boolean"))) {
+      throw new InputValidationError(`connecticutMask shape must be ${rows} x ${columns}`);
+    }
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        if (!mask[row][column] && rawCustomerAccounts[row][column] > 1e-9) {
+          throw new InputValidationError(
+            `rawCustomerAccounts[${row}][${column}] is positive outside Connecticut`,
+          );
+        }
+      }
+    }
+
+    const estimatedCustomerAccounts = gridTotal(rawCustomerAccounts);
+    const targetCustomerAccounts = Math.round(estimatedCustomerAccounts);
+    if (targetCustomerAccounts <= 0) {
+      throw new InputValidationError("customer allocation surface has no customer accounts");
+    }
+    const anchors = customerTerritoryAnchors(topology);
+    const segmentsBySubstation = new Map();
+    const lateralSegmentsById = new Map();
+    for (const segment of topology.segments) {
+      if (!segmentsBySubstation.has(segment.subId)) {
+        segmentsBySubstation.set(segment.subId, { lateral: [], feeder: [] });
+      }
+      segmentsBySubstation.get(segment.subId)[segment.networkKind].push(segment);
+      if (segment.networkKind === "lateral") {
+        if (!lateralSegmentsById.has(segment.lateralId)) {
+          lateralSegmentsById.set(segment.lateralId, []);
+        }
+        lateralSegmentsById.get(segment.lateralId).push(segment);
+      }
+    }
+    for (const candidates of segmentsBySubstation.values()) {
+      candidates.lateral.sort((left, right) => left.segmentId.localeCompare(right.segmentId));
+      candidates.feeder.sort((left, right) => left.segmentId.localeCompare(right.segmentId));
+    }
+    for (const segments of lateralSegmentsById.values()) {
+      segments.sort((left, right) => left.segmentIndex - right.segmentIndex);
+    }
+
+    const loadPoints = [];
+    let sourcePositiveGridNodes = 0;
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        const accounts = rawCustomerAccounts[row][column];
+        if (!mask[row][column] || accounts <= 0) continue;
+        sourcePositiveGridNodes += 1;
+        const coordinate = [longitudes[column], latitudes[row]];
+        const territory = nearestStableCandidate(
+          anchors,
+          coordinate,
+          "subId",
+          (anchor, point) => ({
+            distanceKm: haversineKm(anchor.coordinate, point),
+            projected: anchor.coordinate,
+          }),
+        );
+        if (!territory) {
+          throw new InputValidationError(`customer grid node ${row},${column} has no territory`);
+        }
+        const territorySegments = segmentsBySubstation.get(territory.candidate.subId);
+        if (!territorySegments) {
+          throw new InputValidationError(
+            `customer territory ${territory.candidate.subId} has no network segments`,
+          );
+        }
+        const attachments = [];
+        if (territorySegments.lateral.length) {
+          const nearestByLateral = new Map();
+          for (const segment of territorySegments.lateral) {
+            const measured = nearestPointOnPath(segment.pathCoordinates, coordinate);
+            const prior = nearestByLateral.get(segment.lateralId);
+            if (!prior
+                || measured.distanceKm < prior.distanceKm - 1e-12
+                || (Math.abs(measured.distanceKm - prior.distanceKm) <= 1e-12
+                  && segment.segmentId < prior.candidate.segmentId)) {
+              nearestByLateral.set(segment.lateralId, {
+                candidate: segment,
+                candidateId: segment.segmentId,
+                ...measured,
+              });
+            }
+          }
+          attachments.push(...[...nearestByLateral.values()].sort((left, right) =>
+            left.distanceKm - right.distanceKm
+              || left.candidateId.localeCompare(right.candidateId)).slice(
+            0,
+            CUSTOMER_ALLOCATION_NEARBY_LATERALS,
+          ));
+        } else {
+          const feederAttachment = nearestStableCandidate(
+            territorySegments.feeder,
+            coordinate,
+            "segmentId",
+            (segment, point) => nearestPointOnPath(segment.pathCoordinates, point),
+          );
+          if (feederAttachment) attachments.push(feederAttachment);
+        }
+        if (!attachments.length) {
+          throw new InputValidationError(`customer grid node ${row},${column} has no attachment`);
+        }
+        const inverseDistanceWeights = attachments.map((attachment) =>
+          1 / Math.max(
+            CUSTOMER_ALLOCATION_DISTANCE_FLOOR_KM,
+            attachment.distanceKm,
+          ) ** 2);
+        const inverseDistanceTotal = inverseDistanceWeights.reduce(
+          (sum, value) => sum + value,
+          0,
+        );
+        for (let index = 0; index < attachments.length; index += 1) {
+          const attachment = attachments[index];
+          const attachmentAccounts=
+            accounts * inverseDistanceWeights[index] / inverseDistanceTotal;
+          const servingSegments=attachment.candidate.networkKind === "lateral"
+            ? lateralSegmentsById.get(attachment.candidate.lateralId)
+            : [attachment.candidate];
+          const servingLengthKm=servingSegments.reduce(
+            (sum, segment) => sum + segment.lengthKm,
+            0,
+          );
+          for (const servingSegment of servingSegments) {
+            const measured=servingSegment.segmentId === attachment.candidate.segmentId
+              ? attachment
+              : nearestPointOnPath(servingSegment.pathCoordinates, coordinate);
+            loadPoints.push({
+              loadPointId: `grid:${row}:${column}:${servingSegment.segmentId}`,
+              sourceRow: row,
+              sourceColumn: column,
+              latitude: coordinate[1],
+              longitude: coordinate[0],
+              estimatedCustomerAccounts:
+                attachmentAccounts * servingSegment.lengthKm / servingLengthKm,
+              customerAccounts: 0,
+              roundingRemainder: 0,
+              subId: territory.candidate.subId,
+              territoryAnchorSource: territory.candidate.source,
+              attachedSegmentId: servingSegment.segmentId,
+              attachedComponentClass: servingSegment.networkKind,
+              attachmentCoordinate: measured.projected,
+              allocationDistanceKm: measured.distanceKm,
+            });
+          }
+        }
+      }
+    }
+    if (!loadPoints.length) {
+      throw new InputValidationError("customer allocation surface has no positive in-state grid nodes");
+    }
+    integerizeLoadPoints(loadPoints, targetCustomerAccounts);
+
+    const segments = topology.segments.map((segment) => ({
+      ...segment,
+      childSegmentIds: [...segment.childSegmentIds],
+      directCustomerAccounts: 0,
+      downstreamCustomerAccounts: 0,
+      directLoadPointCount: 0,
+      downstreamLoadPointCount: 0,
+    }));
+    const segmentById = new Map(segments.map((segment) => [segment.segmentId, segment]));
+    for (const loadPoint of loadPoints) {
+      if (loadPoint.customerAccounts <= 0) continue;
+      const segment = segmentById.get(loadPoint.attachedSegmentId);
+      if (!segment) {
+        throw new InputValidationError(
+          `load point ${loadPoint.loadPointId} references missing segment ${loadPoint.attachedSegmentId}`,
+        );
+      }
+      segment.directCustomerAccounts += loadPoint.customerAccounts;
+      segment.directLoadPointCount += 1;
+    }
+    const postOrder = [...segments].sort((left, right) =>
+      right.topologyDepth - left.topologyDepth
+        || right.subtreeStart - left.subtreeStart);
+    for (const segment of postOrder) {
+      segment.downstreamCustomerAccounts += segment.directCustomerAccounts;
+      segment.downstreamLoadPointCount += segment.directLoadPointCount;
+      if (segment.parentSegmentId !== null) {
+        const parent = segmentById.get(segment.parentSegmentId);
+        if (!parent) {
+          throw new InputValidationError(
+            `customer topology segment ${segment.segmentId} has a missing parent`,
+          );
+        }
+        parent.downstreamCustomerAccounts += segment.downstreamCustomerAccounts;
+        parent.downstreamLoadPointCount += segment.downstreamLoadPointCount;
+      }
+    }
+
+    const rootCustomerAccounts = topology.roots.reduce(
+      (sum, rootId) => sum + segmentById.get(rootId).downstreamCustomerAccounts,
+      0,
+    );
+    const directCustomerAccounts = segments.reduce(
+      (sum, segment) => sum + segment.directCustomerAccounts,
+      0,
+    );
+    if (directCustomerAccounts !== targetCustomerAccounts
+        || rootCustomerAccounts !== targetCustomerAccounts) {
+      throw new InputValidationError(
+        `customer allocation failed conservation: direct=${directCustomerAccounts}, roots=${rootCustomerAccounts}, target=${targetCustomerAccounts}`,
+      );
+    }
+    const materializedLoadPoints = loadPoints.filter(
+      (loadPoint) => loadPoint.customerAccounts > 0,
+    );
+    const weightedDistanceTotal = materializedLoadPoints.reduce(
+      (sum, loadPoint) =>
+        sum + loadPoint.customerAccounts * loadPoint.allocationDistanceKm,
+      0,
+    );
+    const fallbackCustomerAccounts = materializedLoadPoints.reduce(
+      (sum, loadPoint) => sum + (loadPoint.attachedComponentClass === "feeder"
+        ? loadPoint.customerAccounts
+        : 0),
+      0,
+    );
+    return {
+      schema: "connecticut_network_customer_allocation_v1",
+      allocationVersion: CUSTOMER_ALLOCATION_VERSION,
+      sourceTopologySchema: topology.schema,
+      sourceCustomerQuantity: "raw unsmoothed Census-derived customer accounts",
+      integerizationMethod: "largest remainder by source grid node",
+      territoryMethod: "nearest substation coordinate; feeder-root fallback when unavailable",
+      attachmentMethod:
+        "inverse-square allocation among up to eight nearest distinct laterals within territory, then length-proportional spreading along each synthetic lateral; feeder fallback when territory has no laterals",
+      roots: [...topology.roots],
+      segments,
+      loadPoints: materializedLoadPoints,
+      serviceRepresentation: {
+        kind: "integer-multiplicity grid load points",
+        materializedLoadPoints: materializedLoadPoints.length,
+        virtualCustomerAccounts: targetCustomerAccounts,
+        individualServiceObjectsMaterialized: false,
+      },
+      summary: {
+        sourcePositiveGridNodes,
+        fractionalNetworkAttachments: loadPoints.length,
+        maximumNearbyLateralsPerGridNode: CUSTOMER_ALLOCATION_NEARBY_LATERALS,
+        inverseDistanceFloorKm: CUSTOMER_ALLOCATION_DISTANCE_FLOOR_KM,
+        materializedLoadPoints: materializedLoadPoints.length,
+        estimatedCustomerAccounts,
+        targetIntegerCustomerAccounts: targetCustomerAccounts,
+        allocatedCustomerAccounts: directCustomerAccounts,
+        rootDownstreamCustomerAccounts: rootCustomerAccounts,
+        customerBearingSegments: segments.filter(
+          (segment) => segment.directCustomerAccounts > 0,
+        ).length,
+        lateralCustomerAccounts: targetCustomerAccounts - fallbackCustomerAccounts,
+        feederFallbackCustomerAccounts: fallbackCustomerAccounts,
+        meanCustomerWeightedAllocationDistanceKm:
+          weightedDistanceTotal / targetCustomerAccounts,
+        p90CustomerWeightedAllocationDistanceKm:
+          weightedDistanceQuantile(materializedLoadPoints, 0.9),
+        maximumAllocationDistanceKm: materializedLoadPoints.reduce(
+          (maximum, loadPoint) => Math.max(maximum, loadPoint.allocationDistanceKm),
+          0,
+        ),
+        territoryAnchors: anchors.length,
+        substationCoordinateAnchors: anchors.filter(
+          (anchor) => anchor.source === "substation_coordinate",
+        ).length,
+        feederRootFallbackAnchors: anchors.filter(
+          (anchor) => anchor.source === "feeder_root_fallback",
+        ).length,
+      },
+    };
+  }
+
+  function buildWeightedNetworkSegments(
+    network,
+    customerSurface,
+    weatherSurface,
+    impactSurface,
+    options = {},
+    topologyOverride = null,
+  ) {
     const feederSusceptibility = options.feederSusceptibility ?? DEFAULT_CONFIG.feederSusceptibility;
     const lateralSusceptibility = options.lateralSusceptibility ?? DEFAULT_CONFIG.lateralSusceptibility;
     const candidateSegmentLengthKm = options.candidateSegmentLengthKm
@@ -1252,7 +2040,11 @@
     if (!["failure_oriented", "impact_weighted"].includes(placementMode)) {
       throw new InputValidationError("placementMode must be failure_oriented or impact_weighted");
     }
-    const normalized = normalizeNetwork(network);
+    const topology = topologyOverride
+      || buildRootedNetworkTopology(network, { candidateSegmentLengthKm });
+    if (!Array.isArray(topology.segments) || !topology.segments.length) {
+      throw new InputValidationError("network topology override must contain segments");
+    }
     const { latitudes, longitudes } = impactSurface;
     const interpolationGrids = {
       windMph: weatherSurface.windMph,
@@ -1269,14 +2061,15 @@
       throw new InputValidationError("network weighting surfaces must share one grid");
     }
     const segments = [];
-    function addLine(kind, line, feeder, coordinates, susceptibility) {
-      const standardized = standardizeLineSegments(coordinates, candidateSegmentLengthKm);
-      for (const geometry of standardized) {
+    for (const topologySegment of topology.segments) {
+        const susceptibility = topologySegment.networkKind === "feeder"
+          ? feederSusceptibility
+          : lateralSusceptibility;
         const integrated = integrateNamedGridsAlongPath(
           latitudes,
           longitudes,
           interpolationGrids,
-          geometry.path,
+          topologySegment.pathCoordinates,
           lineIntegrationStepKm,
         );
         const failureOrientedWeight = susceptibility * integrated.integrals.hazardIndex;
@@ -1286,23 +2079,8 @@
           ? failureOrientedWeight
           : impactPriorityWeight;
         if (weight <= 0 || !Number.isFinite(weight)) continue;
-        const lineId = kind === "feeder" ? feeder.feederId : line.lateralId;
         segments.push({
-          segmentId: `${kind}:${lineId}:${geometry.segmentIndex}`,
-          networkKind: kind,
-          fi: feeder.fi,
-          li: kind === "lateral" ? line.li : null,
-          segmentIndex: geometry.segmentIndex,
-          feederId: feeder.feederId,
-          lateralId: kind === "lateral" ? line.lateralId : null,
-          subId: feeder.subId,
-          start: geometry.start,
-          end: geometry.end,
-          midpoint: geometry.midpoint,
-          pathCoordinates: geometry.pathCoordinates,
-          lengthKm: geometry.lengthKm,
-          startChainageKm: geometry.startChainageKm,
-          endChainageKm: geometry.endChainageKm,
+          ...topologySegment,
           localWindMph: integrated.means.windMph,
           localRainAccumulationIn: integrated.means.rainAccumulationIn,
           localRainInputKind: weatherSurface.rainInputKind,
@@ -1327,15 +2105,12 @@
           integrationStepKm: lineIntegrationStepKm,
           integrationSampleCount: integrated.samples,
         });
-      }
     }
-    for (const feeder of normalized.feeders) addLine("feeder", feeder, feeder, feeder.coordinates, feederSusceptibility);
-    for (const lateral of normalized.laterals) addLine("lateral", lateral, lateral.feeder, lateral.coordinates, lateralSusceptibility);
     if (!segments.length) throw new InputValidationError("network has no positive-weight segments");
     return segments;
   }
 
-  function buildBasicNetworkSegments(network, options = {}) {
+  function buildBasicNetworkSegments(network, options = {}, topologyOverride = null) {
     const feederSusceptibility = options.feederSusceptibility ?? DEFAULT_CONFIG.feederSusceptibility;
     const lateralSusceptibility = options.lateralSusceptibility ?? DEFAULT_CONFIG.lateralSusceptibility;
     const candidateSegmentLengthKm = options.candidateSegmentLengthKm
@@ -1346,28 +2121,23 @@
     if (candidateSegmentLengthKm <= 0) {
       throw new InputValidationError("candidateSegmentLengthKm must be positive");
     }
-    const normalized = normalizeNetwork(network);
-    const segments = [];
-    function addLine(kind, line, feeder, coordinates, susceptibility) {
-      const standardized = standardizeLineSegments(coordinates, candidateSegmentLengthKm);
-      for (const geometry of standardized) {
-        const lineId = kind === "feeder" ? feeder.feederId : line.lateralId;
-        segments.push({
-          segmentId: `basic:${kind}:${lineId}:${geometry.segmentIndex}`,
-          networkKind: kind,
-          fi: feeder.fi,
-          li: kind === "lateral" ? line.li : null,
-          segmentIndex: geometry.segmentIndex,
-          feederId: feeder.feederId,
-          lateralId: kind === "lateral" ? line.lateralId : null,
-          subId: feeder.subId,
-          start: geometry.start,
-          end: geometry.end,
-          midpoint: geometry.midpoint,
-          pathCoordinates: geometry.pathCoordinates,
-          lengthKm: geometry.lengthKm,
-          startChainageKm: geometry.startChainageKm,
-          endChainageKm: geometry.endChainageKm,
+    const topology = topologyOverride
+      || buildRootedNetworkTopology(network, { candidateSegmentLengthKm });
+    if (!Array.isArray(topology.segments) || !topology.segments.length) {
+      throw new InputValidationError("network topology override must contain segments");
+    }
+    const segments = topology.segments.map((topologySegment) => {
+      const susceptibility = topologySegment.networkKind === "feeder"
+        ? feederSusceptibility
+        : lateralSusceptibility;
+      const prefix = (segmentId) => segmentId === null ? null : `basic:${segmentId}`;
+      return {
+          ...topologySegment,
+          sourceTopologySegmentId: topologySegment.segmentId,
+          segmentId: prefix(topologySegment.segmentId),
+          parentSegmentId: prefix(topologySegment.parentSegmentId),
+          childSegmentIds: topologySegment.childSegmentIds.map(prefix),
+          topologyRootId: prefix(topologySegment.topologyRootId),
           localWindMph: null,
           localRainIn: null,
           localRainAccumulationIn: null,
@@ -1384,12 +2154,9 @@
           impactPriorityWeight: null,
           placementMode: "network_length_only",
           susceptibility,
-          weight: geometry.lengthKm * susceptibility,
-        });
-      }
-    }
-    for (const feeder of normalized.feeders) addLine("feeder", feeder, feeder, feeder.coordinates, feederSusceptibility);
-    for (const lateral of normalized.laterals) addLine("lateral", lateral, lateral.feeder, lateral.coordinates, lateralSusceptibility);
+          weight: topologySegment.lengthKm * susceptibility,
+      };
+    });
     if (!segments.length) throw new InputValidationError("network has no positive-length segments");
     return segments;
   }
@@ -1422,6 +2189,417 @@
   function segmentKeyedUniform(seed, stream, segmentId, counter = 0) {
     const hash = fnv1a32(`${seed}|${stream}|${segmentId}|${counter}`);
     return (hash + 0.5) / 4294967296;
+  }
+
+  class MaximumKeyHeap {
+    constructor() {
+      this.values = [];
+    }
+
+    static comesFirst(left, right) {
+      return left.selectionKey > right.selectionKey
+        || (left.selectionKey === right.selectionKey
+          && left.failureId < right.failureId);
+    }
+
+    push(value) {
+      const values = this.values;
+      values.push(value);
+      let index = values.length - 1;
+      while (index > 0) {
+        const parentIndex = Math.floor((index - 1) / 2);
+        if (MaximumKeyHeap.comesFirst(values[parentIndex], values[index])) break;
+        [values[parentIndex], values[index]] = [values[index], values[parentIndex]];
+        index = parentIndex;
+      }
+    }
+
+    pop() {
+      const values = this.values;
+      if (!values.length) return null;
+      const first = values[0];
+      const last = values.pop();
+      if (values.length) {
+        values[0] = last;
+        let index = 0;
+        while (true) {
+          const leftIndex = index * 2 + 1;
+          const rightIndex = leftIndex + 1;
+          let bestIndex = index;
+          if (leftIndex < values.length
+              && MaximumKeyHeap.comesFirst(values[leftIndex], values[bestIndex])) {
+            bestIndex = leftIndex;
+          }
+          if (rightIndex < values.length
+              && MaximumKeyHeap.comesFirst(values[rightIndex], values[bestIndex])) {
+            bestIndex = rightIndex;
+          }
+          if (bestIndex === index) break;
+          [values[index], values[bestIndex]] = [values[bestIndex], values[index]];
+          index = bestIndex;
+        }
+      }
+      return first;
+    }
+
+    get size() {
+      return this.values.length;
+    }
+  }
+
+  function validateCustomerSizingConfig(input = {}) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      throw new InputValidationError("customer sizing options must be an object");
+    }
+    for (const key of Object.keys(input)) {
+      if (!Object.prototype.hasOwnProperty.call(DEFAULT_CUSTOMER_SIZING_CONFIG, key)) {
+        throw new InputValidationError(`unknown customer sizing option: ${key}`);
+      }
+    }
+    const sizing = { ...DEFAULT_CUSTOMER_SIZING_CONFIG, ...input };
+    if (finiteNumber(sizing.serviceFailureWeight, "serviceFailureWeight") < 0) {
+      throw new InputValidationError("serviceFailureWeight must be >= 0");
+    }
+    if (integer(
+      sizing.serviceGroupMaximumCustomers,
+      "serviceGroupMaximumCustomers",
+      1,
+    ) !== 15) {
+      throw new InputValidationError(
+        "serviceGroupMaximumCustomers currently supports the calibrated value 15",
+      );
+    }
+    return Object.freeze(sizing);
+  }
+
+  function serviceGroupCategories(segment, sizing) {
+    const directCustomers = segment.directCustomerAccounts;
+    if (!Number.isInteger(directCustomers) || directCustomers <= 0
+        || sizing.serviceFailureWeight <= 0) return [];
+
+    const pattern = CUSTOMER_LOAD_GROUP_PATTERN.filter(
+      (customerAccounts) => customerAccounts <= sizing.serviceGroupMaximumCustomers,
+    );
+    const accountsPerCycle = pattern.reduce((sum, value) => sum + value, 0);
+    const categoryCounts = new Map();
+    const addCategory = (customerAccounts, count = 1) => {
+      categoryCounts.set(
+        customerAccounts,
+        (categoryCounts.get(customerAccounts) || 0) + count,
+      );
+    };
+
+    // Materialize counts by size, not individual customer groups. Full cycles
+    // are handled arithmetically so statewide selection remains compact.
+    const fullCycles = Math.floor(directCustomers / accountsPerCycle);
+    if (fullCycles > 0) {
+      for (const customerAccounts of pattern) {
+        addCategory(customerAccounts, fullCycles);
+      }
+    }
+    let remainingCustomers = directCustomers - fullCycles * accountsPerCycle;
+    let patternIndex = fnv1a32(
+      `customer_load_group_partition|${segment.segmentId}`,
+    ) % pattern.length;
+    while (remainingCustomers > 0) {
+      const customerAccounts = Math.min(
+        remainingCustomers,
+        pattern[patternIndex],
+      );
+      addCategory(customerAccounts);
+      remainingCustomers -= customerAccounts;
+      patternIndex = (patternIndex + 1) % pattern.length;
+    }
+
+    const definitions = [...categoryCounts.entries()]
+      .map(([customerAccounts, groupCount]) => ({ customerAccounts, groupCount }))
+      .sort((left, right) => left.customerAccounts - right.customerAccounts);
+    const allocatedCustomers = definitions.reduce(
+      (sum, definition) =>
+        sum + definition.customerAccounts * definition.groupCount,
+      0,
+    );
+    if (allocatedCustomers !== directCustomers) {
+      throw new InputValidationError(
+        `customer load groups on ${segment.segmentId} do not conserve direct accounts`,
+      );
+    }
+    const groupCount = definitions.reduce(
+      (sum, definition) => sum + definition.groupCount,
+      0,
+    );
+    const perGroupWeight = segment.weight * sizing.serviceFailureWeight / groupCount;
+    return [{
+      categoryId: `service:${segment.segmentId}`,
+      attachmentSegment: segment,
+      groupCount,
+      remainingGroups: groupCount,
+      remainingSizeCounts: new Map(definitions.map((definition) => [
+        definition.customerAccounts,
+        definition.groupCount,
+      ])),
+      perGroupWeight,
+      currentOrderedUniform: 1,
+      generatedGroups: 0,
+    }];
+  }
+
+  function nextVirtualServiceFailure(category, seed) {
+    if (category.remainingGroups <= 0) return null;
+    const groupsBeforeSelection = category.remainingGroups;
+    const keyedUniform = segmentKeyedUniform(
+      seed,
+      "virtual_service_order_statistic",
+      category.categoryId,
+      category.generatedGroups,
+    );
+    // If N candidate groups have iid U(0,1) keys, their maximum is
+    // U^(1/N). Conditional on that maximum, the next order statistic follows
+    // the same recurrence on the remaining N-1 groups. This lazily generates
+    // only the globally competitive service keys instead of materializing up
+    // to 1.633 million customer objects.
+    category.currentOrderedUniform *= Math.pow(
+      keyedUniform,
+      1 / category.remainingGroups,
+    );
+    let sizeRank = Math.min(
+      groupsBeforeSelection - 1,
+      Math.floor(segmentKeyedUniform(
+        seed,
+        "virtual_service_group_permutation",
+        category.categoryId,
+        category.generatedGroups,
+      ) * groupsBeforeSelection),
+    );
+    let customerAccounts = null;
+    for (const [size, count] of category.remainingSizeCounts.entries()) {
+      if (sizeRank < count) {
+        customerAccounts = size;
+        if (count === 1) category.remainingSizeCounts.delete(size);
+        else category.remainingSizeCounts.set(size, count - 1);
+        break;
+      }
+      sizeRank -= count;
+    }
+    if (customerAccounts === null) {
+      throw new InputValidationError(
+        `customer load group permutation failed for ${category.categoryId}`,
+      );
+    }
+    category.remainingGroups -= 1;
+    category.generatedGroups += 1;
+    const attachment = category.attachmentSegment;
+    return {
+      // Keep identity and placement independent of the selected group's size.
+      // This preserves the placement model's invariance to uniform population
+      // rescaling while customer counts remain a separate sizing output.
+      failureId: `${category.categoryId}:rank${category.generatedGroups}`,
+      failureType: "service",
+      componentClass: "service",
+      customerAccounts,
+      networkSegmentId: null,
+      attachedNetworkSegmentId: attachment.segmentId,
+      topologyRootId: attachment.topologyRootId,
+      attachmentSubtreePoint: attachment.subtreeStart,
+      subtreeStart: null,
+      subtreeEnd: null,
+      feederId: attachment.feederId,
+      lateralId: attachment.lateralId,
+      subId: attachment.subId,
+      selectionWeight: category.perGroupWeight,
+      selectionKey: Math.log(category.currentOrderedUniform) / category.perGroupWeight,
+      category,
+    };
+  }
+
+  function failureOverlapsSelection(candidate, selectedNetworks, selectedServices) {
+    if (candidate.failureType === "network") {
+      for (const selected of selectedNetworks) {
+        if (selected.topologyRootId !== candidate.topologyRootId) continue;
+        if (candidate.subtreeStart <= selected.subtreeEnd
+            && selected.subtreeStart <= candidate.subtreeEnd) return true;
+      }
+      for (const selected of selectedServices) {
+        if (selected.topologyRootId === candidate.topologyRootId
+            && selected.attachmentSubtreePoint >= candidate.subtreeStart
+            && selected.attachmentSubtreePoint <= candidate.subtreeEnd) return true;
+      }
+      return false;
+    }
+    for (const selected of selectedNetworks) {
+      if (selected.topologyRootId === candidate.topologyRootId
+          && candidate.attachmentSubtreePoint >= selected.subtreeStart
+          && candidate.attachmentSubtreePoint <= selected.subtreeEnd) return true;
+    }
+    return false;
+  }
+
+  function selectNonOverlappingTopologyFailures(
+    weightedSegments,
+    configInput = {},
+    sizingInput = null,
+  ) {
+    const config = validateConfig(configInput);
+    const sizing = validateCustomerSizingConfig(sizingInput || {
+      serviceFailureWeight: config.serviceFailureWeight,
+      serviceGroupMaximumCustomers: config.serviceGroupMaximumCustomers,
+    });
+    if (!Array.isArray(weightedSegments) || !weightedSegments.length) {
+      throw new InputValidationError("topology failure selection requires weighted segments");
+    }
+    const orderedSegments = [...weightedSegments].sort(
+      (left, right) => left.segmentId.localeCompare(right.segmentId),
+    );
+    if (new Set(orderedSegments.map((segment) => segment.segmentId)).size
+        !== orderedSegments.length) {
+      throw new InputValidationError("weighted segment IDs must be unique");
+    }
+
+    const heap = new MaximumKeyHeap();
+    const serviceCategories = [];
+    let networkCandidateCount = 0;
+    let virtualServiceCandidateCount = 0;
+    let theoreticalSelectionWeight = 0;
+    for (const segment of orderedSegments) {
+      if (!Number.isFinite(segment.weight) || segment.weight <= 0) continue;
+      if (!Number.isInteger(segment.directCustomerAccounts)
+          || !Number.isInteger(segment.downstreamCustomerAccounts)
+          || segment.directCustomerAccounts < 0
+          || segment.downstreamCustomerAccounts < segment.directCustomerAccounts) {
+        throw new InputValidationError(
+          `segment ${segment.segmentId} lacks valid direct/downstream customer accounts`,
+        );
+      }
+      if (!Number.isInteger(segment.subtreeStart)
+          || !Number.isInteger(segment.subtreeEnd)
+          || segment.subtreeStart > segment.subtreeEnd
+          || typeof segment.topologyRootId !== "string") {
+        throw new InputValidationError(
+          `segment ${segment.segmentId} lacks valid rooted-subtree metadata`,
+        );
+      }
+      if (segment.downstreamCustomerAccounts > 0) {
+        const failureId = `network:${segment.segmentId}`;
+        heap.push({
+          failureId,
+          failureType: "network",
+          componentClass: segment.componentClass || segment.networkKind,
+          customerAccounts: segment.downstreamCustomerAccounts,
+          networkSegmentId: segment.segmentId,
+          attachedNetworkSegmentId: null,
+          topologyRootId: segment.topologyRootId,
+          attachmentSubtreePoint: null,
+          subtreeStart: segment.subtreeStart,
+          subtreeEnd: segment.subtreeEnd,
+          feederId: segment.feederId,
+          lateralId: segment.lateralId,
+          subId: segment.subId,
+          selectionWeight: segment.weight,
+          selectionKey: Math.log(segmentKeyedUniform(
+            config.seed,
+            "topology_failure_selection",
+            failureId,
+          )) / segment.weight,
+          category: null,
+        });
+        networkCandidateCount += 1;
+        theoreticalSelectionWeight += segment.weight;
+      }
+      for (const category of serviceGroupCategories(segment, sizing)) {
+        serviceCategories.push(category);
+        virtualServiceCandidateCount += category.groupCount;
+        theoreticalSelectionWeight += category.groupCount * category.perGroupWeight;
+        const first = nextVirtualServiceFailure(category, config.seed);
+        if (first) heap.push(first);
+      }
+    }
+    if (networkCandidateCount + virtualServiceCandidateCount < config.nOutages) {
+      throw new InputValidationError(
+        `only ${networkCandidateCount + virtualServiceCandidateCount} topology failure candidates are available for ${config.nOutages} outages`,
+      );
+    }
+
+    const selectedFailures = [];
+    const selectedNetworks = [];
+    const selectedServices = [];
+    let rejectedForCustomerOverlap = 0;
+    let discardedOverlappedServiceGroups = 0;
+    while (heap.size && selectedFailures.length < config.nOutages) {
+      const candidate = heap.pop();
+      const overlaps = failureOverlapsSelection(
+        candidate,
+        selectedNetworks,
+        selectedServices,
+      );
+      if (overlaps) {
+        rejectedForCustomerOverlap += 1;
+        if (candidate.failureType === "service") {
+          // Every remaining virtual group in this category is attached to the
+          // same direct-load segment and is blocked by the same selected
+          // network subtree, so the category can be discarded in one step.
+          discardedOverlappedServiceGroups += candidate.category.remainingGroups;
+          candidate.category.remainingGroups = 0;
+        }
+        continue;
+      }
+      const { category, ...selected } = candidate;
+      selectedFailures.push(selected);
+      if (selected.failureType === "network") selectedNetworks.push(selected);
+      else selectedServices.push(selected);
+      if (category) {
+        const next = nextVirtualServiceFailure(category, config.seed);
+        if (next) heap.push(next);
+      }
+    }
+    if (selectedFailures.length !== config.nOutages) {
+      throw new InputValidationError(
+        `overlap-safe selection produced ${selectedFailures.length} of ${config.nOutages} requested outages; adjust component weights or outage count`,
+      );
+    }
+
+    const uniqueCustomerAccounts = selectedFailures.reduce(
+      (sum, failure) => sum + failure.customerAccounts,
+      0,
+    );
+    return {
+      schema: "connecticut_topology_failure_selection_v1",
+      config,
+      customerSizingConfig: sizing,
+      selectedFailures,
+      totalCustomers: uniqueCustomerAccounts,
+      summary: {
+        requestedOutages: config.nOutages,
+        selectedOutages: selectedFailures.length,
+        selectedNetworkFailures: selectedNetworks.length,
+        selectedServiceFailures: selectedServices.length,
+        networkCandidateCount,
+        virtualServiceCandidateCount,
+        serviceCategories: serviceCategories.length,
+        lazilyGeneratedServiceCandidates: serviceCategories.reduce(
+          (sum, category) => sum + category.generatedGroups,
+          0,
+        ),
+        rejectedForCustomerOverlap,
+        discardedOverlappedServiceGroups,
+        theoreticalSelectionWeight,
+        uniqueCustomerAccounts,
+        meanCustomersPerOutage: uniqueCustomerAccounts / selectedFailures.length,
+        maximumCustomersPerOutage: selectedFailures.reduce(
+          (maximum, failure) => Math.max(maximum, failure.customerAccounts),
+          0,
+        ),
+        overlappingCustomerSubtrees: 0,
+      },
+      methodology: {
+        networkFailureSize: "integer downstream customer-account sum",
+        serviceFailureSize:
+          "disjoint 1-15-account compact customer-load group attached to a lateral segment",
+        overlapRule:
+          "reject ancestor/descendant network intervals and service groups contained by selected network intervals",
+        serviceCandidateMaterialization:
+          "lazy per-segment uniform order statistics; individual customer objects are not materialized",
+      },
+    };
   }
 
   function segmentPoint(segment, fraction) {
@@ -1529,13 +2707,31 @@
         feeder_id: segment.feederId,
         is_feeder: isFeeder,
         sub_id: segment.subId,
-        popLoss: config.customersPerOutage,
-        customers: config.customersPerOutage,
+        popLoss: LEGACY_CUSTOMERS_PER_OUTAGE,
+        customers: LEGACY_CUSTOMERS_PER_OUTAGE,
         critical: false,
         priority: 0,
         tree_blocked: -1,
         networkSegmentId: segment.segmentId,
         networkKind: segment.networkKind,
+        componentClass: segment.componentClass || segment.networkKind,
+        parentNetworkSegmentId: segment.parentSegmentId ?? null,
+        childNetworkSegmentIds: Array.isArray(segment.childSegmentIds)
+          ? segment.childSegmentIds.slice()
+          : [],
+        topologyRootId: segment.topologyRootId ?? segment.segmentId,
+        topologyDepth: segment.topologyDepth ?? 0,
+        subtreeStart: segment.subtreeStart ?? null,
+        subtreeEnd: segment.subtreeEnd ?? null,
+        feederAnchorChainageKm: segment.feederAnchorChainageKm ?? null,
+        networkDirectCustomerAccounts:
+          Number.isInteger(segment.directCustomerAccounts)
+            ? segment.directCustomerAccounts
+            : null,
+        networkDownstreamCustomerAccounts:
+          Number.isInteger(segment.downstreamCustomerAccounts)
+            ? segment.downstreamCustomerAccounts
+            : null,
         lateralId: segment.lateralId,
         localWindMph: segment.localWindMph,
         localRainIn: segment.localRainIn,
@@ -1566,7 +2762,7 @@
       config,
       inputs: { ...inputs },
       outages,
-      totalCustomers: outages.length * config.customersPerOutage,
+      totalCustomers: outages.length * LEGACY_CUSTOMERS_PER_OUTAGE,
       samplingDesign: {
         algorithm: "segment_keyed_exponential_random_key_without_replacement",
         keyEquation: "log(U_s) / W_s",
@@ -1583,6 +2779,15 @@
             ? "conditional failure-oriented synthetic placement"
             : "conditional impact-weighted synthetic placement",
         calibratedAbsoluteFailureProbability: false,
+        networkTopology: {
+          schema: "connecticut_rooted_network_topology_v1",
+          version: NETWORK_TOPOLOGY_VERSION,
+          orientation: "feeder and lateral coordinate order is upstream to downstream",
+          customerLoadsAssigned: placeable.some(
+            (segment) => Number.isInteger(segment.downstreamCustomerAccounts),
+          ),
+          overlappingOutagePreventionApplied: false,
+        },
         candidateSegmentation: {
           method: "equal-chainage subdivision of each feeder/lateral polyline",
           maximumLengthKm: config.candidateSegmentLengthKm,
@@ -1590,6 +2795,289 @@
         lineIntegration: {
           method: "composite midpoint quadrature along polyline chainage",
           maximumStepKm: config.lineIntegrationStepKm,
+        },
+      },
+    };
+  }
+
+  function interpolatedQuantile(sortedValues, probability) {
+    if (!sortedValues.length) return null;
+    if (probability <= 0) return sortedValues[0];
+    if (probability >= 1) return sortedValues[sortedValues.length - 1];
+    const position = (sortedValues.length - 1) * probability;
+    const lower = Math.floor(position);
+    const upper = Math.ceil(position);
+    const fraction = position - lower;
+    return sortedValues[lower] * (1 - fraction) + sortedValues[upper] * fraction;
+  }
+
+  function summarizeOutageSizes(outages) {
+    if (!Array.isArray(outages) || !outages.length) {
+      throw new InputValidationError("outage-size summary requires at least one outage");
+    }
+    const sizes = outages.map((outage, index) => {
+      if (!Number.isInteger(outage.customers) || outage.customers <= 0
+          || outage.popLoss !== outage.customers) {
+        throw new InputValidationError(
+          `outage ${index} must have matching positive integer customers and popLoss`,
+        );
+      }
+      return outage.customers;
+    }).sort((left, right) => left - right);
+    const totalCustomers = sizes.reduce((sum, value) => sum + value, 0);
+    const classCounts = { service: 0, lateral: 0, feeder: 0 };
+    for (const outage of outages) {
+      if (!Object.prototype.hasOwnProperty.call(classCounts, outage.componentClass)) {
+        throw new InputValidationError(
+          `unsupported outage componentClass ${outage.componentClass}`,
+        );
+      }
+      classCounts[outage.componentClass] += 1;
+    }
+    const smallestHalfCount = Math.floor(sizes.length / 2);
+    const largestOnePercentCount = Math.max(1, Math.ceil(sizes.length * 0.01));
+    return {
+      outageCount: sizes.length,
+      totalCustomers,
+      meanCustomers: totalCustomers / sizes.length,
+      minimumCustomers: sizes[0],
+      maximumCustomers: sizes[sizes.length - 1],
+      quantiles: {
+        p10: interpolatedQuantile(sizes, 0.10),
+        p25: interpolatedQuantile(sizes, 0.25),
+        p50: interpolatedQuantile(sizes, 0.50),
+        p75: interpolatedQuantile(sizes, 0.75),
+        p90: interpolatedQuantile(sizes, 0.90),
+        p95: interpolatedQuantile(sizes, 0.95),
+        p99: interpolatedQuantile(sizes, 0.99),
+        p999: interpolatedQuantile(sizes, 0.999),
+      },
+      componentClassCounts: classCounts,
+      smallestHalfCustomerShare: sizes.slice(0, smallestHalfCount).reduce(
+        (sum, value) => sum + value,
+        0,
+      ) / totalCustomers,
+      largestOnePercentCustomerShare: sizes.slice(-largestOnePercentCount).reduce(
+        (sum, value) => sum + value,
+        0,
+      ) / totalCustomers,
+    };
+  }
+
+  function evaluateDpu31SizeDistribution(outages) {
+    const summary = summarizeOutageSizes(outages);
+    const bins = DPU31_SIZE_TARGET.map((target) => ({
+      ...target,
+      jobs: 0,
+      customers: 0,
+    }));
+    let overflowJobs = 0;
+    let overflowCustomers = 0;
+    for (const outage of outages) {
+      const bin = bins.find((candidate) =>
+        outage.customers >= candidate.lo && outage.customers < candidate.hi);
+      if (bin) {
+        bin.jobs += 1;
+        bin.customers += outage.customers;
+      } else {
+        overflowJobs += 1;
+        overflowCustomers += outage.customers;
+      }
+    }
+    for (const bin of bins) {
+      bin.simulatedJobShare = bin.jobs / summary.outageCount;
+      bin.simulatedCustomerShare = bin.customers / summary.totalCustomers;
+      bin.jobShareError = bin.simulatedJobShare - bin.jobShare;
+      bin.customerShareError = bin.simulatedCustomerShare - bin.customerShare;
+    }
+    const overflowJobShare = overflowJobs / summary.outageCount;
+    const overflowCustomerShare = overflowCustomers / summary.totalCustomers;
+    const totalVariationJobShare = 0.5 * (
+      bins.reduce((sum, bin) => sum + Math.abs(bin.jobShareError), 0)
+      + overflowJobShare
+    );
+    const totalVariationCustomerShare = 0.5 * (
+      bins.reduce((sum, bin) => sum + Math.abs(bin.customerShareError), 0)
+      + overflowCustomerShare
+    );
+    return {
+      targetId: "dpu_24_41_national_grid_2377_jobs",
+      binConvention: "half-open [lo, hi); final target bin is [2048, 4096)",
+      targetJobs: 2377,
+      targetCustomers: 306020,
+      targetMeanCustomers: 128.74211190576358,
+      bins,
+      overflow: {
+        jobs: overflowJobs,
+        customers: overflowCustomers,
+        jobShare: overflowJobShare,
+        customerShare: overflowCustomerShare,
+      },
+      metrics: {
+        totalVariationJobShare,
+        totalVariationCustomerShare,
+        maximumAbsoluteJobShareError: Math.max(
+          overflowJobShare,
+          ...bins.map((bin) => Math.abs(bin.jobShareError)),
+        ),
+        meanCustomerRelativeError:
+          summary.meanCustomers / 128.74211190576358 - 1,
+      },
+      simulated: summary,
+      calibrationObjectiveIncludesPcao: false,
+    };
+  }
+
+  function calculateProvisionalPcao(outages) {
+    const summary = summarizeOutageSizes(outages);
+    return {
+      schema: "connecticut_provisional_pcao_v1",
+      value: summary.totalCustomers / summary.outageCount,
+      peakCustomersAffected: summary.totalCustomers,
+      totalStormOutages: summary.outageCount,
+      equation: "peak customers affected / total storm outages",
+      source: "Wanik et al. (2018), Equation 2",
+      provisional: true,
+      historicalComparisonValid: false,
+      timeBasis:
+        "all generated failures are assumed active at peak because restoration begins after storm passage",
+      limitation:
+        "under the current workflow PCAO equals mean customers per job; concurrent failure and restoration timing is required for comparison with the historical approximately-37 value",
+      calibrationObjectiveIncludesPcao: false,
+    };
+  }
+
+  function sampleSizedOutageScenario(
+    weightedSegments,
+    configInput = {},
+    inputs = {},
+    boundary = null,
+  ) {
+    const config = validateConfig(configInput);
+    if (!Array.isArray(weightedSegments)) {
+      throw new InputValidationError("weightedSegments must be an array");
+    }
+    const boundaryRings = boundary ? extractBoundaryRings(boundary) : null;
+    const placeable = boundaryRings
+      ? weightedSegments.filter((segment) => segmentCanPlace(segment, boundaryRings))
+      : weightedSegments.slice();
+    const sizingSelection = selectNonOverlappingTopologyFailures(
+      placeable,
+      config,
+    );
+    const sourceSegmentById = new Map(
+      placeable.map((segment) => [segment.segmentId, segment]),
+    );
+    const failureById = new Map();
+    const failureSegments = sizingSelection.selectedFailures.map((failure) => {
+      const topologySegmentId = failure.networkSegmentId
+        || failure.attachedNetworkSegmentId;
+      const source = sourceSegmentById.get(topologySegmentId);
+      if (!source) {
+        throw new InputValidationError(
+          `selected failure ${failure.failureId} references missing topology segment ${topologySegmentId}`,
+        );
+      }
+      failureById.set(failure.failureId, { failure, source });
+      const service = failure.failureType === "service";
+      return {
+        ...source,
+        segmentId: failure.failureId,
+        sourceTopologySegmentId: topologySegmentId,
+        networkKind: failure.componentClass,
+        componentClass: failure.componentClass,
+        parentSegmentId: service ? topologySegmentId : source.parentSegmentId,
+        childSegmentIds: service ? [] : source.childSegmentIds,
+        directCustomerAccounts: service
+          ? failure.customerAccounts
+          : source.directCustomerAccounts,
+        downstreamCustomerAccounts: failure.customerAccounts,
+        weight: failure.selectionWeight,
+      };
+    });
+    const located = sampleOutageScenario(
+      failureSegments,
+      config,
+      inputs,
+      boundary,
+    );
+    const outages = located.outages.map((outage) => {
+      const selected = failureById.get(outage.networkSegmentId);
+      if (!selected) {
+        throw new InputValidationError(
+          `located failure ${outage.networkSegmentId} is missing sizing metadata`,
+        );
+      }
+      const { failure, source } = selected;
+      const service = failure.failureType === "service";
+      return {
+        ...outage,
+        failureId: failure.failureId,
+        componentClass: failure.componentClass,
+        networkKind: failure.componentClass,
+        topologySegmentId: source.segmentId,
+        attachedNetworkSegmentId: service ? source.segmentId : null,
+        parentSegmentId: service ? source.segmentId : source.parentSegmentId,
+        parentNetworkSegmentId: service ? source.segmentId : source.parentSegmentId,
+        childNetworkSegmentIds: service ? [] : [...source.childSegmentIds],
+        directCustomers: service
+          ? failure.customerAccounts
+          : source.directCustomerAccounts,
+        downstreamCustomers: failure.customerAccounts,
+        customers: failure.customerAccounts,
+        popLoss: failure.customerAccounts,
+        networkDirectCustomerAccounts: source.directCustomerAccounts,
+        networkDownstreamCustomerAccounts: source.downstreamCustomerAccounts,
+        subtreeStart: failure.subtreeStart,
+        subtreeEnd: failure.subtreeEnd,
+        attachmentSubtreePoint: failure.attachmentSubtreePoint,
+        sizingSelectionWeight: failure.selectionWeight,
+        sizingSelectionKey: failure.selectionKey,
+      };
+    });
+    const sizeSummary = summarizeOutageSizes(outages);
+    const dpu31Comparison = evaluateDpu31SizeDistribution(outages);
+    const provisionalPcao = calculateProvisionalPcao(outages);
+    if (sizeSummary.totalCustomers !== sizingSelection.totalCustomers) {
+      throw new InputValidationError(
+        `located outage total ${sizeSummary.totalCustomers} does not match sizing selection ${sizingSelection.totalCustomers}`,
+      );
+    }
+    return {
+      ...located,
+      schemaVersion: OUTAGE_SCENARIO_VERSION,
+      schema: "connecticut_outage_scenario_v4",
+      outages,
+      totalCustomers: sizeSummary.totalCustomers,
+      sizeSummary,
+      dpu31Comparison,
+      provisionalPcao,
+      sizingSelection: {
+        schema: sizingSelection.schema,
+        summary: sizingSelection.summary,
+        methodology: sizingSelection.methodology,
+      },
+      samplingDesign: {
+        ...located.samplingDesign,
+        topologyFailureSelection: sizingSelection.methodology,
+        overlappingCustomerSubtrees: 0,
+      },
+      methodology: {
+        ...located.methodology,
+        networkTopology: {
+          ...located.methodology.networkTopology,
+          customerLoadsAssigned: true,
+          overlappingOutagePreventionApplied: true,
+        },
+        customerSizing: {
+          schema: sizingSelection.schema,
+          networkFailureSize: sizingSelection.methodology.networkFailureSize,
+          serviceFailureSize: sizingSelection.methodology.serviceFailureSize,
+          overlapRule: sizingSelection.methodology.overlapRule,
+          serviceCandidateMaterialization:
+            sizingSelection.methodology.serviceCandidateMaterialization,
+          serviceFailureWeight: config.serviceFailureWeight,
+          serviceGroupMaximumCustomers: config.serviceGroupMaximumCustomers,
         },
       },
     };
@@ -1608,23 +3096,56 @@
     );
     const weatherSurface = buildWeatherSeveritySurface(input.weather, customerSurface.connecticutMask, config);
     const impactSurface = buildCombinedImpactSurface(customerSurface, weatherSurface, config);
-    const weightedSegments = buildWeightedNetworkSegments(input.network, customerSurface, weatherSurface, impactSurface, config);
-    const scenario = sampleOutageScenario(weightedSegments, config, input.inputs || {}, input.boundary);
-    const feederOutages = scenario.outages.filter((outage) => outage.is_feeder === 1).length;
+    const topology = buildRootedNetworkTopology(input.network, config);
+    const customerAllocation = allocateCustomerAccountsToTopology(topology, customerSurface);
+    const weightedSegments = buildWeightedNetworkSegments(
+      input.network,
+      customerSurface,
+      weatherSurface,
+      impactSurface,
+      config,
+      customerAllocation,
+    );
+    const scenario = sampleSizedOutageScenario(
+      weightedSegments,
+      config,
+      input.inputs || {},
+      input.boundary,
+    );
+    const componentClassCounts = scenario.sizeSummary.componentClassCounts;
     return {
       ...scenario,
       surfaces: { customer: customerSurface, weather: weatherSurface, impact: impactSurface },
+      customerAllocation: {
+        schema: customerAllocation.schema,
+        allocationVersion: customerAllocation.allocationVersion,
+        sourceCustomerQuantity: customerAllocation.sourceCustomerQuantity,
+        serviceRepresentation: customerAllocation.serviceRepresentation,
+        summary: customerAllocation.summary,
+      },
       summary: {
-        placementModel: `${config.placementMode}_snapshot_v3`,
+        placementModel: `${config.placementMode}_snapshot_v4_topology_sized`,
         placementMode: config.placementMode,
         candidateSegments: weightedSegments.length,
         feederCandidateSegments: weightedSegments.filter((segment) => segment.networkKind === "feeder").length,
         lateralCandidateSegments: weightedSegments.filter((segment) => segment.networkKind === "lateral").length,
         sampledOutages: scenario.outages.length,
         uniqueSampledSegments: new Set(scenario.outages.map((outage) => outage.networkSegmentId)).size,
-        feederOutages,
-        lateralOutages: scenario.outages.length - feederOutages,
+        feederOutages: componentClassCounts.feeder,
+        lateralOutages: componentClassCounts.lateral,
+        serviceOutages: componentClassCounts.service,
+        topologyRoots: new Set(weightedSegments.map((segment) => segment.topologyRootId)).size,
+        maximumTopologyDepth: weightedSegments.reduce(
+          (maximum, segment) => Math.max(maximum, segment.topologyDepth || 0),
+          0,
+        ),
         representedCustomers: scenario.totalCustomers,
+        uniqueCustomersAffected: scenario.totalCustomers,
+        outageSize: scenario.sizeSummary,
+        dpu31Comparison: scenario.dpu31Comparison,
+        provisionalPcao: scenario.provisionalPcao,
+        topologySizing: scenario.sizingSelection.summary,
+        customerAllocation: customerAllocation.summary,
         totalSegmentWeight: weightedSegments.reduce((sum, segment) => sum + segment.weight, 0),
         totalFailureOrientedWeight: weightedSegments.reduce(
           (sum, segment) => sum + segment.failureOrientedWeight, 0,
@@ -1673,15 +3194,26 @@
     });
   }
 
-  function buildTimelineWeightedSegments(network, frameSurfaces, config) {
+  function buildTimelineWeightedSegments(
+    network,
+    frameSurfaces,
+    config,
+    topologyOverride = null,
+  ) {
     if (!Array.isArray(frameSurfaces) || !frameSurfaces.length) {
       throw new InputValidationError("frameSurfaces must contain at least one frame");
     }
     const latitudes = frameSurfaces[0].impact.latitudes;
     const longitudes = frameSurfaces[0].impact.longitudes;
-    const segments = buildBasicNetworkSegments(network, config).map((segment) => ({
+    const removeBasicPrefix = (segmentId) => segmentId === null
+      ? null
+      : segmentId.replace(/^basic:/, "");
+    const segments = buildBasicNetworkSegments(network, config, topologyOverride).map((segment) => ({
       ...segment,
-      segmentId: segment.segmentId.replace(/^basic:/, ""),
+      segmentId: removeBasicPrefix(segment.segmentId),
+      parentSegmentId: removeBasicPrefix(segment.parentSegmentId),
+      childSegmentIds: segment.childSegmentIds.map(removeBasicPrefix),
+      topologyRootId: removeBasicPrefix(segment.topologyRootId),
       placementMode: config.placementMode,
       failureOrientedWeight: 0,
       impactPriorityWeight: 0,
@@ -1734,7 +3266,7 @@
     boundary = null,
   ) {
     const config = validateConfig(configInput);
-    const baseScenario = sampleOutageScenario(
+    const baseScenario = sampleSizedOutageScenario(
       weightedSegments,
       config,
       inputs,
@@ -1746,8 +3278,8 @@
     const frameOutageCounts = Array(frameSurfaces.length).fill(0);
 
     const outages = baseScenario.outages.map((outage) => {
-      const segment = segmentById.get(outage.networkSegmentId);
-      if (!segment) throw new InputValidationError(`missing timeline segment ${outage.networkSegmentId}`);
+      const segment = segmentById.get(outage.topologySegmentId);
+      if (!segment) throw new InputValidationError(`missing timeline segment ${outage.topologySegmentId}`);
       const frameWeights = frameSurfaces.map((frame) => {
         const grid = config.placementMode === "failure_oriented"
           ? frame.weather.weatherSeverity
@@ -1768,7 +3300,7 @@
       const target = segmentKeyedUniform(
         config.seed,
         "occurrence_frame",
-        segment.segmentId,
+        outage.failureId,
       ) * totalFrameWeight;
       let cumulative = 0;
       let selectedFrameIndex = frameWeights.length - 1;
@@ -1820,7 +3352,8 @@
 
     return {
       ...baseScenario,
-      schema: "connecticut_timeline_outage_scenario_v3",
+      schemaVersion: OUTAGE_SCENARIO_VERSION,
+      schema: "connecticut_timeline_outage_scenario_v4",
       scenarioId: `${config.stormId}_timeline_seed${config.seed}`,
       outages,
       frameOutageCounts,
@@ -1843,8 +3376,15 @@
       timeline.longitudes,
       { smoothingKm: config.customerSmoothingKm, ruralBaselineFraction: config.ruralBaselineFraction },
     );
+    const topology = buildRootedNetworkTopology(input.network, config);
+    const customerAllocation = allocateCustomerAccountsToTopology(topology, customerSurface);
     const frameSurfaces = buildTimelineFrameSurfaces(timeline, customerSurface, config);
-    const weightedSegments = buildTimelineWeightedSegments(input.network, frameSurfaces, config);
+    const weightedSegments = buildTimelineWeightedSegments(
+      input.network,
+      frameSurfaces,
+      config,
+      customerAllocation,
+    );
     const scenario = sampleTimelineOutageScenario(
       weightedSegments,
       frameSurfaces,
@@ -1859,10 +3399,17 @@
       },
       input.boundary,
     );
-    const feederOutages = scenario.outages.filter((outage) => outage.is_feeder === 1).length;
+    const componentClassCounts = scenario.sizeSummary.componentClassCounts;
     const activeFrameCount = scenario.frameOutageCounts.filter((count) => count > 0).length;
     return {
       ...scenario,
+      customerAllocation: {
+        schema: customerAllocation.schema,
+        allocationVersion: customerAllocation.allocationVersion,
+        sourceCustomerQuantity: customerAllocation.sourceCustomerQuantity,
+        serviceRepresentation: customerAllocation.serviceRepresentation,
+        summary: customerAllocation.summary,
+      },
       surfaces: {
         customer: customerSurface,
         timeline: {
@@ -1877,7 +3424,7 @@
         },
       },
       summary: {
-        placementModel: `${config.placementMode}_curated_hourly_timeline_v3`,
+        placementModel: `${config.placementMode}_curated_hourly_timeline_v4_topology_sized`,
         placementMode: config.placementMode,
         candidateSegments: weightedSegments.length,
         feederCandidateSegments: weightedSegments.filter(
@@ -1888,9 +3435,21 @@
         ).length,
         sampledOutages: scenario.outages.length,
         uniqueSampledSegments: new Set(scenario.outages.map((outage) => outage.networkSegmentId)).size,
-        feederOutages,
-        lateralOutages: scenario.outages.length - feederOutages,
+        feederOutages: componentClassCounts.feeder,
+        lateralOutages: componentClassCounts.lateral,
+        serviceOutages: componentClassCounts.service,
+        topologyRoots: new Set(weightedSegments.map((segment) => segment.topologyRootId)).size,
+        maximumTopologyDepth: weightedSegments.reduce(
+          (maximum, segment) => Math.max(maximum, segment.topologyDepth || 0),
+          0,
+        ),
         representedCustomers: scenario.totalCustomers,
+        uniqueCustomersAffected: scenario.totalCustomers,
+        outageSize: scenario.sizeSummary,
+        dpu31Comparison: scenario.dpu31Comparison,
+        provisionalPcao: scenario.provisionalPcao,
+        topologySizing: scenario.sizingSelection.summary,
+        customerAllocation: customerAllocation.summary,
         totalSegmentWeight: weightedSegments.reduce((sum, segment) => sum + segment.weight, 0),
         totalFailureOrientedWeight: weightedSegments.reduce(
           (sum, segment) => sum + segment.failureOrientedWeight, 0,
@@ -1915,7 +3474,13 @@
 
   return Object.freeze({
     SCHEMA_VERSION,
+    OUTAGE_SCENARIO_VERSION,
+    LEGACY_CUSTOMERS_PER_OUTAGE,
     POPULATION_TO_CUSTOMER_RATIO,
+    NETWORK_TOPOLOGY_VERSION,
+    CUSTOMER_ALLOCATION_VERSION,
+    DEFAULT_CUSTOMER_SIZING_CONFIG,
+    DPU31_SIZE_TARGET,
     DEFAULT_CONFIG,
     InputValidationError,
     validateConfig,
@@ -1939,11 +3504,19 @@
     standardizeLineSegments,
     integrateGridAlongPath,
     normalizeNetwork,
+    buildRootedNetworkTopology,
+    allocateCustomerAccountsToTopology,
     buildWeightedNetworkSegments,
     buildBasicNetworkSegments,
     mulberry32,
     segmentKeyedUniform,
+    validateCustomerSizingConfig,
+    selectNonOverlappingTopologyFailures,
     sampleOutageScenario,
+    sampleSizedOutageScenario,
+    summarizeOutageSizes,
+    evaluateDpu31SizeDistribution,
+    calculateProvisionalPcao,
     buildTimelineFrameSurfaces,
     buildTimelineWeightedSegments,
     sampleTimelineOutageScenario,
