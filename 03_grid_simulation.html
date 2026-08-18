@@ -131,6 +131,15 @@
   .outage-type-key .key-hide { border:0; background:transparent; color:#64748b; font-size:10px; cursor:pointer; padding:1px 3px; }
   .outage-type-key .key-hide:hover { color:#1e3a8a; text-decoration:underline; }
   .outage-type-key .ml-row { line-height:1.55; }
+  .leaflet-tooltip.outage-inspection-tooltip {
+    min-width:190px; max-width:245px; padding:7px 9px; border:1px solid #334155;
+    border-radius:6px; box-shadow:0 4px 14px rgba(15,23,42,.2); color:#334155;
+    font-size:10px; line-height:1.4;
+  }
+  .outage-inspection-tooltip .oi-customers { color:#0f172a; font-size:12px; font-weight:800; }
+  .outage-inspection-tooltip .oi-detail { margin-top:2px; }
+  .outage-inspection-tooltip .oi-hint { margin-top:4px; color:#64748b; font-size:9px; }
+  .leaflet-container.outage-inspection-active { cursor:pointer; }
   .outage-symbol { position:relative; display:inline-block; width:13px; height:13px; flex:0 0 13px; }
   .outage-symbol.service::before,.outage-symbol.service::after,
   .outage-symbol.lateral::before,.outage-symbol.lateral::after,
@@ -144,10 +153,6 @@
   .outage-symbol.lateral::after { transform:rotate(-45deg) scale(.88); }
   .outage-symbol.feeder::before,.outage-symbol.feeder::after { height:2.5px; background:#7c3aed; transform:rotate(45deg) scale(1.08); }
   .outage-symbol.feeder::after { transform:rotate(-45deg) scale(1.08); }
-  .outage-symbol.critical::before {
-    content:""; position:absolute; width:10px; height:10px; left:0; top:0;
-    border-radius:50%; border:2px solid #eab308; box-shadow:0 0 0 1px rgba(15,23,42,.55);
-  }
 
   .rf-root { background:#f8fafc !important; border-color:#cbd5e1 !important; }
   .rf-panel { display:none; margin-top:6px; max-height:340px; overflow-y:auto; }
@@ -235,6 +240,46 @@
   .size-validation-status { margin-top:6px; padding:5px 6px; border-radius:5px; font-size:9px; line-height:1.35; }
   .size-validation-status.pass { color:#065f46; background:#ecfdf5; }
   .size-validation-status.warn { color:#854d0e; background:#fefce8; border:1px solid #fde68a; }
+  .size-comparison-chart { margin-top:7px; border:1px solid #e2e8f0; border-radius:5px; padding:6px; background:#fff; }
+  .size-comparison-chart-title { color:#334155; font-size:10px; font-weight:750; }
+  .size-comparison-chart-legend { display:flex; flex-wrap:wrap; gap:4px 12px; margin:3px 0 2px; color:#64748b; font-size:9px; }
+  .size-comparison-chart-legend span { display:inline-flex; align-items:center; gap:4px; }
+  .size-comparison-chart-legend i { width:10px; height:5px; display:inline-block; border-radius:1px; }
+  .size-comparison-chart svg { display:block; width:100%; height:auto; overflow:visible; }
+  .size-comparison-chart .chart-placeholder { color:#94a3b8; font-size:9px; padding:8px 2px 4px; }
+  .size-comparison-chart-note { color:#64748b; font-size:8.5px; line-height:1.3; margin-top:2px; }
+  .size-charts-open { width:100%; margin-top:6px; border:1px solid #93c5fd; border-radius:5px; padding:6px 8px;
+    background:#eff6ff; color:#1d4ed8; font-size:10px; font-weight:750; cursor:pointer; }
+  .size-charts-open:disabled { color:#94a3b8; background:#f8fafc; border-color:#e2e8f0; cursor:not-allowed; }
+  .size-charts-overlay { display:none; position:fixed; inset:0; z-index:3000; background:rgba(15,23,42,.72); padding:16px; }
+  .size-charts-overlay.open { display:flex; }
+  .size-charts-dialog { width:100%; max-width:1440px; height:calc(100vh - 32px); margin:auto; background:#f8fafc;
+    border-radius:12px; box-shadow:0 24px 80px rgba(15,23,42,.4); display:flex; flex-direction:column; overflow:hidden; }
+  .size-charts-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:13px 16px;
+    background:#fff; border-bottom:1px solid #cbd5e1; }
+  .size-charts-header h2 { margin:0; color:#0f172a; font-size:17px; }
+  .size-charts-header p { margin:2px 0 0; color:#64748b; font-size:11px; }
+  .size-charts-close { border:1px solid #cbd5e1; border-radius:6px; background:#fff; color:#334155;
+    padding:7px 11px; font-size:11px; font-weight:700; cursor:pointer; }
+  .size-charts-grid { flex:1; min-height:0; overflow:auto; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    gap:12px; padding:12px; }
+  .size-chart-panel { min-width:0; background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:12px;
+    display:flex; flex-direction:column; }
+  .size-chart-panel h3 { margin:0; color:#1e293b; font-size:13px; }
+  .size-chart-panel .panel-note { margin:3px 0 7px; color:#64748b; font-size:10px; line-height:1.35; }
+  .size-chart-panel .large-chart { flex:1; min-height:300px; display:flex; align-items:center; }
+  .size-chart-panel svg { display:block; width:100%; height:auto; max-height:calc(100vh - 175px); }
+  .quantile-chart-legend { display:flex; flex-wrap:wrap; gap:5px 14px; margin:2px 0 5px; color:#475569; font-size:10px; }
+  .quantile-chart-legend span { display:inline-flex; align-items:center; gap:5px; }
+  .quantile-chart-legend i { display:inline-block; width:14px; height:3px; border-radius:2px; }
+  body.size-charts-open-body { overflow:hidden; }
+  @media (max-width:900px) {
+    .size-charts-overlay { padding:8px; }
+    .size-charts-dialog { height:calc(100vh - 16px); }
+    .size-charts-grid { grid-template-columns:1fr; }
+    .size-chart-panel .large-chart { min-height:280px; }
+    .size-chart-panel svg { max-height:none; }
+  }
   .size-validation-table-wrap { max-height:170px; overflow:auto; margin-top:6px; border:1px solid #e2e8f0; border-radius:5px; }
   .size-validation-table { width:100%; border-collapse:collapse; font-size:8.5px; font-variant-numeric:tabular-nums; }
   .size-validation-table th,.size-validation-table td { padding:3px 4px; border-bottom:1px solid #f1f5f9; text-align:right; white-space:nowrap; }
@@ -477,6 +522,16 @@
             <div class="size-validation-metric">Largest 1% customer share<b id="modelSizeTopOne">—</b></div>
           </div>
           <div id="modelSizeValidationStatus" class="size-validation-status">Generate a scenario to compare its topology-derived sizes with the 2,377-job target.</div>
+          <button type="button" id="viewCustomerSizeCharts" class="size-charts-open" disabled>View charts</button>
+          <div class="size-comparison-chart">
+            <div class="size-comparison-chart-title">Share of outage jobs by customer count</div>
+            <div class="size-comparison-chart-legend" aria-hidden="true">
+              <span><i style="background:#2563eb"></i>National Grid target</span>
+              <span><i style="background:#f97316"></i>Current simulation</span>
+            </div>
+            <div id="modelSizeComparisonChart" class="chart-placeholder">Generate a scenario to draw the comparison.</div>
+            <div class="size-comparison-chart-note">Each row compares the percentage of jobs in that customer-size range.</div>
+          </div>
           <div class="size-validation-table-wrap">
             <table class="size-validation-table">
               <thead><tr><th>Customers</th><th>Target jobs</th><th>Simulated</th><th>Difference</th></tr></thead>
@@ -714,7 +769,7 @@
       <div style="font-size:10px;color:#64748b;margin-top:3px;line-height:1.35;">Optional HIFLD facilities, Census, NOAA tracks, and DOE references. Enable only the layers needed for the current review.</div>
       <div id="realDataPanel" class="rf-panel">
         <div class="rf-item">
-          <label class="rf-label"><input type="checkbox" id="showCriticalFacilities" checked /><span class="rf-name">Critical facilities</span></label>
+          <label class="rf-label"><input type="checkbox" id="showCriticalFacilities" /><span class="rf-name">Critical facilities</span></label>
           <div class="rf-desc">Shows hospitals, fire stations, EMS, and water plants. This checkbox only changes the map display. <span id="critFacilityCount"></span></div>
         </div>
         <div class="rf-item">
@@ -722,7 +777,7 @@
           <div class="rf-desc">2020 Census blocks, preallocated to the fixed HRRR grid for detailed demand placement without loading tens of thousands of browser points. <span id="censusBlockCount"></span></div>
         </div>
         <div class="rf-item">
-          <label class="rf-label"><input type="checkbox" id="showStormTrack" checked /><span class="rf-name">NOAA storm track</span></label>
+          <label class="rf-label"><input type="checkbox" id="showStormTrack" /><span class="rf-name">NOAA storm track</span></label>
           <div class="rf-desc">HURDAT2 best-track visualization for the storm selected in the Storm outage model above. The track overlay does not alter outage placement.</div>
         </div>
         <div class="rf-item">
@@ -744,6 +799,39 @@
   <div id="map"></div>
 </div>
 
+<div id="customerSizeChartsOverlay" class="size-charts-overlay" aria-hidden="true">
+  <section class="size-charts-dialog" role="dialog" aria-modal="true" aria-labelledby="customerSizeChartsTitle">
+    <header class="size-charts-header">
+      <div>
+        <h2 id="customerSizeChartsTitle">Customer-size comparisons</h2>
+        <p>National filing target compared directly with the current simulation.</p>
+      </div>
+      <button type="button" id="closeCustomerSizeCharts" class="size-charts-close">Close</button>
+    </header>
+    <div class="size-charts-grid">
+      <article class="size-chart-panel">
+        <h3>Job share by customer-size bin</h3>
+        <div class="panel-note">Primary calibration view: the 13 National Grid D.P.U. bins versus this simulation.</div>
+        <div class="size-comparison-chart-legend" aria-hidden="true">
+          <span><i style="background:#2563eb"></i>National Grid target</span>
+          <span><i style="background:#f97316"></i>Current simulation</span>
+        </div>
+        <div id="fullSizeBinChart" class="large-chart"></div>
+      </article>
+      <article class="size-chart-panel">
+        <h3>Customers per job by percentile</h3>
+        <div class="panel-note">Secondary validation view. The vertical axis is logarithmic so small jobs and the heavy tail remain visible.</div>
+        <div class="quantile-chart-legend" aria-hidden="true">
+          <span><i style="background:#2563eb"></i>National Grid</span>
+          <span><i style="background:#f97316"></i>Current simulation</span>
+        </div>
+        <div id="fullSizeQuantileChart" class="large-chart"></div>
+        <div class="panel-note">Both series are evaluated at the same eight percentile checkpoints. Checkpoints are spaced evenly for readability.</div>
+      </article>
+    </div>
+  </section>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -756,7 +844,8 @@
 <script src="./data/connecticut_tree_canopy.js"></script>
 <script src="./data/hartford_storm_tracks.js"></script>
 <script src="./data/hartford_doe_oe417.js"></script>
-<script src="./data/connecticut_storm_timelines.js"></script>
+<script src="./data/customer_size_quantile_references.js"></script>
+<script src="./data/connecticut_storm_timelines.js?v=20260818-dec2022"></script>
 <script src="./data/connecticut_flood_corridors.js"></script>
 <script src="./data/connecticut_storm_events.js"></script>
 <!-- LIVE Eversource CT outages (17_fetch_live_outages.py). Optional: a 404
@@ -956,9 +1045,9 @@ map.getPane('countyBoundary').style.zIndex = 650;
 map.getPane('countyBoundary').style.pointerEvents = 'none';
 
 const mapLayerVisibility={
-  towns:true,territories:true,gridLines:true,substations:true,
+  towns:false,territories:false,gridLines:true,substations:false,
   impactSurface:true,outages:true,restoration:true,depots:true,
-  criticalFacilities:true,stormTrack:true,
+  criticalFacilities:false,stormTrack:false,
 };
 const layerPicker=L.control({position:'topright'});
 layerPicker.onAdd=function(){
@@ -968,15 +1057,15 @@ layerPicker.onAdd=function(){
     <div class="ml-title">Map layers</div>
     <label><input type="checkbox" data-map-layer="outages" checked> Outage locations <span class="layer-state"></span></label>
     <label><input type="checkbox" data-map-layer="impactSurface" checked> Weather / impact overlay <span class="layer-state"></span></label>
-    <label><input type="checkbox" data-map-layer="substations" checked> Substations <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="substations"> Substations <span class="layer-state"></span></label>
     <label><input type="checkbox" data-map-layer="gridLines" checked> Grid lines <span class="layer-state"></span></label>
-    <label><input type="checkbox" data-map-layer="territories" checked> Service territories <span class="layer-state"></span></label>
-    <label><input type="checkbox" data-map-layer="towns" checked> Town boundaries <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="territories"> Service territories <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="towns"> Town boundaries <span class="layer-state"></span></label>
     <div class="layer-group-title">Restoration and review</div>
     <label><input type="checkbox" data-map-layer="restoration" checked> Repair assignments <span class="layer-state"></span></label>
     <label><input type="checkbox" data-map-layer="depots" checked> Crew depots <span class="layer-state"></span></label>
-    <label><input type="checkbox" data-map-layer="criticalFacilities" checked> Critical facilities <span class="layer-state"></span></label>
-    <label><input type="checkbox" data-map-layer="stormTrack" checked> Storm track <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="criticalFacilities"> Critical facilities <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="stormTrack"> Storm track <span class="layer-state"></span></label>
   `;
   L.DomEvent.disableClickPropagation(div);
   L.DomEvent.disableScrollPropagation(div);
@@ -998,8 +1087,8 @@ layerPicker.onAdd=function(){
 layerPicker.addTo(map);
 
 // Appears only for generated scenarios. X size and color encode which level of
-// the synthetic electrical network failed; a separate yellow ring marks an
-// outage that is close enough to a critical facility to receive priority.
+// the synthetic electrical network failed. Critical-facility proximity remains
+// restoration metadata but is intentionally not drawn over the outage symbols.
 const outageTypeKey=L.control({position:'bottomright'});
 outageTypeKey.onAdd=function(){
   const div=L.DomUtil.create('div','map-legend outage-type-key');
@@ -1010,9 +1099,6 @@ outageTypeKey.onAdd=function(){
     <div class="ml-row"><span class="outage-symbol service"></span> Service / small customer group</div>
     <div class="ml-row"><span class="outage-symbol lateral"></span> Lateral branch</div>
     <div class="ml-row"><span class="outage-symbol feeder"></span> Feeder / backbone</div>
-    <div class="ml-row"><span class="outage-symbol critical"></span> Near a critical facility</div>
-    <div class="ml-note">Yellow rings mark outages near critical facilities.</div>
-    <div class="ml-note" style="border-top:1px solid #e2e8f0;margin-top:4px;padding-top:4px;"><b>Facility-location dots:</b> red hospital · orange fire · blue EMS · teal water.</div>
   `;
   L.DomEvent.disableClickPropagation(div);
   L.DomEvent.disableScrollPropagation(div);
@@ -1529,6 +1615,8 @@ let outageSurfaceLayer=null;
 let currentTimelineFrameIndex=0;
 let timelinePlaybackTimer=null;
 let timelineSurfaceScales=null;
+let currentCustomerSizeChartResult=null;
+let customerSizeChartsReturnFocus=null;
 let outageResearchGridMaskCache=null;
 const outageResearchWeatherCache=new Map();
 
@@ -2296,11 +2384,12 @@ function removeOutageSurface(){
 
 function clearOutageResultLayers(){
   stopTimelinePlayback();
+  clearOutageInspection();
   document.getElementById('stormPlayback').classList.remove('visible');
   currentTimelineFrameIndex=0;
   timelineSurfaceScales=null;
   outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
-  for (const key of ['_outageCloud','_criticalCloud','_depotCloud','_repairCloud']){
+  for (const key of ['_outageCloud','_depotCloud','_repairCloud']){
     if (window[key]){map.removeLayer(window[key]);window[key]=null;}
   }
   window._outageLegendMode=null;
@@ -2308,6 +2397,7 @@ function clearOutageResultLayers(){
   syncOutageTypeLegend();
   removeOutageSurface();
   syncMapLayerVisibility();
+  resetCustomerSizeChartReview();
 }
 
 function markOutageModelStale(reason){
@@ -2474,17 +2564,159 @@ function renderOutagePoints(outages){
   drawOutagePoints(outages);
 }
 
-function drawOutagePoints(outages){
-  for (const key of ['_outageCloud','_criticalCloud']){
-    if (window[key]){map.removeLayer(window[key]);window[key]=null;}
+// Keep statewide outage rendering fast: the X markers remain one batched
+// canvas draw, while this small geographic hash supports hover/click details
+// without creating up to 26,000 interactive Leaflet marker objects.
+const OUTAGE_INSPECTION_CELL_DEG=0.01;
+const OUTAGE_INSPECTION_HOVER_RADIUS_PX=10;
+const OUTAGE_INSPECTION_CLICK_RADIUS_PX=14;
+let outageInspectionGrid=new Map();
+let outageInspectionIds=new WeakMap();
+let outageInspectionTooltip=null;
+let outageInspectionPinnedId=null;
+let outageInspectionFrame=null;
+let outageInspectionPendingLatLng=null;
+
+function outageInspectionId(outage,index=0){
+  return outage.failureId||outage.networkSegmentId||`outage-${index}`;
+}
+
+function outageInspectionCellKey(x,y){return `${x}:${y}`;}
+
+function rebuildOutageInspectionIndex(outages){
+  const grid=new Map();
+  const ids=new WeakMap();
+  for (let index=0;index<outages.length;index++){
+    const outage=outages[index];
+    if (!Number.isFinite(outage.lat)||!Number.isFinite(outage.lon)) continue;
+    ids.set(outage,outageInspectionId(outage,index));
+    const x=Math.floor(outage.lon/OUTAGE_INSPECTION_CELL_DEG);
+    const y=Math.floor(outage.lat/OUTAGE_INSPECTION_CELL_DEG);
+    const key=outageInspectionCellKey(x,y);
+    let bucket=grid.get(key);
+    if (!bucket){bucket=[];grid.set(key,bucket);}
+    bucket.push(outage);
   }
-  const componentPoints={service:[],lateral:[],feeder:[]},criticalPts=[];
+  outageInspectionGrid=grid;
+  outageInspectionIds=ids;
+}
+
+function nearestInspectableOutage(latlng,radiusPx){
+  if (!latlng||!outageInspectionGrid.size||!mapLayerVisibility.outages) return null;
+  const center=map.latLngToContainerPoint(latlng);
+  const cornerA=map.containerPointToLatLng([center.x-radiusPx,center.y-radiusPx]);
+  const cornerB=map.containerPointToLatLng([center.x+radiusPx,center.y+radiusPx]);
+  const minLon=Math.min(cornerA.lng,cornerB.lng),maxLon=Math.max(cornerA.lng,cornerB.lng);
+  const minLat=Math.min(cornerA.lat,cornerB.lat),maxLat=Math.max(cornerA.lat,cornerB.lat);
+  const minX=Math.floor(minLon/OUTAGE_INSPECTION_CELL_DEG);
+  const maxX=Math.floor(maxLon/OUTAGE_INSPECTION_CELL_DEG);
+  const minY=Math.floor(minLat/OUTAGE_INSPECTION_CELL_DEG);
+  const maxY=Math.floor(maxLat/OUTAGE_INSPECTION_CELL_DEG);
+  const maximumDistanceSquared=radiusPx*radiusPx;
+  let nearest=null,nearestDistanceSquared=maximumDistanceSquared;
+  for (let x=minX;x<=maxX;x++) for (let y=minY;y<=maxY;y++){
+    const bucket=outageInspectionGrid.get(outageInspectionCellKey(x,y));
+    if (!bucket) continue;
+    for (const outage of bucket){
+      const point=map.latLngToContainerPoint([outage.lat,outage.lon]);
+      const dx=point.x-center.x,dy=point.y-center.y,distanceSquared=dx*dx+dy*dy;
+      if (distanceSquared<=nearestDistanceSquared){
+        nearest=outage;
+        nearestDistanceSquared=distanceSquared;
+      }
+    }
+  }
+  return nearest;
+}
+
+function outageInspectionComponentLabel(componentClass){
+  if (componentClass==='service') return 'Service / small customer group';
+  if (componentClass==='feeder') return 'Feeder / backbone';
+  return 'Lateral branch';
+}
+
+function outageInspectionContent(outage,pinned){
+  const customers=Math.max(0,Math.round(Number(outage.customers)||0));
+  const customerLabel=customers===1?'customer':'customers';
+  const occurrence=outage.occurredAt
+    ? `<div class="oi-detail"><b>Occurred:</b> ${formatTimelineTimestamp(outage.occurredAt)}</div>`:'';
+  const critical=outage.critical
+    ? '<div class="oi-detail">Near a critical facility</div>':'';
+  return `<div class="oi-customers">${customers.toLocaleString()} model-estimated ${customerLabel} affected</div>`+
+    `<div class="oi-detail"><b>Outage level:</b> ${outageInspectionComponentLabel(outage.componentClass)}</div>`+
+    occurrence+critical+
+    `<div class="oi-hint">${pinned?'Click the map elsewhere to close.':'Click to keep these details open.'}</div>`;
+}
+
+function showOutageInspection(outage,pinned=false){
+  if (!outage) return;
+  if (!outageInspectionTooltip){
+    outageInspectionTooltip=L.tooltip({
+      direction:'top',offset:[0,-7],opacity:0.98,className:'outage-inspection-tooltip',interactive:false,
+    });
+  }
+  outageInspectionTooltip
+    .setLatLng([outage.lat,outage.lon])
+    .setContent(outageInspectionContent(outage,pinned));
+  if (!map.hasLayer(outageInspectionTooltip)) outageInspectionTooltip.addTo(map);
+  map.getContainer().classList.add('outage-inspection-active');
+}
+
+function hideOutageInspection(force=false){
+  if (outageInspectionPinnedId&&!force) return;
+  if (outageInspectionTooltip&&map.hasLayer(outageInspectionTooltip)){
+    map.removeLayer(outageInspectionTooltip);
+  }
+  map.getContainer().classList.remove('outage-inspection-active');
+}
+
+function clearOutageInspection(){
+  outageInspectionGrid=new Map();
+  outageInspectionIds=new WeakMap();
+  outageInspectionPinnedId=null;
+  outageInspectionPendingLatLng=null;
+  if (outageInspectionFrame!==null){cancelAnimationFrame(outageInspectionFrame);outageInspectionFrame=null;}
+  hideOutageInspection(true);
+}
+
+map.on('mousemove',event=>{
+  if (outageInspectionPinnedId||!mapLayerVisibility.outages) return;
+  outageInspectionPendingLatLng=event.latlng;
+  if (outageInspectionFrame!==null) return;
+  outageInspectionFrame=requestAnimationFrame(()=>{
+    outageInspectionFrame=null;
+    const outage=nearestInspectableOutage(
+      outageInspectionPendingLatLng,OUTAGE_INSPECTION_HOVER_RADIUS_PX,
+    );
+    if (outage) showOutageInspection(outage,false);
+    else hideOutageInspection(false);
+  });
+});
+
+map.on('click',event=>{
+  const outage=nearestInspectableOutage(event.latlng,OUTAGE_INSPECTION_CLICK_RADIUS_PX);
+  if (!outage){outageInspectionPinnedId=null;hideOutageInspection(true);return;}
+  const inspectionId=outageInspectionIds.get(outage)||outageInspectionId(outage);
+  if (outageInspectionPinnedId===inspectionId){
+    outageInspectionPinnedId=null;
+    hideOutageInspection(true);
+    return;
+  }
+  outageInspectionPinnedId=inspectionId;
+  showOutageInspection(outage,true);
+});
+
+map.getContainer().addEventListener('mouseleave',()=>hideOutageInspection(false));
+
+function drawOutagePoints(outages){
+  rebuildOutageInspectionIndex(outages);
+  if (window._outageCloud){map.removeLayer(window._outageCloud);window._outageCloud=null;}
+  const componentPoints={service:[],lateral:[],feeder:[]};
   for (const outage of outages){
     const point={lat:outage.lat,lon:outage.lon};
     const component=Object.prototype.hasOwnProperty.call(componentPoints,outage.componentClass)
       ? outage.componentClass : 'lateral';
     componentPoints[component].push(point);
-    if (outage.critical) criticalPts.push(point);
   }
   const componentLayers=[];
   if (componentPoints.service.length) componentLayers.push(new PointCloudLayer(componentPoints.service,{
@@ -2497,11 +2729,6 @@ function drawOutagePoints(outages){
     uniformColor:true,marker:'x',radius:4.1,markerWidth:1.8,fillColor:'#7c3aed',fillOpacity:0.98,
   }));
   window._outageCloud=L.layerGroup(componentLayers).addTo(map);
-  if (criticalPts.length){
-    window._criticalCloud=new PointCloudLayer(criticalPts,{
-      uniformColor:true,marker:'ring',radius:5.4,fillColor:'#facc15',stroke:'#facc15',lineWidth:1.7,fillOpacity:0.98,
-    }).addTo(map);
-  }
   window._outageLegendMode='simulated';
   syncMapLayerVisibility();
 }
@@ -2575,9 +2802,6 @@ function drawSurfaceRaster(values,scale,surfaces){
   }
   if (window._outageCloud&&mapLayerVisibility.outages){
     map.removeLayer(window._outageCloud);window._outageCloud.addTo(map);
-  }
-  if (window._criticalCloud&&mapLayerVisibility.outages){
-    map.removeLayer(window._criticalCloud);window._criticalCloud.addTo(map);
   }
   const legend=document.getElementById('modelSurfaceLegend');
   legend.style.display='block';
@@ -2687,6 +2911,161 @@ function initializeTimelinePlayback(){
   },250);
 }
 
+function outageSizeComparisonSvg(comparison,idPrefix){
+  const rows=comparison.bins.map(bin=>({
+    label:bin.hi===bin.lo+1?String(bin.lo):`${bin.lo}–${bin.hi-1}`,
+    target:bin.jobShare,
+    simulated:bin.simulatedJobShare,
+  }));
+  rows.push({label:'Outside',target:0,simulated:comparison.overflow.jobShare});
+  const maximumObserved=Math.max(...rows.flatMap(row=>[row.target,row.simulated]));
+  const maximumShare=Math.max(0.25,Math.ceil(maximumObserved/0.05)*0.05);
+  const width=330,height=242,left=31,right=4,top=13,plotBottom=166;
+  const plotWidth=width-left-right,plotHeight=plotBottom-top;
+  const groupWidth=plotWidth/rows.length;
+  const barWidth=Math.min(7,groupWidth*0.34);
+  const y=share=>plotBottom-plotHeight*share/maximumShare;
+  const percent=share=>`${(share*100).toFixed(1)}%`;
+  const ticks=[];
+  for (let value=0;value<=maximumShare+1e-9;value+=0.05) ticks.push(value);
+  const grid=ticks.map(value=>{
+    const position=y(value);
+    return `<line x1="${left}" y1="${position}" x2="${width-right}" y2="${position}" stroke="#e2e8f0" stroke-width="0.7"/>`+
+      `<text x="${left-4}" y="${position+3}" text-anchor="end" fill="#64748b" font-size="8.5">${Math.round(value*100)}%</text>`;
+  }).join('');
+  const bars=rows.map((row,index)=>{
+    const center=left+groupWidth*(index+0.5);
+    const targetTop=y(row.target),simulatedTop=y(row.simulated);
+    const labelY=plotBottom+11;
+    return `<rect x="${center-barWidth-1}" y="${targetTop}" width="${barWidth}" height="${plotBottom-targetTop}" rx="1" fill="#2563eb"><title>${row.label}: National Grid target ${percent(row.target)}</title></rect>`+
+      `<rect x="${center+1}" y="${simulatedTop}" width="${barWidth}" height="${plotBottom-simulatedTop}" rx="1" fill="#f97316"><title>${row.label}: current simulation ${percent(row.simulated)}</title></rect>`+
+      `<text x="${center+2}" y="${labelY}" transform="rotate(52 ${center+2} ${labelY})" text-anchor="start" fill="#475569" font-size="8.5">${row.label}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="${idPrefix}Title ${idPrefix}Description">`+
+    `<title id="${idPrefix}Title">National Grid target compared with simulated outage job sizes</title>`+
+    `<desc id="${idPrefix}Description">Paired vertical bars compare target and simulated job shares across thirteen customer-size bins and an outside-target category.</desc>`+
+    grid+bars+
+    `<line x1="${left}" y1="${plotBottom}" x2="${width-right}" y2="${plotBottom}" stroke="#94a3b8" stroke-width="0.8"/>`+
+    `<text x="9" y="${(top+plotBottom)/2}" transform="rotate(-90 9 ${(top+plotBottom)/2})" text-anchor="middle" fill="#475569" font-size="8.5">Share of jobs</text>`+
+    `<text x="${left+plotWidth/2}" y="238" text-anchor="middle" fill="#475569" font-size="8.5">Customers affected by the job</text>`+
+    '</svg>';
+}
+
+function renderOutageSizeComparisonChart(comparison){
+  const chart=document.getElementById('modelSizeComparisonChart');
+  chart.className='';
+  chart.innerHTML=outageSizeComparisonSvg(comparison,'sizeChart');
+}
+
+function interpolatedCustomerQuantile(sortedCustomers,percentile){
+  if (!sortedCustomers.length) return null;
+  const bounded=Math.max(0,Math.min(100,percentile));
+  const position=(sortedCustomers.length-1)*bounded/100;
+  const lower=Math.floor(position),upper=Math.ceil(position),fraction=position-lower;
+  return sortedCustomers[lower]*(1-fraction)+sortedCustomers[upper]*fraction;
+}
+
+function customerSizeQuantileSvg(result,idPrefix){
+  const references=window.CUSTOMER_SIZE_QUANTILE_REFERENCES;
+  const national=references?.nationalGridDpu31?.points;
+  if (!Array.isArray(national)||!national.length){
+    throw new Error('Customer-size quantile reference data is unavailable.');
+  }
+  const sortedCustomers=result.outages.map(outage=>outage.customers).sort((a,b)=>a-b);
+  const percentiles=national.map(point=>point.percentile);
+  const simulated=percentiles.map(percentile=>({
+    percentile,
+    customers:interpolatedCustomerQuantile(sortedCustomers,percentile),
+  }));
+  const observedValues=[
+    ...national.map(point=>point.customers),
+    ...simulated.map(point=>point.customers),
+  ].filter(value=>Number.isFinite(value)&&value>0);
+  const width=600,height=410,left=68,right=18,top=18,bottom=60;
+  const plotWidth=width-left-right,plotHeight=height-top-bottom;
+  const minimumCustomers=1;
+  const maximumCustomers=10**Math.max(1,Math.ceil(Math.log10(Math.max(...observedValues))));
+  const xPositions=new Map(percentiles.map((percentile,index)=>[
+    percentile,
+    left+(percentiles.length===1?plotWidth/2:index/(percentiles.length-1)*plotWidth),
+  ]));
+  const x=percentile=>xPositions.get(percentile);
+  const logMinimum=Math.log10(minimumCustomers),logMaximum=Math.log10(maximumCustomers);
+  const y=customers=>top+(logMaximum-Math.log10(Math.max(minimumCustomers,customers)))/(logMaximum-logMinimum)*plotHeight;
+  const pointString=(points,valueKey)=>points.map(point=>
+    `${x(point.percentile).toFixed(2)},${y(point[valueKey]).toFixed(2)}`).join(' ');
+  const formatCustomers=value=>value>=1000
+    ? Math.round(value).toLocaleString()
+    : value>=10?value.toFixed(0):value.toFixed(1);
+  const xTicks=percentiles;
+  const yTicks=[];
+  for (let value=1;value<=maximumCustomers;value*=10) yTicks.push(value);
+  const grid=xTicks.map(value=>{
+    const position=x(value);
+    return `<line x1="${position}" y1="${top}" x2="${position}" y2="${height-bottom}" stroke="#f1f5f9" stroke-width="1"/>`+
+      `<text x="${position}" y="${height-bottom+18}" text-anchor="middle" fill="#64748b" font-size="11">P${value}</text>`;
+  }).join('')+yTicks.map(value=>{
+    const position=y(value);
+    return `<line x1="${left}" y1="${position}" x2="${width-right}" y2="${position}" stroke="#e2e8f0" stroke-width="1"/>`+
+      `<text x="${left-8}" y="${position+4}" text-anchor="end" fill="#64748b" font-size="11">${value.toLocaleString()}</text>`;
+  }).join('');
+  const pointMarks=(points,valueKey,color,label)=>points.map(point=>
+    `<circle cx="${x(point.percentile)}" cy="${y(point[valueKey])}" r="3" fill="${color}">`+
+      `<title>P${point.percentile}: ${label} ${formatCustomers(point[valueKey])} customers per job</title></circle>`).join('');
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="${idPrefix}Title ${idPrefix}Description">`+
+    `<title id="${idPrefix}Title">Customer counts per outage job by percentile</title>`+
+    `<desc id="${idPrefix}Description">Logarithmic chart comparing the current simulation and National Grid filing at the same eight percentile checkpoints.</desc>`+
+    grid+
+    `<polyline points="${pointString(national,'customers')}" fill="none" stroke="#2563eb" stroke-width="2.5"/>`+
+    `<polyline points="${pointString(simulated,'customers')}" fill="none" stroke="#f97316" stroke-width="2.5"/>`+
+    pointMarks(national,'customers','#2563eb','National Grid')+
+    pointMarks(simulated,'customers','#f97316','current simulation')+
+    `<rect x="${left}" y="${top}" width="${plotWidth}" height="${plotHeight}" fill="none" stroke="#94a3b8" stroke-width="1"/>`+
+    `<text x="${left+plotWidth/2}" y="${height-12}" text-anchor="middle" fill="#475569" font-size="12">Matching percentile checkpoints</text>`+
+    `<text x="16" y="${top+plotHeight/2}" transform="rotate(-90 16 ${top+plotHeight/2})" text-anchor="middle" fill="#475569" font-size="12">Customers affected per job (log scale)</text>`+
+    '</svg>';
+}
+
+function closeCustomerSizeCharts(){
+  const overlay=document.getElementById('customerSizeChartsOverlay');
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden','true');
+  document.body.classList.remove('size-charts-open-body');
+  if (customerSizeChartsReturnFocus?.focus) customerSizeChartsReturnFocus.focus();
+  customerSizeChartsReturnFocus=null;
+}
+
+function openCustomerSizeCharts(){
+  if (!currentCustomerSizeChartResult) return;
+  customerSizeChartsReturnFocus=document.activeElement;
+  document.getElementById('fullSizeBinChart').innerHTML=
+    outageSizeComparisonSvg(currentCustomerSizeChartResult.dpu31Comparison,'fullSizeBinChartSvg');
+  document.getElementById('fullSizeQuantileChart').innerHTML=
+    customerSizeQuantileSvg(currentCustomerSizeChartResult,'fullSizeQuantileChartSvg');
+  const overlay=document.getElementById('customerSizeChartsOverlay');
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden','false');
+  document.body.classList.add('size-charts-open-body');
+  document.getElementById('closeCustomerSizeCharts').focus();
+}
+
+function resetCustomerSizeChartReview(){
+  currentCustomerSizeChartResult=null;
+  document.getElementById('viewCustomerSizeCharts').disabled=true;
+  closeCustomerSizeCharts();
+}
+
+document.getElementById('viewCustomerSizeCharts').addEventListener('click',openCustomerSizeCharts);
+document.getElementById('closeCustomerSizeCharts').addEventListener('click',closeCustomerSizeCharts);
+document.getElementById('customerSizeChartsOverlay').addEventListener('click',event=>{
+  if (event.target===event.currentTarget) closeCustomerSizeCharts();
+});
+document.addEventListener('keydown',event=>{
+  if (event.key==='Escape'&&document.getElementById('customerSizeChartsOverlay').classList.contains('open')){
+    closeCustomerSizeCharts();
+  }
+});
+
 function renderOutageSizeValidation(result){
   const comparison=result?.dpu31Comparison;
   if (!comparison) throw new Error('Generated scenario is missing its D.P.U. size-distribution comparison.');
@@ -2698,6 +3077,8 @@ function renderOutageSizeValidation(result){
   const percent=value=>Number.isFinite(value)?`${(value*100).toFixed(1)}%`:'—';
   const signedPercent=value=>Number.isFinite(value)?`${value>=0?'+':''}${(value*100).toFixed(1)}%`:'—';
   const simulated=comparison.simulated;
+  currentCustomerSizeChartResult=result;
+  document.getElementById('viewCustomerSizeCharts').disabled=false;
   document.getElementById('modelSizeTv').textContent=comparison.metrics.totalVariationJobShare.toFixed(3);
   document.getElementById('modelSizeMean').textContent=
     `${simulated.meanCustomers.toFixed(1)} (target ${comparison.targetMeanCustomers.toFixed(1)})`;
@@ -2710,6 +3091,7 @@ function renderOutageSizeValidation(result){
     `${Math.round(pcao.peakCustomersAffected).toLocaleString()} assumed peak customers ÷ `+
     `${pcao.totalStormOutages.toLocaleString()} total jobs = ${pcao.value.toFixed(1)}. `+
     `Current-workflow demonstration only.`;
+  renderOutageSizeComparisonChart(comparison);
   document.getElementById('modelSizeValidationBins').innerHTML=comparison.bins.map(bin=>{
     const label=bin.hi===bin.lo+1?String(bin.lo):`${bin.lo}–${bin.hi-1}`;
     return `<tr><td>${label}</td><td>${percent(bin.jobShare)}</td><td>${percent(bin.simulatedJobShare)}</td><td>${signedPercent(bin.jobShareError)}</td></tr>`;
@@ -2762,6 +3144,7 @@ function applyOutageModelResult(result){
   }
   const trackKey=document.getElementById('stormTrackSelect').value;
   const trackData=trackKey&&window.HARTFORD_STORM_TRACKS&&window.HARTFORD_STORM_TRACKS[trackKey];
+  const selectedWeatherStorm=window.CONNECTICUT_STORM_TIMELINES?.storms?.[trackKey];
   const localPlannerReasons=[];
   if (enriched.summary.switchRestored) localPlannerReasons.push('automatic switching');
   if (enriched.summary.underground) localPlannerReasons.push('underground repair-time modifiers');
@@ -2812,7 +3195,7 @@ function applyOutageModelResult(result){
   setStormProgress(100);
   setTimeout(()=>setStormProgress(0,false),700);
   status.textContent=isTimeline
-    ? `Generated ${outages.length.toLocaleString()} timestamped outages from ${result.summary.timelineFrames} hourly Isaias frames. Playback uses the exact weather and impact arrays used by the model; the full scenario is ready for restoration.`
+    ? `Generated ${outages.length.toLocaleString()} timestamped outages from ${result.summary.timelineFrames} hourly ${selectedWeatherStorm?.name||'storm'} frames. Playback uses the exact weather and impact arrays used by the model; the full scenario is ready for restoration.`
     : `Generated ${outages.length.toLocaleString()} non-overlapping outages representing exactly ${modelCustomerTotal.toLocaleString()} unique customers; attached deterministic restoration metadata without moving or removing any point. Ready to plan restoration.`;
   syncMapLayerVisibility();
 }
@@ -3082,7 +3465,6 @@ function loadLiveOutages(){
   // Render (same canvas-batched path as simulateStorm).
   outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
   if (window._outageCloud){ map.removeLayer(window._outageCloud); window._outageCloud=null; }
-  if (window._criticalCloud){ map.removeLayer(window._criticalCloud); window._criticalCloud=null; }
   if (window._depotCloud){ map.removeLayer(window._depotCloud); window._depotCloud=null; }
   if (window._repairCloud){ map.removeLayer(window._repairCloud); window._repairCloud=null; }
   const pts = outages.map(o => ({lat: o.lat, lon: o.lon}));
@@ -4424,7 +4806,6 @@ function resetStorm(){
   storm=null; plan=null;
   outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
   if (window._outageCloud){ map.removeLayer(window._outageCloud); window._outageCloud=null; }
-  if (window._criticalCloud){ map.removeLayer(window._criticalCloud); window._criticalCloud=null; }
   if (window._depotCloud){ map.removeLayer(window._depotCloud); window._depotCloud=null; }
   if (window._repairCloud){ map.removeLayer(window._repairCloud); window._repairCloud=null; }
   window._outageLegendMode=null;
@@ -5517,8 +5898,8 @@ document.getElementById('stormTrackSelect').addEventListener('change', function(
 // harness this was tuned against -- if you recalibrate a storm there,
 // update the matching entry here too. realH is the real documented
 // duration in hours, shown alongside the simulated result for comparison.
-// Snowtober/March 2023/Dec 2022/Oct 2019/Sep 2021 have no real track or
-// HRRR data (uniform placement, same as leaving the dropdown blank) --
+// Snowtober/March 2023/Oct 2019/Sep 2021 have no real track or
+// curated HRRR timeline (uniform placement, same as leaving the dropdown blank) --
 // their keys here don't exist in HARTFORD_STORM_TRACKS or the curated
 // timeline cache on purpose, so placement falls through to the
 // default population-weighted behavior.
@@ -5536,7 +5917,7 @@ const REAL_STORM_PRESETS = {
   march2023_noreaster:       {outages: 450,   crews: 350,  realH: 60,  label: "March 2023 Nor'easter"},
   oct2020_derecho:           {outages: 950,   crews: 300,  realH: 28,  label: "Oct 2020 Derecho"},
   ct_sep2019_tornado:        {outages: 80,    crews: 60,   realH: 24,  label: "Sep 2019 Tornado"},
-  dec2022_windstorm:         {outages: 3450,  crews: 1100, realH: 75,  label: "Dec 2022 Windstorm"},
+  dec2022:                   {outages: 3899,  crews: 1100, realH: 88,  label: "Dec 2022 Windstorm"},
   oct2019_bomb_cyclone:      {outages: 1500,  crews: 400,  realH: 60,  label: "Oct 2019 Bomb Cyclone"},
   sep2021_ida:               {outages: 1250,  crews: 300,  realH: 51,  label: "Sep 2021 Ida Flooding"},
   dec2025_windstorm:         {outages: 2950,  crews: 700,  realH: 72,  label: "Dec 2025 Windstorm"},
@@ -6239,7 +6620,7 @@ function mapLayerAvailability(){
   const selectedTrack=document.getElementById('stormTrackSelect')?.value;
   const track=selectedTrack&&window.HARTFORD_STORM_TRACKS?.[selectedTrack];
   return {
-    outages:{available:!!(window._outageCloud||window._criticalCloud),waiting:'run outage simulation'},
+    outages:{available:!!window._outageCloud,waiting:'run outage simulation'},
     impactSurface:{available:!!outageSurfaceLayer,waiting:'run research model'},
     substations:{available:substations.length>0&&subLayer.getLayers().length>0,waiting:'grid is loading'},
     gridLines:{available:!!(lateralCloud&&feederCloud&&(feeders.length||laterals.length)),waiting:'grid is loading'},
@@ -6276,13 +6657,13 @@ function syncMapLayerVisibility(){
   setMapLayerVisible(subLayer,mapLayerVisibility.substations);
   setMapLayerVisible(outageSurfaceLayer,mapLayerVisibility.impactSurface);
   setMapLayerVisible(window._outageCloud,mapLayerVisibility.outages);
-  setMapLayerVisible(window._criticalCloud,mapLayerVisibility.outages);
   setMapLayerVisible(repairLayer,mapLayerVisibility.restoration);
   setMapLayerVisible(window._repairCloud,mapLayerVisibility.restoration);
   setMapLayerVisible(depotLayer,mapLayerVisibility.depots);
   setMapLayerVisible(window._depotCloud,mapLayerVisibility.depots);
   setMapLayerVisible(critFacilityLayer,mapLayerVisibility.criticalFacilities);
   setMapLayerVisible(stormTrackLayer,mapLayerVisibility.stormTrack);
+  if (!mapLayerVisibility.outages){outageInspectionPinnedId=null;hideOutageInspection(true);}
   syncOutageTypeLegend();
   if (window._boundary) window._boundary.bringToFront();
   updateMapLayerControlAvailability();

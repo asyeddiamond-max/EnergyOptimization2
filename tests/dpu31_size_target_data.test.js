@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const vm = require("node:vm");
 
 const ROOT = path.resolve(__dirname, "..");
 const VALIDATION_DIR = path.join(ROOT, "data", "validation");
@@ -39,6 +40,12 @@ const quantiles = readNumericCsv(
   "dpu31_size_target_quantiles.csv",
   ["quantile", "customers"],
 );
+const quantileReferenceSandbox = { window: {} };
+vm.runInNewContext(
+  fs.readFileSync(path.join(ROOT, "data", "customer_size_quantile_references.js"), "utf8"),
+  quantileReferenceSandbox,
+);
+const quantileReferences = quantileReferenceSandbox.window.CUSTOMER_SIZE_QUANTILE_REFERENCES;
 
 test("D.P.U. 24-41 size bins are contiguous and reconcile exactly", () => {
   assert.equal(bins.length, 13);
@@ -103,6 +110,32 @@ test("D.P.U. quantile checklist preserves the supplied interpolation values", ()
     quantiles.map(({ customers }) => customers),
     [1, 2, 16, 80, 325, 706.1999999999998, 1779.6399999999976, 2915.0240000000254],
   );
+});
+
+test("browser quantile references preserve the DPU checkpoints and Dave major-event ranges", () => {
+  assert.deepEqual(
+    Array.from(quantileReferences.nationalGridDpu31.points, (point) => ({
+      quantile: point.percentile,
+      customers: point.customers,
+    })),
+    quantiles,
+  );
+  const stormClasses = quantileReferences.stormClasses;
+  assert.equal(stormClasses.smallEventCount, 562);
+  assert.equal(stormClasses.mediumEventCount, 279);
+  assert.equal(stormClasses.largeEventCount, 80);
+  assert.equal(stormClasses.majorEventCount, 4);
+  assert.equal(stormClasses.classThresholdsAvailable, false);
+  assert.deepEqual(
+    Array.from(stormClasses.points, (point) => point.percentile),
+    [10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 97.5, 99],
+  );
+  const majorP50 = stormClasses.points.find((point) => point.percentile === 50);
+  const majorP90 = stormClasses.points.find((point) => point.percentile === 90);
+  const majorP99 = stormClasses.points.find((point) => point.percentile === 99);
+  assert.deepEqual([majorP50.majorLow, majorP50.majorHigh], [2, 2]);
+  assert.deepEqual([majorP90.majorLow, majorP90.majorHigh], [105, 143]);
+  assert.deepEqual([majorP99.majorLow, majorP99.majorHigh], [813, 979]);
 });
 
 test("pre-change fixed-50 generator baseline is recorded against the target bins", () => {

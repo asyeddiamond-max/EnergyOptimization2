@@ -278,12 +278,12 @@ fit.
 
 | | |
 |---|---|
-| **What** | A 24-frame hourly wind/rain timeline on the same 41×65 Connecticut grid, intended as the single weather source for both animation and time-dependent outage placement |
+| **What** | Reviewed hourly wind/rain timelines on the same 41×65 Connecticut grid, used as the single weather source for both animation and time-dependent outage placement |
 | **Source** | NOAA HRRR surface product, AWS public archive, accessed via `herbie-data` |
-| **Fetch script** | [`12_fetch_hrrr_storm_wind.py`](12_fetch_hrrr_storm_wind.py) with `--timeline-only --timeline isaias_2020` |
+| **Fetch script** | [`12_fetch_hrrr_storm_wind.py`](12_fetch_hrrr_storm_wind.py) with `--timeline-only --timeline isaias_2020`, `--timeline dec2022`, or `--timeline all` |
 | **Cached file** | [`data/connecticut_storm_timelines.js`](data/connecticut_storm_timelines.js) |
-| **Curated storms** | Tropical Storm Isaias (2020) only in Phase 1 |
-| **Window** | 2020-08-04 06:00 UTC through 2020-08-05 05:00 UTC, hourly |
+| **Curated storms** | Tropical Storm Isaias (2020), 24 frames; December 2022 Pre-Christmas Windstorm, 42 frames |
+| **Windows** | Isaias: 2020-08-04 06:00 UTC through 2020-08-05 05:00 UTC. December 2022: 2022-12-22 18:00 UTC through 2022-12-24 11:00 UTC. Both are hourly. |
 | **Fields** | Surface gust in mph; one-hour accumulated precipitation ending at the frame time; six-hour antecedent precipitation, all stored as row-major arrays |
 | **License** | Public domain (U.S. government work) |
 
@@ -298,6 +298,15 @@ browser consumes the committed, reviewed data and does not download or decode
 raw GRIB files. The JavaScript model and Worker now produce timestamped outage
 locations and transferable map surfaces from this timeline. The existing map
 animates those exact arrays with hourly playback and cumulative outage markers.
+Adding one storm preserves the other reviewed timelines; `--timeline all`
+rebuilds the complete catalog reproducibly.
+
+**December 2022 observed reference**: Dr. Wanik's Eversource event-curve files
+identify event `2022122218` with 3,899 jobs, 207,731 summed customer-job impacts,
+188,737 customers out at the first reported point, and 3,034 open jobs. Those
+values support the website's historical preset and provenance metadata. The
+hourly restoration curve remains a separate restoration-validation input; it
+does not change the weather-based outage-location or customer-size calibration.
 
 ---
 
@@ -492,7 +501,27 @@ animates those exact arrays with hourly playback and cumulative outage markers.
 
 ---
 
-## 23 · Planned / pending data sources
+## 23 · Storm-size-class customer quantile reference
+
+| Field | Value |
+|---|---|
+| **What** | Customers affected per trouble spot at 14 percentiles for small, medium, large, and four major storm events |
+| **Received from** | Dr. Dave Wanik by email/screenshot on 2026-08-18 |
+| **Cached file** | [`data/customer_size_quantile_references.js`](data/customer_size_quantile_references.js) |
+| **Used by** | Full-screen customer-size quantile comparison in `03_grid_simulation.html` |
+| **Role** | Secondary validation reference; never a customer-sizing calibration target |
+
+The small, medium, and large columns are transcribed as the supplied
+class-level percentile values. The screenshot did not include the storm-class
+thresholds or the underlying row-level table, so the website does not guess a
+class automatically. Reviewers choose the relevant class and compare its
+percentiles with the simulation at the same percentile positions. The supplied
+four-major-event ranges remain stored for provenance but are not drawn in the
+main comparison because connecting ranges as a curve was visually ambiguous.
+
+---
+
+## 24 · Planned / pending data sources
 
 These are tracked in [`ROADMAP.md`](ROADMAP.md) and listed here so future-you
 (or a reviewer) can see what's not yet integrated. Each one is gated on data

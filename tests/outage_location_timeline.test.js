@@ -15,7 +15,7 @@ const { buildReviewNetwork } = require("./helpers/outage_location_test_network.j
 
 const ROOT = path.resolve(__dirname, "..");
 
-function loadInputs() {
+function loadInputs(stormId = "isaias_2020") {
   const context = { window: {} };
   vm.createContext(context);
   vm.runInContext(
@@ -28,10 +28,10 @@ function loadInputs() {
     fs.readFileSync(path.join(ROOT, "data", "connecticut_census_population_grid.json"), "utf8"),
   );
   return {
-    config: model.DEFAULT_CONFIG,
+    config: { ...model.DEFAULT_CONFIG, stormId },
     boundary,
     populationGrid,
-    weatherTimeline: { grid: data.grid, storm: data.storms.isaias_2020 },
+    weatherTimeline: { grid: data.grid, storm: data.storms[stormId] },
     network: buildReviewNetwork(model, boundary, data.grid),
   };
 }
@@ -99,6 +99,30 @@ test("full Isaias timeline produces exactly 2,000 unique timestamped outages", (
     model.pointInBoundary(input.boundary, outage.lat, outage.lon)));
   assert.equal(result.summary.firstOccurrence, "2020-08-04T17:00:00Z");
   assert.equal(result.summary.lastOccurrence, "2020-08-05T00:00:00Z");
+});
+
+test("December 2022 timeline produces topology-sized outages from its own 42 weather frames", () => {
+  const input = loadInputs("dec2022");
+  const result = model.generateTimelineOutageScenario({
+    ...input,
+    config: { ...input.config, nOutages: 500 },
+  });
+  const validTimes = new Set(input.weatherTimeline.storm.frames.map((frame) => frame.valid_time));
+
+  assert.equal(result.summary.timelineFrames, 42);
+  assert.equal(result.outages.length, 500);
+  assert.equal(result.summary.frameOutageCounts.reduce((sum, count) => sum + count, 0), 500);
+  assert.equal(new Set(result.outages.map((outage) => outage.networkSegmentId)).size, 500);
+  assert.equal(
+    result.totalCustomers,
+    result.outages.reduce((sum, outage) => sum + outage.customers, 0),
+  );
+  assert.ok(result.outages.every((outage) =>
+    validTimes.has(outage.occurredAt)
+      && Number.isInteger(outage.customers)
+      && outage.customers > 0));
+  assert.equal(result.summary.firstOccurrence, "2022-12-23T01:00:00Z");
+  assert.equal(result.summary.lastOccurrence, "2022-12-24T01:00:00Z");
 });
 
 test("timestamped outage footprint follows Isaias from west toward east", () => {
