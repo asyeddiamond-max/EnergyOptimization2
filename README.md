@@ -33,16 +33,16 @@ Public data sources: NOAA SPC storm reports (`data/july2026_spc_reports.json`), 
 
 | Capability | How |
 |---|---|
-| Real statewide Connecticut distribution grid | 299 HIFLD substations across all 8 counties, branching feeders + laterals, census-tract-weighted demand (883 tracts) |
-| Weather/customer-weighted outage locations | Browser Worker combines HRRR wind and rain, census customer exposure, Gaussian smoothing, and the live network; the UI converts each selected network segment to a geography-derived estimated account impact |
+| Real statewide Connecticut distribution grid | 299 HIFLD substations across all 8 counties, branching feeders + laterals, and 2020 Census-block-derived demand on the HRRR grid |
+| Weather/customer-weighted outage locations | Browser Worker combines HRRR wind and rain, Census-block customer exposure, optional population smoothing, 10 km impact regularization, and the live network |
 | Realistic-mode scheduler with seven factors | assessment delay, log-normal repair, discovery ramp, mutual-aid waves, road proxy, workday clamp, critical priority |
 | Real critical facilities (HIFLD/EPA) | 1,143 hospitals, fire stations, EMS, water plants statewide — outages near real facilities get priority-1 restoration |
 | NLCD tree canopy per substation | USGS 30m canopy cover (live-computed 1km buffer mean per substation) replaces the distance-based urban/suburban/rural heuristic |
 | NOAA HURDAT2 storm tracks | Sandy, Isaias, Irene, Henri track overlays on the map with wind-speed markers |
 | Statewide HRRR wind/rain grid | 41×65 grid (~3km resolution) for 8 cached events; sourced from the NOAA AWS archive |
-| Curated hourly storm playback | 24 hourly Isaias HRRR frames drive both the animated Wind/Rain/Impact overlay and timestamped outage placement |
+| Curated hourly storm playback | Isaias (24 frames) and the December 2022 windstorm (42 frames) use hourly HRRR data to drive the animated Wind/Rain/Impact overlay and timestamped outage placement |
 | DOE OE-417 disturbance database | 8 real CT outage events for calibrating simulated vs. actual restoration timelines |
-| Census tract population | 883 tracts (2020 Census P.L. 94-171) for much finer demand placement than the 169-town model |
+| Census block population | All 49,926 Connecticut blocks (2020 Census P.L. 94-171), bilinearly allocated from Census internal points to the fixed 41×65 HRRR grid |
 | Customer-impact-weighted dispatch | scheduler can favor outages serving more customers, not just nearest |
 | Crew specialization (line vs tree) | 80/20 fleet split, 30% tree-blocked outages, parallel subsystems |
 | Optimal-crew-count recommendation | server-side binary search via Numba (10 s at 250 k outages) |
@@ -120,7 +120,7 @@ Public data sources: NOAA SPC storm reports (`data/july2026_spc_reports.json`), 
 No Python, backend, JSON import, or downloaded handoff file is required:
 
 1. Open `03_grid_simulation.html` through GitHub Pages or any static web server.
-2. Choose a curated storm (currently Isaias), seed, outage count, and optional scientific parameters.
+2. Choose a curated storm (Isaias 2020 or the December 2022 windstorm), seed, outage count, and optional scientific parameters.
 3. Click **Generate outage scenario**.
 4. Inspect outage points and the customer, weather, raw-impact, or
    Gaussian-smoothed diagnostic surface.
@@ -129,11 +129,19 @@ No Python, backend, JSON import, or downloaded handoff file is required:
 The browser sends the live in-memory feeder/lateral network to
 `outage_location_worker.js`, which calls the same pure
 `outage_location_model.js` used by the automated tests. The default generates
-2,000 unique Connecticut network locations. Before restoration planning, the UI
-assigns each location a geography-derived estimated account impact from its
-served feeder/lateral segment. `outage_restoration_adapter.js` then attaches
+2,000 unique Connecticut failure jobs. The model assigns exact Census-derived
+integer accounts to the rooted network, sizes each job from its non-overlapping
+downstream subtree or compact customer-load group, and emits the variable count as
+authoritative output. `outage_restoration_adapter.js` then attaches
 deterministic critical-facility, tree, flood, callback, switching, underground,
 feeder, and substation metadata without moving a selected point.
+
+The network candidates form a validated upstream-to-downstream rooted forest
+with stable parent/child and subtree metadata. Census accounts are conserved
+exactly on that forest, and ancestor/descendant conflicts are rejected. Snapshot,
+hourly timeline, and Basic placement now emit the v4 variable-customer contract,
+which restoration preserves end to end. See
+[`CUSTOMER_OUTAGE_SIZING_IMPLEMENTATION_PLAN.md`](CUSTOMER_OUTAGE_SIZING_IMPLEMENTATION_PLAN.md).
 
 At a high level, the research placement path constructs separate storm-hazard
 and customer-consequence fields, optionally combines them into an
@@ -167,7 +175,8 @@ UI controls to source functions, see
 ├── 08_fetch_substations.py        # cache 299 real HIFLD substations statewide
 ├── 09_fetch_critical_facilities.py # cache 1,143 real HIFLD/EPA critical facilities statewide
 ├── 10_fetch_tree_canopy.py        # live-compute NLCD tree canopy per substation (1km buffer)
-├── 11_fetch_census_tracts.py      # cache 883 real census tracts + 169 town populations (keyless)
+├── 11_fetch_census_population.py # cache all 49,926 Census blocks + 169 towns
+├── 11_build_census_population_grid.js # reproducible block → HRRR-grid preprocessing
 ├── 12_fetch_hrrr_storm_wind.py    # builds curated hourly HRRR weather + offline legacy cache
 ├── 13_fetch_flood_corridors.py    # 12 real USGS NHD river corridors for the other 7 counties
 ├── scheduler_fast.py              # NumPy-vectorized fallback scheduler
@@ -178,11 +187,12 @@ UI controls to source functions, see
 ├── data/                          # real-data inputs (HIFLD, EPA, NLCD, Census, NOAA, DOE, USGS)
 │   ├── connecticut_substations.json    #   299 real HIFLD substations statewide
 │   ├── connecticut_critical_facilities.js # 1,143 HIFLD/EPA hospitals/fire/EMS/water
-│   ├── connecticut_census_tracts.js    #   883 real census tract centroids + populations
-│   ├── connecticut_towns_population.js #   169 real town populations + centroids
+│   ├── connecticut_census_blocks.json  #   auditable block populations + internal points
+│   ├── connecticut_census_population_grid.js # production 41×65 unsmoothed population grid
+│   ├── connecticut_towns_population.js #   169 town populations + Census internal points
 │   ├── connecticut_tree_canopy.js      #   live-computed NLCD canopy per substation
 │   ├── connecticut_storm_wind.js       #   legacy peak-hour cache for offline regression only
-│   ├── connecticut_storm_timelines.js  #   24 hourly Isaias wind/rain frames
+│   ├── connecticut_storm_timelines.js  #   reviewed hourly Isaias + Dec. 2022 wind/rain frames
 │   ├── connecticut_flood_corridors.js  #   12 USGS-traced river corridors (7 counties)
 │   ├── hartford_storm_tracks.js   #   NOAA HURDAT2 tracks (Sandy, Isaias, Irene, Henri)
 │   ├── hartford_doe_oe417.js      #   DOE OE-417 disturbance events for CT
@@ -213,11 +223,11 @@ python -m http.server 8080
 
 The page works entirely client-side. The server backend is optional; the page auto-detects whether it's reachable and falls back to in-browser compute.
 
-For the curated Isaias workflow, the animated map and outage generator consume
-the same 24 hourly weather frames. Clicking **Plan restoration** stops playback,
-shows the final accumulated 2,000 locations, and hands all 100,000 represented
-customers to the existing scheduler. Restoration time starts after the final
-storm frame; the result card verifies that zero customers remain.
+For either curated-storm workflow, the animated map and outage generator
+consume the same reviewed hourly weather frames. Clicking **Plan restoration**
+stops playback, shows the final accumulated outage set, and hands every
+represented customer to the existing scheduler. Restoration time starts after
+the final storm frame; the result card verifies that zero customers remain.
 
 ### With the FastAPI backend locally
 
@@ -248,19 +258,23 @@ npm test
 The dependency-free suite covers frozen Python-to-JavaScript component parity,
 scientific controls, determinism, every complete HRRR event, the standalone
 generator customer contract, Connecticut geography, network membership, Worker cancellation and
-responsiveness, 24-frame Isaias timeline generation, timestamped storm-path
+responsiveness, reviewed Isaias and December 2022 timeline generation, timestamped storm-path
 movement, restoration metadata, and zero-endpoint accounting. The
 100,000-segment performance fixture is built deterministically in JavaScript;
 there is no exported production-network file or second generator to maintain.
 
 ## Current limitations
 
-- Isaias is currently the only curated hourly storm. The eight older
-  representative-hour caches remain for offline compatibility and regression
-  comparison, but the website does not load them or present them as equivalent
-  full-storm timelines.
+- Isaias 2020 and the December 2022 windstorm are the two curated hourly
+  storms. The remaining representative-hour caches stay available for offline
+  compatibility and regression comparison, but the website does not present
+  them as equivalent full-storm timelines.
 - Feeder and lateral topology is synthetic around 299 real HIFLD substations;
   it is not utility GIS topology.
+- Topology-derived customer sizing passes the predeclared held-out D.P.U. bin
+  thresholds after adding generic 1–15-account leaf groups. The match is not
+  exact: the held-out mean and largest-1% concentration remain somewhat high;
+  see [`data/validation/dpu31_topology_calibration_report.md`](data/validation/dpu31_topology_calibration_report.md).
 - The model creates plausible outage locations, but it has not yet been
   validated against restricted EAGLE-I or utility outage-point data.
 - July 2026 has complete cached HRRR arrays but a 27.6 mph in-state maximum,
@@ -303,17 +317,18 @@ History of the speedup at 25k × 5000 over the project:
 Repository documentation covers the implementation, data, and research context:
 
 - **[`OUTAGE_LOCATION_MODEL_GUIDE.md`](OUTAGE_LOCATION_MODEL_GUIDE.md)** — concise code map, equations, tuning-parameter table, resolution handling, and maintainer checklist for the outage-location model.
+- **[`CUSTOMER_OUTAGE_SIZING_IMPLEMENTATION_PLAN.md`](CUSTOMER_OUTAGE_SIZING_IMPLEMENTATION_PLAN.md)** — source-of-truth plan for topology-derived customer counts, D.P.U. 24-41 distribution calibration, non-overlapping downstream impacts, validation gates, and the separate Isaias timing follow-up.
 - **`JOURNAL.html`** — open in any browser. Chapters covering everything from foundations through The Realism Fix, with verbatim user-question quotes, colored category tags, a cross-project "Problems Faced" appendix, and an addendum on the Realism Fix phases + advisor feedback. Browser-viewable and printable.
 - **`Hartford_Grid_Dev_Journal.docx`** — same content as a Word document for upload to Google Docs (drag into `drive.google.com` → right-click → Open with Google Docs → auto-converts). Regenerate with `python build_docx.py`.
 - **`Hartford_Grid_Research_Context.docx`** — 19 cited research papers across 6 themes (each with author/title/venue + "Why it matters" + "What it does" + "Key terms" vocab), niche analysis, sketch of paper introduction, open research questions, and PURA / Eversource data sources to pursue.
 - **`ROADMAP.md`** — advisor-feedback incorporation plan: the feedback organized by theme, a prioritized track-by-track implementation plan, and the data/links to collect.
-- **`DATA_SOURCES.md`** — provenance file for every real-world dataset the simulation uses (Connecticut state boundary, 169 towns, 299 real HIFLD substations, 1,143 critical facilities, 883 census tracts, statewide HRRR wind grid, 17 flood corridors) plus planned sources (ISO-NE, DW crew curves, Eversource outage data). Source URLs, fetch scripts, licenses, refresh commands, and honest coverage notes for each.
+- **`DATA_SOURCES.md`** — provenance file for every real-world dataset the simulation uses (Connecticut boundaries, 169 towns, 299 real HIFLD substations, 1,143 critical facilities, 49,926 Census blocks, statewide HRRR weather grid, and flood corridors). Source URLs, preprocessing scripts, licenses, refresh commands, and coverage notes are recorded there.
 
 ---
 
 ## Status & roadmap
 
-**Engineering side:** the grid, critical facilities, census tracts, towns, tree canopy, HRRR wind grid, and flood corridors are all real data covering the entire state of Connecticut (8 counties). Territory/feeder rendering is canvas-batched and the territory-coloring pass runs in a Web Worker; the FastAPI backend disk-caches expensive `/api/schedule` and `/api/monte_carlo` results. Calibration framework is ready, multi-server batch is ready, all toggles work at max settings.
+**Engineering side:** the grid, critical facilities, Census blocks, towns, tree canopy, HRRR weather grid, and flood corridors use statewide Connecticut data. Census blocks are preprocessed to the model grid so the browser does not load or transfer tens of thousands of records on every run. Territory/feeder rendering is canvas-batched and the outage-placement calculation runs in a Web Worker.
 
 **The Realism Fix (done):** three composable realism phases shipped and tested —
 **Phase 1** hierarchical restoration (laterals can't energize until their feeder is back),

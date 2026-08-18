@@ -2,6 +2,6 @@
   "name": "connecticut-energy-grid-simulation",
   "private": true,
   "scripts": {
-    "test": "node --test tests/outage_location_model.test.js tests/outage_location_timeline.test.js tests/outage_location_worker.test.js tests/outage_restoration_adapter.test.js tests/outage_location_acceptance.test.js tests/storm_timeline_data.test.js tests/storm_timeline_ui.test.js"
+    "test": "node --test tests/dpu31_size_target_data.test.js tests/outage_network_topology.test.js tests/outage_customer_allocation.test.js tests/outage_topology_sizing.test.js tests/outage_location_model.test.js tests/outage_location_timeline.test.js tests/outage_location_worker.test.js tests/outage_restoration_adapter.test.js tests/outage_location_acceptance.test.js tests/storm_timeline_data.test.js tests/storm_timeline_ui.test.js"
   }
 }

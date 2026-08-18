@@ -35,7 +35,7 @@ function smallInput(seed = 17) {
   return {
     config: { ...source.config, seed },
     boundary: source.boundary,
-    censusTracts: source.census_tracts,
+    censusBlocks: source.census_tracts,
     weather: source.weather,
     network: source.network,
     inputs: { fixture: "small-worker" },
@@ -45,14 +45,16 @@ function smallInput(seed = 17) {
 function fullInput() {
   const config = fixture.full_isaias_reference.config;
   const boundary = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "connecticut_boundary.json"), "utf8"));
-  const censusTracts = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "connecticut_census_tracts.json"), "utf8"));
+  const populationGrid = JSON.parse(fs.readFileSync(
+    path.join(ROOT, "data", "connecticut_census_population_grid.json"), "utf8",
+  ));
   const weatherText = fs.readFileSync(path.join(ROOT, "data", "connecticut_storm_wind.js"), "utf8");
   const weatherData = JSON.parse(weatherText.slice(weatherText.indexOf("=") + 1).trim().replace(/;$/, ""));
   const network = buildPerformanceNetwork(model, boundary, weatherData.grid);
   return {
     config,
     boundary,
-    censusTracts,
+    populationGrid,
     weather: {
       grid: weatherData.grid,
       storm: { storm_id: config.storm_id, ...weatherData.storms[config.storm_id] },
@@ -64,7 +66,9 @@ function fullInput() {
 
 function timelineInput() {
   const boundary = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "connecticut_boundary.json"), "utf8"));
-  const censusTracts = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "connecticut_census_tracts.json"), "utf8"));
+  const populationGrid = JSON.parse(fs.readFileSync(
+    path.join(ROOT, "data", "connecticut_census_population_grid.json"), "utf8",
+  ));
   const timelineText = fs.readFileSync(
     path.join(ROOT, "data", "connecticut_storm_timelines.js"),
     "utf8",
@@ -76,7 +80,7 @@ function timelineInput() {
     mode: "timeline",
     config: model.DEFAULT_CONFIG,
     boundary,
-    censusTracts,
+    populationGrid,
     weatherTimeline: {
       grid: timelineData.grid,
       storm: timelineData.storms.isaias_2020,
@@ -127,6 +131,9 @@ test("Worker announces its versioned capabilities", async (t) => {
   assert.equal(ready.capabilities.separatedRiskComponents, true);
   assert.equal(ready.capabilities.lineIntegratedNetworkScores, true);
   assert.equal(ready.capabilities.segmentKeyedSampling, true);
+  assert.equal(ready.capabilities.rootedNetworkTopology, true);
+  assert.equal(ready.capabilities.censusCustomerAccountAllocation, true);
+  assert.equal(ready.capabilities.topologyCustomerSizing, true);
 });
 
 test("Worker answers an explicit startup status handshake", async (t) => {
@@ -155,13 +162,39 @@ test("Worker reports real stages and returns typed surfaces plus restoration-com
   const message = await waitFor(worker, (value) => value.type === "result" && value.runId === "small");
   const { result } = message;
   assert.deepEqual(stages, [
-    "validation", "customer-exposure", "weather-severity", "impact-smoothing",
+    "validation", "customer-exposure", "network-customer-allocation",
+    "weather-severity", "impact-smoothing",
     "network-weighting", "sampling", "serialization", "complete",
   ]);
   assert.equal(result.outages.length, 3);
-  assert.equal(result.totalCustomers, 150);
+  assert.equal(result.schemaVersion, 4);
+  assert.equal(
+    result.totalCustomers,
+    result.outages.reduce((sum, outage) => sum + outage.customers, 0),
+  );
   assert.equal(result.summary.uniqueSampledSegments, 3);
-  assert.ok(result.outages.every((outage) => outage.popLoss === 50));
+  assert.ok(result.outages.every((outage) =>
+    ["service", "lateral", "feeder"].includes(outage.componentClass)
+      && Number.isInteger(outage.customers)
+      && outage.customers > 0
+      && outage.popLoss === outage.customers));
+  assert.ok(result.outages.every((outage) => Number.isInteger(outage.topologyDepth)));
+  assert.ok(result.outages.every(
+    (outage) => Number.isInteger(outage.networkDirectCustomerAccounts)
+      && Number.isInteger(outage.networkDownstreamCustomerAccounts),
+  ));
+  assert.equal(result.methodology.networkTopology.customerLoadsAssigned, true);
+  assert.equal(result.methodology.networkTopology.overlappingOutagePreventionApplied, true);
+  assert.equal(
+    result.customerAllocation.summary.allocatedCustomerAccounts,
+    result.customerAllocation.summary.targetIntegerCustomerAccounts,
+  );
+  assert.equal(
+    result.summary.customerAllocation.rootDownstreamCustomerAccounts,
+    result.customerAllocation.summary.targetIntegerCustomerAccounts,
+  );
+  assert.ok(result.summary.topologyRoots >= 1);
+  assert.ok(result.summary.maximumTopologyDepth >= 0);
   assert.ok(result.surfaces.mask instanceof Uint8Array);
   assert.ok(result.surfaces.smoothedImpact instanceof Float64Array);
   assert.equal(result.surfaces.hazardIndex, result.surfaces.weatherSeverity);
@@ -175,6 +208,7 @@ test("Worker reports real stages and returns typed surfaces plus restoration-com
   assert.deepEqual([result.surfaces.rows, result.surfaces.columns], [3, 3]);
   assert.equal(result.surfaces.smoothedImpact.length, 9);
   assert.ok(result.summary.timingsMs["network-weighting"] >= 0);
+  assert.ok(result.summary.timingsMs["network-customer-allocation"] >= 0);
   assert.ok(result.summary.surface.totalPopulationPersons > result.summary.surface.totalCustomerAccounts);
 });
 
@@ -198,11 +232,14 @@ test("Worker returns 24 transferable Isaias frames and 2,000 timestamped outages
   ]);
   assert.equal(
     result.summary.placementModel,
-    "impact_weighted_curated_hourly_timeline_v2",
+    "impact_weighted_curated_hourly_timeline_v4_topology_sized",
   );
   assert.equal(result.summary.placementMode, "impact_weighted");
   assert.equal(result.outages.length, 2000);
-  assert.equal(result.totalCustomers, 100000);
+  assert.equal(
+    result.totalCustomers,
+    result.outages.reduce((sum, outage) => sum + outage.customers, 0),
+  );
   assert.equal(result.summary.uniqueSampledSegments, 2000);
   assert.ok(result.outages.every((outage) => typeof outage.occurredAt === "string"));
   assert.equal(result.surfaces.mode, "timeline");
@@ -232,7 +269,7 @@ test("Worker returns human-readable validation errors with the failing stage", a
   const message = await waitFor(worker, (value) => value.type === "error" && value.runId === "bad-input");
   assert.equal(message.error.name, "InputValidationError");
   assert.equal(message.error.stage, "validation");
-  assert.match(message.error.message, /exactly 50 customers/);
+  assert.match(message.error.message, /deprecated compatibility field/);
 
   worker.postMessage({ ...request("wrong-version", smallInput()), version: 2 });
   const protocolError = await waitFor(
@@ -264,15 +301,35 @@ test("explicit basic mode succeeds without weather surfaces and labels itself cl
   await waitFor(worker, (message) => message.type === "ready");
   const input = smallInput();
   input.mode = "basic";
-  delete input.boundary;
-  delete input.censusTracts;
+  input.config = { ...input.config, nOutages: 2 };
+  const weather = model.normalizeWeather(input.weather);
+  const mask = model.buildConnecticutMask(
+    input.boundary,
+    weather.latitudes,
+    weather.longitudes,
+  );
+  const populationPersons = model.rasterizePopulationPersons(
+    input.censusBlocks,
+    weather.latitudes,
+    weather.longitudes,
+    mask,
+  );
+  input.populationGrid = {
+    grid: { latitudes: weather.latitudes, longitudes: weather.longitudes },
+    connecticutMask: mask,
+    populationPersons,
+  };
+  delete input.censusBlocks;
   delete input.weather;
   worker.postMessage(request("basic", input));
   const message = await waitFor(worker, (value) => value.type === "result" && value.runId === "basic");
-  assert.equal(message.result.summary.placementModel, "basic_network_v1");
+  assert.equal(message.result.summary.placementModel, "basic_network_v2_topology_sized");
   assert.equal(message.result.surfaces, null);
-  assert.equal(message.result.outages.length, 3);
-  assert.equal(message.result.totalCustomers, 150);
+  assert.equal(message.result.outages.length, 2);
+  assert.equal(
+    message.result.totalCustomers,
+    message.result.outages.reduce((sum, outage) => sum + outage.customers, 0),
+  );
 });
 
 test("a newer request supersedes an older run without leaking a stale result", async (t) => {
@@ -285,12 +342,12 @@ test("a newer request supersedes an older run without leaking a stale result", a
     messages.push(message);
     if (!replacementSent && message.type === "progress" && message.runId === "old") {
       replacementSent = true;
-      worker.postMessage(request("new", smallInput(18)));
+      worker.postMessage(request("new", smallInput(19)));
     }
   });
   worker.postMessage(request("old", smallInput(17)));
   const replacement = await waitFor(worker, (value) => value.type === "result" && value.runId === "new");
-  assert.equal(replacement.result.config.seed, 18);
+  assert.equal(replacement.result.config.seed, 19);
   assert.ok(messages.some((message) => message.type === "cancelled"
     && message.runId === "old" && message.reason === "superseded"));
   assert.ok(!messages.some((message) => message.type === "result" && message.runId === "old"));
@@ -321,10 +378,12 @@ test("full Isaias generation runs off-thread on a 100k-segment test network", { 
   assert.ok(message.result.summary.candidateSegments >= message.result.summary.sampledOutages);
   assert.equal(message.result.summary.sampledOutages, 2000);
   assert.equal(message.result.summary.uniqueSampledSegments, 2000);
-  assert.equal(message.result.summary.representedCustomers, 100000);
+  assert.equal(message.result.summary.representedCustomers, message.result.totalCustomers);
+  assert.ok(message.result.totalCustomers > 0);
+  assert.ok(message.result.totalCustomers <= 1633000);
   assert.equal(
     message.result.summary.surface.validConnecticutCells,
-    fixture.full_isaias_reference.expected.valid_connecticut_cells,
+    input.populationGrid.connecticutMask.reduce((sum, inside) => sum + inside, 0),
   );
   assert.equal(message.result.surfaces.mask.length, 41 * 65);
   assert.equal(message.result.surfaces.smoothedImpact.length, 41 * 65);

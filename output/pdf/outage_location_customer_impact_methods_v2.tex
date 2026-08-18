@@ -1,0 +1,236 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=0.72in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage{etoolbox}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[hidelinks]{hyperref}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.42em}
+\setlength{\bibsep}{0.2em}
+\AtBeginEnvironment{thebibliography}{\footnotesize\raggedright}
+
+\begin{document}
+\begin{center}
+  {\Large\textbf{Outage-Location and Customer-Impact Mapping}}\\[0.2em]
+  {\large Math Summary for Review}\\[0.4em]
+  Alex Luo\\[-0.05em]
+  \small Updated August 18, 2026
+\end{center}
+\vspace{-0.8em}
+
+\section*{Purpose}
+
+The model creates a fixed number of synthetic storm outages on a distribution-network map. It does not predict the total outage count or an absolute probability that a particular line will fail. Given a storm and a requested count $k$, weather and customer exposure determine where failures receive weight, while network topology determines how many modeled customer accounts are downstream of each failure.
+
+The inputs are hourly NOAA High-Resolution Rapid Refresh (HRRR) wind and precipitation fields, 2020 Census population, and synthetic feeders and laterals anchored at public substation coordinates \citep{noaahrrr,census2020,hifld}. Raster calculations use a regular $41\times65$ Connecticut grid. Network lines remain vector geometry and are evaluated against that grid.
+
+\section*{Weather and customer-exposure surface}
+
+\textbf{1. Put Census population on the weather grid.}
+Each Census block has population $p_i$ at its published internal point. Bilinear weights assign it to the four surrounding grid nodes. Weights outside the Connecticut land mask are removed and the valid weights are renormalized. If $w_{ij}$ is the resulting share of block $i$ assigned to node $j$, then
+
+\begin{equation}
+  P_j=\sum_i p_iw_{ij},
+  \qquad
+  \sum_j P_j=\sum_i p_i=3{,}605{,}944.
+  \label{eq:population-allocation}
+\end{equation}
+
+The production grid represents all 49,926 Connecticut blocks and conserves the official statewide population exactly. Census internal points are geographic reference points, not household locations or population-weighted centroids.
+
+\textbf{2. Construct relative customer exposure.}
+Optional Gaussian smoothing uses normalized boundary convolution. For land mask $M$ and Gaussian kernel $G_{\sigma_c}$,
+
+\begin{equation}
+  \mathcal{S}_{\sigma_c}(P)_j=
+  \frac{[G_{\sigma_c}*(MP)]_j}{[G_{\sigma_c}*M]_j}
+  \times
+  \frac{\sum_{\ell:M_\ell=1}P_\ell}
+       {\sum_{\ell:M_\ell=1}[G_{\sigma_c}*(MP)]_\ell/[G_{\sigma_c}*M]_\ell}.
+  \label{eq:smoothing}
+\end{equation}
+
+The reference setting is $\sigma_c=0$ km, so the block-derived grid is used without additional smoothing. Nonzero bandwidths remain sensitivity scenarios. Population is converted to a modeled account inventory with
+
+\begin{equation}
+  r_A=\frac{1{,}633{,}000}{3{,}605{,}944},
+  \qquad
+  A_j=r_A\,\mathcal{S}_{\sigma_c}(P)_j,
+  \qquad
+  C_j=\frac{A_j}{\overline A}.
+  \label{eq:accounts-consequence}
+\end{equation}
+
+Here $\overline A$ is the mean account estimate over in-state nodes, so $C_j$ is a dimensionless consequence index. The value 1,633,000 is the fixed modeled account inventory used by the software, not a customer-level utility record.
+
+\textbf{3. Compute a relative storm-hazard score.}
+At grid node $j$ and hour $t$,
+
+\begin{align}
+  D_{jt}
+    &=\left(\frac{\max(0,v_{jt}-v_0)}{s_v}\right)^p,
+    &v_0&=35\ \text{mph},\quad s_v=25\ \text{mph},\quad p=2,
+    \label{eq:wind}\\
+  R_{jt}
+    &=1+\alpha\min\left(\frac{r_{jt}}{r_0},r_{\max}\right),
+    &\alpha&=0.5,\quad r_0=1\ \text{inch},\quad r_{\max}=2,
+    \label{eq:rain}\\
+  H_{jt}&=D_{jt}R_{jt}.
+  \label{eq:hazard}
+\end{align}
+
+$v_{jt}$ is HRRR surface gust speed. The precipitation value $r_{jt}$ is a rolling six-hour total derived from aligned one-hour HRRR accumulations. These constants are sensitivity assumptions, not coefficients fitted to observed component failures. Thus $H_{jt}$ is a relative stress score, not a failure probability.
+
+\textbf{4. Combine hazard with customer consequence.}
+The default impact-priority field is
+
+\begin{equation}
+  I_{jt}=\mathcal{S}_{\sigma_I}\!\left(H_{jt}C_j^q\right),
+  \qquad q=1,\quad \sigma_I=10\ \text{km}.
+  \label{eq:impact}
+\end{equation}
+
+The 10 km boundary-corrected smoother regularizes the combined surface. It is an explicit modeling choice, not an empirically fitted damage radius.
+
+\textbf{5. Transfer the grid score to network lines.}
+Every feeder and lateral is divided by chainage into candidates no longer than 0.25 km. Composite midpoint quadrature, also using a maximum spacing of 0.25 km, gives
+
+\begin{equation}
+  W_s=\lambda_{\mathrm{type}(s)}
+  \sum_t\int_s I(x,t)\,d\ell,
+  \qquad
+  \lambda_{\mathrm{feeder}}=0.10,
+  \quad
+  \lambda_{\mathrm{lateral}}=1.00.
+  \label{eq:segment-weight}
+\end{equation}
+
+$I(x,t)$ is bilinearly interpolated along segment $s$. An optional failure-oriented mode replaces $I$ with $H$. Segmentation and integration by physical distance make the result insensitive to redundant vertices in a line drawing.
+
+\section*{Topology-based customer counts}
+
+\textbf{6. Turn feeders and laterals into directed trees.}
+A feeder coordinate list is interpreted from its substation toward its endpoint. A lateral is interpreted from its feeder attachment outward. Each segment records one parent and zero or more children. A lateral's first segment is attached to the feeder segment at the recorded or inferred attachment chainage. Attachments farther than 0.05 km from the feeder are rejected. The statewide network is therefore a rooted forest: one directed tree for each feeder root.
+
+\textbf{7. Attach modeled accounts to the network.}
+Topology sizing uses the raw, unsmoothed Census-derived account grid, so population-smoothing experiments affect placement but do not change the topology allocation or statewide sizing inventory. Each positive grid node is first assigned to its nearest substation territory. Within that territory, the node's accounts are divided among up to eight nearest distinct laterals using inverse-square distance weights:
+
+\begin{equation}
+  q_{jk}=\frac{1}{\max(d_{jk},0.25)^2},
+  \qquad
+  A_{jk}=A_j\frac{q_{jk}}{\sum_m q_{jm}}.
+  \label{eq:lateral-allocation}
+\end{equation}
+
+$d_{jk}$ is the shortest distance in kilometers from grid node $j$ to lateral $k$. The 0.25 km floor prevents a nearly zero distance from dominating the allocation. Each lateral share is then spread over all of that lateral's segments in proportion to segment length:
+
+\begin{equation}
+  A_{jks}=A_{jk}\frac{L_s}{\sum_{u\in k}L_u}.
+  \label{eq:length-allocation}
+\end{equation}
+
+If a territory has no laterals, the nearest feeder segment is used as an explicit fallback. Fractional attachments are converted to whole accounts using largest-remainder rounding, conserving exactly 1,633,000 modeled accounts.
+
+\textbf{8. Sum customers from the network ends toward the substation.}
+Let $D_s$ be accounts attached directly to segment $s$, and let $N_s$ be all accounts downstream of it. A post-order traversal computes
+
+\begin{equation}
+  N_s=D_s+\sum_{c\in\operatorname{children}(s)}N_c.
+  \label{eq:downstream}
+\end{equation}
+
+For example, if a terminal segment has six direct accounts and its parent has four, the terminal failure affects six accounts while the parent failure affects $4+6=10$. A feeder failure can therefore be large because it includes every modeled account below that segment.
+
+\textbf{9. Represent small outages without inventing equipment labels.}
+Whole network segments do not provide enough one- and two-account jobs to represent the supplied storm-job distribution. The model therefore partitions each segment's directly attached accounts into disjoint groups no larger than 15 accounts. The repeating generic pattern is
+
+\begin{equation}
+  [1,1,1,1,1,1,1,1,2,3,5,8,12,15].
+  \label{eq:group-pattern}
+\end{equation}
+
+The final partial cycle is adjusted to conserve the segment's exact direct-account total. These groups are generic computational load units. They are not claimed transformers, service lines, or damage types. A network-segment candidate has size $N_s$. A small-group candidate has the size of its own disjoint group.
+
+If segment $s$ has $G_s$ small groups, each group receives
+
+\begin{equation}
+  W_{sg}=\frac{0.75W_s}{G_s}.
+  \label{eq:group-weight}
+\end{equation}
+
+Thus all small groups on the segment together have 75 percent of the segment's network-failure weight, regardless of how many groups it contains.
+
+\textbf{10. Select failures without counting the same customers twice.}
+Every positive-weight network or small-group candidate $f$ receives a deterministic random-priority key
+
+\begin{equation}
+  K_f=\frac{\log U_f}{w_f},
+  \qquad U_f\sim\operatorname{Uniform}(0,1),
+  \label{eq:failure-key}
+\end{equation}
+
+where $w_f=W_s$ for a network failure and $w_f=W_{sg}$ for a small group. The logarithmic key is ordering-equivalent to the Efraimidis-Spirakis weighted sampling key \citep{efraimidis2006}. Uniform values are generated from the scenario seed and stable candidate identifiers, making results reproducible and invariant to candidate-array order.
+
+Candidates are considered from largest key downward. Each network segment has a preorder subtree interval $[a_s,b_s]$. In a rooted tree, two network failures overlap when their intervals intersect:
+
+\begin{equation}
+  a_i\le b_j
+  \quad\text{and}\quad
+  a_j\le b_i.
+  \label{eq:overlap}
+\end{equation}
+
+An overlapping candidate is rejected. A small group is also rejected if an already selected network failure contains its attachment segment, and a network failure is rejected if it contains an already selected group. Selection continues until $k$ non-overlapping failures have been accepted. This is an overlap-safe random-priority procedure, not ordinary top-$k$ weighted sampling.
+
+The reported total is therefore
+
+\begin{equation}
+  C_{\mathrm{total}}=\sum_{o=1}^{k}C_o,
+  \label{eq:total-customers}
+\end{equation}
+
+with each modeled account represented in at most one selected outage.
+
+\textbf{11. Assign an occurrence hour.}
+For a selected failure attached to segment $s$, the occurrence frame is sampled conditionally from the segment's frame-specific weights:
+
+\begin{equation}
+  \Pr(T=t\mid s)=\frac{W_{st}}{\sum_\tau W_{s\tau}}.
+  \label{eq:frame}
+\end{equation}
+
+The location is sampled reproducibly along the selected segment. This separates the segment's storm-total selection weight from the hour assigned to the resulting outage.
+
+\section*{Calibration and interpretation}
+
+Feeder susceptibility, candidate length, and total small-group weight were selected using aggregate National Grid D.P.U. 24-41 storm-job size bins supplied for this project \citep{dpu2441}. The fitting objective was the mean total-variation distance between simulated and target job shares across five calibration seeds. Five additional seeds were held out from parameter selection. The accepted settings produced held-out mean job-share total variation 0.1007, maximum absolute bin error 0.0578, and overflow job share 0.0025.
+
+These are held-out stochastic seeds on the same synthetic calibration network, not validation on an independent utility topology or storm. The D.P.U. target influences the distribution of modeled job sizes; it does not directly assign a customer count to an outage.
+
+\section*{What this supports and what it does not}
+
+The method provides a transparent conditional scenario generator in which customer totals arise from network position. Population and accounts are conserved, upstream and downstream failures cannot double-count the same modeled customers, and all random choices are reproducible for a fixed seed.
+
+Important limitations remain:
+
+\begin{itemize}[leftmargin=1.35em,itemsep=0.02em,topsep=0.1em,parsep=0pt]
+  \item Substation locations are real, but feeders and laterals are synthetic.
+  \item Customer-to-network attachment is based on distance rather than utility customer-circuit records.
+  \item The initial sizing rule assumes every modeled customer below a failed segment loses power.
+  \item Initial sizing does not represent electrical phases, protective-device boundaries, switching, or backfeeding.
+  \item A failure location is sampled within a 0.25 km segment, while its size uses that segment's complete downstream total.
+  \item The 1-15 account groups are generic and calibration-informed, not an observed equipment inventory.
+\end{itemize}
+
+The appropriate paper language is therefore \emph{model-estimated downstream customer accounts}, not known customers served by an actual circuit. Validation against observed component failures and utility circuit records would be required before interpreting the weights as calibrated failure probabilities or the customer counts as actual outage impacts.
+
+\newpage
+\bibliographystyle{plainnat}
+\bibliography{outage_location_customer_impact_methods_v2}
+
+\end{document}

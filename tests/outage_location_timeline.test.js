@@ -15,7 +15,7 @@ const { buildReviewNetwork } = require("./helpers/outage_location_test_network.j
 
 const ROOT = path.resolve(__dirname, "..");
 
-function loadInputs() {
+function loadInputs(stormId = "isaias_2020") {
   const context = { window: {} };
   vm.createContext(context);
   vm.runInContext(
@@ -24,14 +24,14 @@ function loadInputs() {
   );
   const data = context.window.CONNECTICUT_STORM_TIMELINES;
   const boundary = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "connecticut_boundary.json"), "utf8"));
-  const censusTracts = JSON.parse(
-    fs.readFileSync(path.join(ROOT, "data", "connecticut_census_tracts.json"), "utf8"),
+  const populationGrid = JSON.parse(
+    fs.readFileSync(path.join(ROOT, "data", "connecticut_census_population_grid.json"), "utf8"),
   );
   return {
-    config: model.DEFAULT_CONFIG,
+    config: { ...model.DEFAULT_CONFIG, stormId },
     boundary,
-    censusTracts,
-    weatherTimeline: { grid: data.grid, storm: data.storms.isaias_2020 },
+    populationGrid,
+    weatherTimeline: { grid: data.grid, storm: data.storms[stormId] },
     network: buildReviewNetwork(model, boundary, data.grid),
   };
 }
@@ -63,26 +63,66 @@ test("full Isaias timeline produces exactly 2,000 unique timestamped outages", (
   const result = model.generateTimelineOutageScenario(input);
   const validTimes = new Set(result.surfaces.timeline.frames.map((frame) => frame.validTime));
 
-  assert.equal(result.schemaVersion, 2);
-  assert.equal(result.schema, "connecticut_timeline_outage_scenario_v2");
+  assert.equal(result.schemaVersion, 4);
+  assert.equal(result.schema, "connecticut_timeline_outage_scenario_v4");
   assert.equal(
     result.summary.placementModel,
-    "impact_weighted_curated_hourly_timeline_v2",
+    "impact_weighted_curated_hourly_timeline_v4_topology_sized",
   );
   assert.equal(result.summary.placementMode, "impact_weighted");
   assert.equal(result.summary.timelineFrames, 24);
   assert.equal(result.outages.length, 2000);
-  assert.equal(result.totalCustomers, 100000);
+  assert.equal(
+    result.totalCustomers,
+    result.outages.reduce((sum, outage) => sum + outage.customers, 0),
+  );
+  assert.equal(result.methodology.networkTopology.customerLoadsAssigned, true);
+  assert.equal(result.methodology.networkTopology.overlappingOutagePreventionApplied, true);
+  assert.equal(result.customerAllocation.summary.targetIntegerCustomerAccounts, 1633000);
+  assert.equal(result.customerAllocation.summary.allocatedCustomerAccounts, 1633000);
+  assert.equal(result.customerAllocation.summary.rootDownstreamCustomerAccounts, 1633000);
   assert.equal(result.summary.uniqueSampledSegments, 2000);
   assert.equal(new Set(result.outages.map((outage) => outage.networkSegmentId)).size, 2000);
   assert.equal(result.summary.frameOutageCounts.reduce((sum, count) => sum + count, 0), 2000);
-  assert.ok(result.outages.every((outage) => outage.customers === 50 && outage.popLoss === 50));
+  assert.ok(result.outages.every(
+    (outage) => Number.isInteger(outage.customers)
+      && outage.customers > 0
+      && outage.popLoss === outage.customers,
+  ));
+  assert.ok(result.outages.every(
+    (outage) => Number.isInteger(outage.networkDirectCustomerAccounts)
+      && Number.isInteger(outage.networkDownstreamCustomerAccounts),
+  ));
   assert.ok(result.outages.every((outage) => validTimes.has(outage.occurredAt)));
   assert.ok(result.outages.every((outage) => outage.localRain1hIn >= 0 && outage.localRain6hIn >= 0));
   assert.ok(result.outages.every((outage) =>
     model.pointInBoundary(input.boundary, outage.lat, outage.lon)));
   assert.equal(result.summary.firstOccurrence, "2020-08-04T17:00:00Z");
   assert.equal(result.summary.lastOccurrence, "2020-08-05T00:00:00Z");
+});
+
+test("December 2022 timeline produces topology-sized outages from its own 42 weather frames", () => {
+  const input = loadInputs("dec2022");
+  const result = model.generateTimelineOutageScenario({
+    ...input,
+    config: { ...input.config, nOutages: 500 },
+  });
+  const validTimes = new Set(input.weatherTimeline.storm.frames.map((frame) => frame.valid_time));
+
+  assert.equal(result.summary.timelineFrames, 42);
+  assert.equal(result.outages.length, 500);
+  assert.equal(result.summary.frameOutageCounts.reduce((sum, count) => sum + count, 0), 500);
+  assert.equal(new Set(result.outages.map((outage) => outage.networkSegmentId)).size, 500);
+  assert.equal(
+    result.totalCustomers,
+    result.outages.reduce((sum, outage) => sum + outage.customers, 0),
+  );
+  assert.ok(result.outages.every((outage) =>
+    validTimes.has(outage.occurredAt)
+      && Number.isInteger(outage.customers)
+      && outage.customers > 0));
+  assert.equal(result.summary.firstOccurrence, "2022-12-23T01:00:00Z");
+  assert.equal(result.summary.lastOccurrence, "2022-12-24T01:00:00Z");
 });
 
 test("timestamped outage footprint follows Isaias from west toward east", () => {
@@ -125,7 +165,7 @@ test("failure-oriented timeline mode excludes Census exposure from placement wei
   });
   assert.equal(
     failure.summary.placementModel,
-    "failure_oriented_curated_hourly_timeline_v2",
+    "failure_oriented_curated_hourly_timeline_v4_topology_sized",
   );
   assert.equal(failure.methodology.placementMode, "failure_oriented");
   assert.equal(failure.summary.totalSegmentWeight, failure.summary.totalFailureOrientedWeight);
@@ -146,7 +186,7 @@ test("hourly timeline remains comparable to but meaningfully differs from the ol
   const snapshot = model.generateOutageScenario({
     config: { ...input.config, stormId: "isaias_2020" },
     boundary: input.boundary,
-    censusTracts: input.censusTracts,
+    populationGrid: input.populationGrid,
     weather: loadSnapshotWeather(),
     network: input.network,
   });
@@ -155,10 +195,13 @@ test("hourly timeline remains comparable to but meaningfully differs from the ol
 
   assert.equal(snapshot.outages.length, 2000);
   assert.equal(timeline.outages.length, 2000);
-  assert.equal(snapshot.totalCustomers, 100000);
-  assert.equal(timeline.totalCustomers, 100000);
+  assert.equal(snapshot.totalCustomers, snapshot.sizeSummary.totalCustomers);
+  assert.equal(timeline.totalCustomers, timeline.sizeSummary.totalCustomers);
   assert.ok(snapshot.outages.every((outage) => outage.occurredAt == null));
   assert.ok(timeline.outages.every((outage) => outage.occurredAt != null));
-  assert.equal(overlap, 1587);
-  assert.ok(overlap > 0 && overlap < timeline.outages.length);
+  const overlapFraction = overlap / timeline.outages.length;
+  assert.ok(
+    overlapFraction > 0.2 && overlapFraction < 0.99,
+    `expected comparable but distinct failure sets, observed overlap ${overlapFraction}`,
+  );
 });

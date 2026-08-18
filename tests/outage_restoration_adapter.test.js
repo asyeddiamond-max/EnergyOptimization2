@@ -10,9 +10,9 @@ const adapter = require("../outage_restoration_adapter.js");
 
 function fixtureOutages() {
   return [
-    { lat: 41.70, lon: -72.70, kind: "f", fi: 0, li: null, feeder_id: 0, sub_id: 0, popLoss: 50, customers: 50 },
-    { lat: 41.71, lon: -72.69, kind: "l", fi: 0, li: 0, feeder_id: 0, sub_id: 0, popLoss: 50, customers: 50 },
-    { lat: 41.90, lon: -72.30, kind: "l", fi: 1, li: 1, feeder_id: 1, sub_id: 1, popLoss: 50, customers: 50 },
+    { lat: 41.70, lon: -72.70, kind: "f", componentClass: "feeder", fi: 0, li: null, feeder_id: 0, sub_id: 0, popLoss: 325, customers: 325 },
+    { lat: 41.71, lon: -72.69, kind: "l", componentClass: "lateral", fi: 0, li: 0, feeder_id: 0, sub_id: 0, popLoss: 16, customers: 16 },
+    { lat: 41.90, lon: -72.30, kind: "l", componentClass: "service", fi: 1, li: 1, feeder_id: 1, sub_id: 1, popLoss: 1, customers: 1 },
   ];
 }
 
@@ -44,13 +44,16 @@ test("metadata enrichment is deterministic and never changes placement or custom
   const first = adapter.enrichOutages(input, context);
   const second = adapter.enrichOutages(input, context);
   assert.deepEqual(first, second);
-  assert.equal(first.contract.representedCustomers, 150);
+  assert.equal(first.contract.representedCustomers, 342);
+  assert.equal(first.contract.variableCustomerCounts, true);
+  assert.equal(first.contract.minimumCustomersPerOutage, 1);
+  assert.equal(first.contract.maximumCustomersPerOutage, 325);
   assert.equal(first.summary.placementUnchanged, true);
   first.outages.forEach((outage, index) => {
     assert.equal(outage.lat, input[index].lat);
     assert.equal(outage.lon, input[index].lon);
-    assert.equal(outage.popLoss, 50);
-    assert.equal(outage.customers, 50);
+    assert.equal(outage.popLoss, input[index].popLoss);
+    assert.equal(outage.customers, input[index].customers);
   });
   assert.equal(first.outages[0].critical, true);
   assert.equal(first.outages[0].near_flood_zone, true);
@@ -69,7 +72,7 @@ test("downstream toggles use independent random streams and cannot perturb other
   }
 });
 
-test("switching and underground tags preserve the fixed initial contract", () => {
+test("switching and underground tags preserve the variable-customer initial contract", () => {
   const result = adapter.enrichOutages(fixtureOutages(), {
     ...context,
     criticalFacilities: [],
@@ -82,7 +85,7 @@ test("switching and underground tags preserve the fixed initial contract", () =>
   assert.equal(result.outages[0].switch_restored, true);
   assert.equal(result.outages[1].underground, true);
   assert.equal(result.outages[1].underground_repair_multiplier, 1.35);
-  assert.equal(result.outages.reduce((sum, outage) => sum + outage.popLoss, 0), 150);
+  assert.equal(result.outages.reduce((sum, outage) => sum + outage.popLoss, 0), 342);
 });
 
 test("restoration summary includes automatic switching jobs and proves a zero endpoint", () => {
@@ -96,16 +99,17 @@ test("restoration summary includes automatic switching jobs and proves a zero en
   assert.deepEqual(summary, {
     inputOutages: 3,
     restoredOutages: 3,
-    inputCustomers: 150,
-    restoredCustomers: 150,
+    inputCustomers: 342,
+    restoredCustomers: 342,
     remainingCustomers: 0,
     lastCompletionHour: 4,
     complete: true,
   });
 });
 
-test("contract validation rejects any variable-customer generated outage", () => {
+test("contract validation accepts variable counts and rejects mismatches", () => {
   const outages = fixtureOutages();
-  outages[1].popLoss = 49;
-  assert.throws(() => adapter.validateInitialScenario(outages, 149, 50), adapter.ContractError);
+  assert.equal(adapter.validateInitialScenario(outages, 342).representedCustomers, 342);
+  outages[1].popLoss = 15;
+  assert.throws(() => adapter.validateInitialScenario(outages, 341), adapter.ContractError);
 });

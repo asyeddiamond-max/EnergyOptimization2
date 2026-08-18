@@ -25,7 +25,7 @@ on coverage gaps go at the bottom of each entry.
 | **License** | © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright) |
 | **Refresh** | `python 01_fetch_county_boundary.py` — only needed if OSM updates the boundary |
 
-**History**: originally scoped to Hartford County only (`data/hartford_boundary.json`, still present but unused); replaced with the statewide polygon so every downstream dataset (towns, substations, tracts) could cover all 8 counties instead of one.
+**History**: originally scoped to Hartford County only (`data/hartford_boundary.json`, still present but unused); replaced with the statewide polygon so every downstream dataset could cover all 8 counties instead of one.
 
 ---
 
@@ -192,23 +192,29 @@ fit.
 
 ---
 
-## 9 · Census tract population and town population (2020 Census P.L. 94-171)
+## 9 · Census block and town population (2020 Census P.L. 94-171)
 
 | | |
 |---|---|
-| **What** | Census tract centroids + population (883 tracts) and town-level (county subdivision) population + centroids (169 towns), statewide |
-| **Source** | US Census Bureau, 2020 Census **P.L. 94-171 Redistricting Data** — a keyless static flat-file download, not the api.census.gov API (which requires a free key) |
+| **What** | Census block population and internal points, plus town-level population and internal points, statewide |
+| **Source** | U.S. Census Bureau, 2020 Census **P.L. 94-171 Redistricting Data** geographic header |
 | **URL** | `www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Connecticut/ct2020.pl.zip` |
-| **Fetch script** | [`11_fetch_census_tracts.py`](11_fetch_census_tracts.py) |
-| **Cached files** | [`data/connecticut_census_tracts.js`](data/connecticut_census_tracts.js), [`data/connecticut_towns_population.js`](data/connecticut_towns_population.js) |
-| **Used by** | `buildDemandPoints()` — census-tract-level demand (883 tracts) when the toggle is on, falling back to the 169-town centroid model otherwise. `05_generate_artifacts.py` also loads the town file for `TOTAL_POP` and demand-point generation. |
-| **Record count** | 883 tracts; 169 towns, total population 3,605,944 (verified exact match to CT's real 2020 Census population) |
+| **Fetch/preprocessing** | [`11_fetch_census_population.py`](11_fetch_census_population.py), then [`11_build_census_population_grid.js`](11_build_census_population_grid.js) |
+| **Cached files** | [`data/connecticut_census_blocks.json`](data/connecticut_census_blocks.json), [`data/connecticut_census_population_grid.json`](data/connecticut_census_population_grid.json), browser copy [`data/connecticut_census_population_grid.js`](data/connecticut_census_population_grid.js), and [`data/connecticut_towns_population.js`](data/connecticut_towns_population.js) |
+| **Used by** | The outage model consumes the precomputed unsmoothed 41×65 population grid. `buildDemandPoints()` uses its positive grid nodes as weighted clustering inputs, avoiding tens of thousands of runtime points. Towns remain the explicit UI fallback. |
+| **Record count** | 49,926 blocks: 42,008 populated and 7,918 with zero population; 169 towns; statewide population 3,605,944 |
 | **License** | Public domain (U.S. government work) |
 
+**Allocation and validation**
+- Each block's `POP100` is located at the Census-provided `INTPTLAT`/`INTPTLON` internal point and bilinearly divided among its four surrounding HRRR nodes. Weights that fall outside the land mask are removed and the remaining weights are renormalized; a nearest-valid-node fallback handles a point with no valid surrounding node.
+- The production asset stores the resulting unsmoothed grid, not the 49,926 records, so preprocessing and runtime use the same authoritative JavaScript allocation code while avoiding repeated browser work.
+- Automated checks require unique 15-digit Connecticut block GEOIDs, valid coordinates, nonnegative counts, the official record count, and exact statewide population conservation before and after gridding.
+
 **Honest coverage notes**
-- Centroids (`INTPTLAT`/`INTPTLON`) are the Census Bureau's own internal points, not simple geometric centroids.
-- Population is total population (POP100, the 100% count), not households or electric customers.
-- **History**: the original Hartford-only `hartford_census_tracts.js` (148 records) had 10-digit "GEOIDs" — real Census tract GEOIDs are 11 digits — and an embedded county-FIPS substring that didn't match Hartford County's real FIPS code (003). Both are strong evidence it was hand-typed rather than pulled from a real API. The statewide file's GEOIDs are verified correctly formatted (e.g. `09001010101` = state 09, county 001, tract 010101) and cross-checked against known real town populations (Bridgeport 148,654; Greenwich 63,518).
+- Census internal points are guaranteed representations supplied for each geography; they are not geometric or population-weighted centroids and do not reveal household locations.
+- Population is total population (`POP100`), not households or electric accounts. The separate statewide person-to-account ratio is applied only where an account-valued output is required.
+- The block-derived grid uses the land-only Connecticut mask from `connecticut_land_boundary.json`; the map can still display the broader legal state outline, including its maritime jurisdiction.
+- The former 883-tract files are retained only for version-2 regression comparison. They are not loaded by the production UI or Worker.
 
 ---
 
@@ -272,12 +278,12 @@ fit.
 
 | | |
 |---|---|
-| **What** | A 24-frame hourly wind/rain timeline on the same 41×65 Connecticut grid, intended as the single weather source for both animation and time-dependent outage placement |
+| **What** | Reviewed hourly wind/rain timelines on the same 41×65 Connecticut grid, used as the single weather source for both animation and time-dependent outage placement |
 | **Source** | NOAA HRRR surface product, AWS public archive, accessed via `herbie-data` |
-| **Fetch script** | [`12_fetch_hrrr_storm_wind.py`](12_fetch_hrrr_storm_wind.py) with `--timeline-only --timeline isaias_2020` |
+| **Fetch script** | [`12_fetch_hrrr_storm_wind.py`](12_fetch_hrrr_storm_wind.py) with `--timeline-only --timeline isaias_2020`, `--timeline dec2022`, or `--timeline all` |
 | **Cached file** | [`data/connecticut_storm_timelines.js`](data/connecticut_storm_timelines.js) |
-| **Curated storms** | Tropical Storm Isaias (2020) only in Phase 1 |
-| **Window** | 2020-08-04 06:00 UTC through 2020-08-05 05:00 UTC, hourly |
+| **Curated storms** | Tropical Storm Isaias (2020), 24 frames; December 2022 Pre-Christmas Windstorm, 42 frames |
+| **Windows** | Isaias: 2020-08-04 06:00 UTC through 2020-08-05 05:00 UTC. December 2022: 2022-12-22 18:00 UTC through 2022-12-24 11:00 UTC. Both are hourly. |
 | **Fields** | Surface gust in mph; one-hour accumulated precipitation ending at the frame time; six-hour antecedent precipitation, all stored as row-major arrays |
 | **License** | Public domain (U.S. government work) |
 
@@ -292,6 +298,15 @@ browser consumes the committed, reviewed data and does not download or decode
 raw GRIB files. The JavaScript model and Worker now produce timestamped outage
 locations and transferable map surfaces from this timeline. The existing map
 animates those exact arrays with hourly playback and cumulative outage markers.
+Adding one storm preserves the other reviewed timelines; `--timeline all`
+rebuilds the complete catalog reproducibly.
+
+**December 2022 observed reference**: Dr. Wanik's Eversource event-curve files
+identify event `2022122218` with 3,899 jobs, 207,731 summed customer-job impacts,
+188,737 customers out at the first reported point, and 3,034 open jobs. Those
+values support the website's historical preset and provenance metadata. The
+hourly restoration curve remains a separate restoration-validation input; it
+does not change the weather-based outage-location or customer-size calibration.
 
 ---
 
@@ -449,7 +464,64 @@ animates those exact arrays with hourly playback and cumulative outage markers.
 
 ---
 
-## 22 · Planned / pending data sources
+## 22 · National Grid D.P.U. 24-41 storm-job size targets
+
+| Field | Value |
+|---|---|
+| **What** | Aggregate customer-count distribution for 2,377 National Grid storm jobs: 13 size bins plus eight percentile checkpoints |
+| **Underlying source** | National Grid regulatory filing, D.P.U. 24-41 |
+| **Received from** | Dr. Dave Wanik by email on 2026-08-13 |
+| **Cached files** | [`data/validation/dpu31_size_target_bins.csv`](data/validation/dpu31_size_target_bins.csv), [`data/validation/dpu31_size_target_quantiles.csv`](data/validation/dpu31_size_target_quantiles.csv) |
+| **Provenance note** | [`data/validation/README.md`](data/validation/README.md) records definitions, received-file checksums, integrity totals, and the pre-change fixed-50 baseline |
+| **Used by** | Automated target-integrity tests, `evaluateDpu31SizeDistribution`, the reproducible topology calibration script, and browser target-versus-simulated diagnostics |
+| **Records** | 13 size-bin rows and 8 quantile rows, summarizing 2,377 jobs and 306,020 customer-job impacts |
+| **License/status** | Regulatory-filing-derived aggregate tables supplied by the project advisor for research; redistribution status of the underlying row-level filing extract has not been independently determined |
+
+**Target interpretation and checks**
+
+- Size bins use half-open intervals `[lo, hi)`. The first two bins therefore
+  represent one- and two-customer jobs, consistent with the supplied 25th
+  percentile of two.
+- Job shares and customer shares each sum to exactly one within floating-point
+  precision.
+- The target mean is 128.742 customers per job and the median is 16.
+- The 13 job-count shares are the primary calibration target. Customer shares,
+  quantiles, mean, and tail concentration remain validation outputs.
+- PCAO is not a calibration target.
+
+**Honest coverage notes**
+
+- The original 2,377-row job list referenced by the advisor was not included in
+  the files received by the repository. The aggregate targets can be validated
+  internally but not regenerated independently from row-level records yet.
+- The dataset describes National Grid storm jobs from one regulatory filing; it
+  is an empirical distribution target, not Connecticut circuit topology.
+- Calibration can test whether the synthetic topology reproduces this aggregate
+  profile. It cannot establish utility-specific circuit fidelity.
+
+---
+
+## 23 · Storm-size-class customer quantile reference
+
+| Field | Value |
+|---|---|
+| **What** | Customers affected per trouble spot at 14 percentiles for small, medium, large, and four major storm events |
+| **Received from** | Dr. Dave Wanik by email/screenshot on 2026-08-18 |
+| **Cached file** | [`data/customer_size_quantile_references.js`](data/customer_size_quantile_references.js) |
+| **Used by** | Full-screen customer-size quantile comparison in `03_grid_simulation.html` |
+| **Role** | Secondary validation reference; never a customer-sizing calibration target |
+
+The small, medium, and large columns are transcribed as the supplied
+class-level percentile values. The screenshot did not include the storm-class
+thresholds or the underlying row-level table, so the website does not guess a
+class automatically. Reviewers choose the relevant class and compare its
+percentiles with the simulation at the same percentile positions. The supplied
+four-major-event ranges remain stored for provenance but are not drawn in the
+main comparison because connecting ranges as a curve was visually ambiguous.
+
+---
+
+## 24 · Planned / pending data sources
 
 These are tracked in [`ROADMAP.md`](ROADMAP.md) and listed here so future-you
 (or a reviewer) can see what's not yet integrated. Each one is gated on data

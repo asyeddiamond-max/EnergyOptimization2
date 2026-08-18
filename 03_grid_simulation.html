@@ -126,6 +126,33 @@
   .map-layer-picker label.layer-unavailable { color:#94a3b8; cursor:not-allowed; }
   .map-layer-picker .layer-state { margin-left:auto; color:#94a3b8; font-size:9px; font-style:italic; }
   .map-layer-picker .layer-group-title { margin-top:5px; padding-top:5px; border-top:1px solid #e2e8f0; color:#64748b; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; }
+  .outage-type-key { min-width:215px; max-width:245px; padding:9px 11px; }
+  .outage-type-key .key-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .outage-type-key .key-hide { border:0; background:transparent; color:#64748b; font-size:10px; cursor:pointer; padding:1px 3px; }
+  .outage-type-key .key-hide:hover { color:#1e3a8a; text-decoration:underline; }
+  .outage-type-key .ml-row { line-height:1.55; }
+  .leaflet-tooltip.outage-inspection-tooltip {
+    min-width:190px; max-width:245px; padding:7px 9px; border:1px solid #334155;
+    border-radius:6px; box-shadow:0 4px 14px rgba(15,23,42,.2); color:#334155;
+    font-size:10px; line-height:1.4;
+  }
+  .outage-inspection-tooltip .oi-customers { color:#0f172a; font-size:12px; font-weight:800; }
+  .outage-inspection-tooltip .oi-detail { margin-top:2px; }
+  .outage-inspection-tooltip .oi-hint { margin-top:4px; color:#64748b; font-size:9px; }
+  .leaflet-container.outage-inspection-active { cursor:pointer; }
+  .outage-symbol { position:relative; display:inline-block; width:13px; height:13px; flex:0 0 13px; }
+  .outage-symbol.service::before,.outage-symbol.service::after,
+  .outage-symbol.lateral::before,.outage-symbol.lateral::after,
+  .outage-symbol.feeder::before,.outage-symbol.feeder::after {
+    content:""; position:absolute; left:1px; top:5.5px; width:11px; border-radius:2px;
+    transform-origin:center;
+  }
+  .outage-symbol.service::before,.outage-symbol.service::after { height:1.5px; background:#0891b2; transform:rotate(45deg) scale(.68); }
+  .outage-symbol.service::after { transform:rotate(-45deg) scale(.68); }
+  .outage-symbol.lateral::before,.outage-symbol.lateral::after { height:2px; background:#ea580c; transform:rotate(45deg) scale(.88); }
+  .outage-symbol.lateral::after { transform:rotate(-45deg) scale(.88); }
+  .outage-symbol.feeder::before,.outage-symbol.feeder::after { height:2.5px; background:#7c3aed; transform:rotate(45deg) scale(1.08); }
+  .outage-symbol.feeder::after { transform:rotate(-45deg) scale(1.08); }
 
   .rf-root { background:#f8fafc !important; border-color:#cbd5e1 !important; }
   .rf-panel { display:none; margin-top:6px; max-height:340px; overflow-y:auto; }
@@ -204,6 +231,61 @@
   .model-metric { font-size:10px; color:#64748b; }
   .model-metric b { display:block; color:#1e3a8a; font-size:13px; }
   .model-stale { color:#92400e; font-weight:700; }
+  .size-validation { margin-top:7px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; }
+  .size-validation > summary { cursor:pointer; padding:6px 7px; color:#334155; font-size:10px; font-weight:750; }
+  .size-validation-body { padding:0 7px 7px; }
+  .size-validation-grid { display:grid; grid-template-columns:1fr 1fr; gap:5px 8px; }
+  .size-validation-metric { color:#64748b; font-size:9px; line-height:1.25; }
+  .size-validation-metric b { display:block; color:#1e3a8a; font-size:11px; }
+  .size-validation-status { margin-top:6px; padding:5px 6px; border-radius:5px; font-size:9px; line-height:1.35; }
+  .size-validation-status.pass { color:#065f46; background:#ecfdf5; }
+  .size-validation-status.warn { color:#854d0e; background:#fefce8; border:1px solid #fde68a; }
+  .size-comparison-chart { margin-top:7px; border:1px solid #e2e8f0; border-radius:5px; padding:6px; background:#fff; }
+  .size-comparison-chart-title { color:#334155; font-size:10px; font-weight:750; }
+  .size-comparison-chart-legend { display:flex; flex-wrap:wrap; gap:4px 12px; margin:3px 0 2px; color:#64748b; font-size:9px; }
+  .size-comparison-chart-legend span { display:inline-flex; align-items:center; gap:4px; }
+  .size-comparison-chart-legend i { width:10px; height:5px; display:inline-block; border-radius:1px; }
+  .size-comparison-chart svg { display:block; width:100%; height:auto; overflow:visible; }
+  .size-comparison-chart .chart-placeholder { color:#94a3b8; font-size:9px; padding:8px 2px 4px; }
+  .size-comparison-chart-note { color:#64748b; font-size:8.5px; line-height:1.3; margin-top:2px; }
+  .size-charts-open { width:100%; margin-top:6px; border:1px solid #93c5fd; border-radius:5px; padding:6px 8px;
+    background:#eff6ff; color:#1d4ed8; font-size:10px; font-weight:750; cursor:pointer; }
+  .size-charts-open:disabled { color:#94a3b8; background:#f8fafc; border-color:#e2e8f0; cursor:not-allowed; }
+  .size-charts-overlay { display:none; position:fixed; inset:0; z-index:3000; background:rgba(15,23,42,.72); padding:16px; }
+  .size-charts-overlay.open { display:flex; }
+  .size-charts-dialog { width:100%; max-width:1440px; height:calc(100vh - 32px); margin:auto; background:#f8fafc;
+    border-radius:12px; box-shadow:0 24px 80px rgba(15,23,42,.4); display:flex; flex-direction:column; overflow:hidden; }
+  .size-charts-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:13px 16px;
+    background:#fff; border-bottom:1px solid #cbd5e1; }
+  .size-charts-header h2 { margin:0; color:#0f172a; font-size:17px; }
+  .size-charts-header p { margin:2px 0 0; color:#64748b; font-size:11px; }
+  .size-charts-close { border:1px solid #cbd5e1; border-radius:6px; background:#fff; color:#334155;
+    padding:7px 11px; font-size:11px; font-weight:700; cursor:pointer; }
+  .size-charts-grid { flex:1; min-height:0; overflow:auto; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    gap:12px; padding:12px; }
+  .size-chart-panel { min-width:0; background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:12px;
+    display:flex; flex-direction:column; }
+  .size-chart-panel h3 { margin:0; color:#1e293b; font-size:13px; }
+  .size-chart-panel .panel-note { margin:3px 0 7px; color:#64748b; font-size:10px; line-height:1.35; }
+  .size-chart-panel .large-chart { flex:1; min-height:300px; display:flex; align-items:center; }
+  .size-chart-panel svg { display:block; width:100%; height:auto; max-height:calc(100vh - 175px); }
+  .quantile-chart-legend { display:flex; flex-wrap:wrap; gap:5px 14px; margin:2px 0 5px; color:#475569; font-size:10px; }
+  .quantile-chart-legend span { display:inline-flex; align-items:center; gap:5px; }
+  .quantile-chart-legend i { display:inline-block; width:14px; height:3px; border-radius:2px; }
+  body.size-charts-open-body { overflow:hidden; }
+  @media (max-width:900px) {
+    .size-charts-overlay { padding:8px; }
+    .size-charts-dialog { height:calc(100vh - 16px); }
+    .size-charts-grid { grid-template-columns:1fr; }
+    .size-chart-panel .large-chart { min-height:280px; }
+    .size-chart-panel svg { max-height:none; }
+  }
+  .size-validation-table-wrap { max-height:170px; overflow:auto; margin-top:6px; border:1px solid #e2e8f0; border-radius:5px; }
+  .size-validation-table { width:100%; border-collapse:collapse; font-size:8.5px; font-variant-numeric:tabular-nums; }
+  .size-validation-table th,.size-validation-table td { padding:3px 4px; border-bottom:1px solid #f1f5f9; text-align:right; white-space:nowrap; }
+  .size-validation-table th:first-child,.size-validation-table td:first-child { text-align:left; }
+  .size-validation-table thead th { position:sticky; top:0; background:#f8fafc; color:#475569; }
+  .pcao-independent { margin-top:6px; padding:5px 6px; border-left:3px solid #7c3aed; background:#f5f3ff; color:#5b21b6; font-size:9px; line-height:1.35; }
   .surface-ramp { height:9px; border-radius:5px; margin:5px 0 2px;
     background:linear-gradient(90deg,rgba(12,24,55,.1),#1e609b,#26b5b2,#f6d344,#c42d26); }
   .timeline-playback { display:none; margin-top:7px; padding:8px; border:1px solid #93c5fd;
@@ -364,7 +446,7 @@
       </select>
       <div id="modelAvailability" class="model-availability warn">Preparing outage generator…</div>
       <button type="button" id="retryOutageEngine" class="engine-retry">Retry outage generator</button>
-      <div class="small">Customers per outage are geography-derived from each feeder/lateral's served population (avg ~35, per Wanik 2017 / PURA 13-03-23), not a flat constant.</div>
+      <div class="small">Customer counts come from the network: compact customer groups make small jobs, while downstream lateral and feeder failures can make larger jobs.</div>
       <button type="button" id="applyHistoricalPreset" class="future-tool" style="margin-top:7px;width:100%;border:1px solid #93c5fd;background:#fff;color:#1d4ed8;border-radius:5px;padding:5px;font-size:10px;cursor:pointer;">Apply historical restoration preset</button>
       <!-- OUTAGE-LOCATION MODEL TUNING
            Each input ID is mapped to its outage_location_model.js config key by
@@ -394,7 +476,7 @@
           <label for="modelRainCap">Rain-score cap</label><input id="modelRainCap" type="number" min="0.1" step="0.1" />
           <div class="tuning-group">Customer exposure and smoothing</div>
           <label for="modelExposureExponent">Exposure exponent</label><input id="modelExposureExponent" type="number" min="0.1" step="0.1" />
-          <label for="modelCustomerSmoothing">Customer smoothing (km)</label><input id="modelCustomerSmoothing" type="number" min="0.1" step="0.5" />
+          <label for="modelCustomerSmoothing">Population smoothing (km)</label><input id="modelCustomerSmoothing" type="number" min="0" step="0.5" />
           <label for="modelRuralBaseline">Rural baseline fraction</label><input id="modelRuralBaseline" type="number" min="0" step="0.01" />
           <label for="modelGaussianBandwidth">Impact bandwidth (km)</label><input id="modelGaussianBandwidth" type="number" min="0.1" step="0.5" />
           <div class="tuning-group">Network and numerical controls</div>
@@ -402,6 +484,7 @@
           <label for="modelIntegrationStep">Line-integration step (km)</label><input id="modelIntegrationStep" type="number" min="0.05" step="0.05" />
           <label for="modelFeederSusceptibility">Feeder susceptibility</label><input id="modelFeederSusceptibility" type="number" min="0.1" step="0.05" />
           <label for="modelLateralSusceptibility">Lateral susceptibility</label><input id="modelLateralSusceptibility" type="number" min="0.1" step="0.05" />
+          <label for="modelServiceFailureWeight">Small-group weight</label><input id="modelServiceFailureWeight" type="number" min="0" step="0.05" />
         </div>
         <button type="button" id="resetModelDefaults" style="margin-top:7px;width:100%;border:1px solid #bfdbfe;background:#fff;color:#1d4ed8;border-radius:5px;padding:5px;font-size:10px;cursor:pointer;">Reset scientific defaults</button>
         </div>
@@ -409,16 +492,13 @@
     </div>
 
     <div class="ctrl">
-      <div class="row"><span>Customers affected<span id="custAffEst"> (est.)</span>: <b id="customerScaleVal">70,000</b></span></div>
-      <!-- Max 26,000 = the worst real CT storm on record (Oct 2011 Nor'easter,
-           ~26,132 outages / 807k customers, per Wanik 2017 / PURA 13-03-23), so
-           the tool stays inside the range we have real calibration data for.
-           Above this the model extrapolates and its known large-storm bias
-           (workloadSlowdownMult over-predicts, see Isaias) inflates the time. -->
-      <input type="range" id="oSlider" min="50" max="26000" value="2000" step="10" />
-      <div class="small"><b id="oVal">2,000</b> modeled failure units. Customers
-        affected per outage are geography-derived (feeder/lateral population),
-        averaging ~35 [Wanik 2017 / PURA 13-03-23], not a flat constant.</div>
+      <div class="row">
+        <label for="oCountInput">Outage locations</label>
+        <input id="oCountInput" type="number" min="50" max="26000" step="1" value="2000" style="width:82px;text-align:right;" />
+      </div>
+      <input type="range" id="oSlider" min="0" max="1000" value="590" step="1" aria-label="Outage locations logarithmic slider" />
+      <div style="display:flex;justify-content:space-between;font-size:8px;color:#94a3b8;margin-top:-2px;"><span>50</span><span>≈1,140</span><span>26,000</span></div>
+      <div class="small"><b id="oVal">2,000</b> outage locations will be generated. Customers affected is calculated from the network.</div>
     </div>
 
     <div id="modelSummary" class="model-summary">
@@ -428,10 +508,43 @@
       <div class="model-summary-grid">
         <div class="model-metric">Outages<b id="modelSummaryOutages">—</b></div>
         <div class="model-metric">Customers<b id="modelSummaryCustomers">—</b></div>
-        <div class="model-metric">Feeder / lateral<b id="modelSummarySplit">—</b></div>
+        <div class="model-metric">Service / lateral / feeder<b id="modelSummarySplit">—</b></div>
         <div class="model-metric">Runtime<b id="modelSummaryRuntime">—</b></div>
       </div>
       <div id="modelSummaryFormula" style="font-size:9px;color:#64748b;line-height:1.35;margin-top:6px;"></div>
+      <details id="modelSizeValidation" class="size-validation" open>
+        <summary>D.P.U. 24-41 customer-size validation</summary>
+        <div class="size-validation-body">
+          <div class="size-validation-grid">
+            <div class="size-validation-metric">Job-share TV distance<b id="modelSizeTv">—</b></div>
+            <div class="size-validation-metric">Mean customers / job<b id="modelSizeMean">—</b></div>
+            <div class="size-validation-metric">Median customers / job<b id="modelSizeMedian">—</b></div>
+            <div class="size-validation-metric">Largest 1% customer share<b id="modelSizeTopOne">—</b></div>
+          </div>
+          <div id="modelSizeValidationStatus" class="size-validation-status">Generate a scenario to compare its topology-derived sizes with the 2,377-job target.</div>
+          <button type="button" id="viewCustomerSizeCharts" class="size-charts-open" disabled>View charts</button>
+          <div class="size-comparison-chart">
+            <div class="size-comparison-chart-title">Share of outage jobs by customer count</div>
+            <div class="size-comparison-chart-legend" aria-hidden="true">
+              <span><i style="background:#2563eb"></i>National Grid target</span>
+              <span><i style="background:#f97316"></i>Current simulation</span>
+            </div>
+            <div id="modelSizeComparisonChart" class="chart-placeholder">Generate a scenario to draw the comparison.</div>
+            <div class="size-comparison-chart-note">Each row compares the percentage of jobs in that customer-size range.</div>
+          </div>
+          <div class="size-validation-table-wrap">
+            <table class="size-validation-table">
+              <thead><tr><th>Customers</th><th>Target jobs</th><th>Simulated</th><th>Difference</th></tr></thead>
+              <tbody id="modelSizeValidationBins"></tbody>
+            </table>
+          </div>
+          <div id="modelPcaoIndependent" class="pcao-independent">
+            <b>PCAO* — <span id="modelPcaoValue">—</span> customers per total storm outage</b>
+            <div id="modelPcaoFormula">Generate a scenario to calculate the provisional current-workflow value.</div>
+            <div style="margin-top:3px;">*Provisional: restoration currently begins after storm passage, so every generated job is assumed active at peak and PCAO* equals mean customers per job. It is not comparable with the historical ≈37 value and is never used for calibration.</div>
+          </div>
+        </div>
+      </details>
       <div id="stormPlayback" class="timeline-playback" data-testid="storm-playback">
         <div class="timeline-heading">
           <span id="timelineTimestamp" class="timeline-time">—</span>
@@ -656,15 +769,15 @@
       <div style="font-size:10px;color:#64748b;margin-top:3px;line-height:1.35;">Optional HIFLD facilities, Census, NOAA tracks, and DOE references. Enable only the layers needed for the current review.</div>
       <div id="realDataPanel" class="rf-panel">
         <div class="rf-item">
-          <label class="rf-label"><input type="checkbox" id="showCriticalFacilities" checked /><span class="rf-name">Critical facilities</span></label>
-          <div class="rf-desc">Real HIFLD hospitals, fire stations, EMS, water plants shown on map. Outages near these are priority-1 for restoration. <span id="critFacilityCount"></span></div>
+          <label class="rf-label"><input type="checkbox" id="showCriticalFacilities" /><span class="rf-name">Critical facilities</span></label>
+          <div class="rf-desc">Shows hospitals, fire stations, EMS, and water plants. This checkbox only changes the map display. <span id="critFacilityCount"></span></div>
         </div>
         <div class="rf-item">
-          <label class="rf-label"><input type="checkbox" id="useCensusTracts" checked /><span class="rf-name">Census tract demand</span></label>
-          <div class="rf-desc">883 tracts (2020 Census) for much finer customer-count placement than the 169-town model. <span id="censusTractCount"></span></div>
+          <label class="rf-label"><input type="checkbox" id="useCensusBlocks" checked /><span class="rf-name">Census block demand</span></label>
+          <div class="rf-desc">2020 Census blocks, preallocated to the fixed HRRR grid for detailed demand placement without loading tens of thousands of browser points. <span id="censusBlockCount"></span></div>
         </div>
         <div class="rf-item">
-          <label class="rf-label"><input type="checkbox" id="showStormTrack" checked /><span class="rf-name">NOAA storm track</span></label>
+          <label class="rf-label"><input type="checkbox" id="showStormTrack" /><span class="rf-name">NOAA storm track</span></label>
           <div class="rf-desc">HURDAT2 best-track visualization for the storm selected in the Storm outage model above. The track overlay does not alter outage placement.</div>
         </div>
         <div class="rf-item">
@@ -686,6 +799,39 @@
   <div id="map"></div>
 </div>
 
+<div id="customerSizeChartsOverlay" class="size-charts-overlay" aria-hidden="true">
+  <section class="size-charts-dialog" role="dialog" aria-modal="true" aria-labelledby="customerSizeChartsTitle">
+    <header class="size-charts-header">
+      <div>
+        <h2 id="customerSizeChartsTitle">Customer-size comparisons</h2>
+        <p>National filing target compared directly with the current simulation.</p>
+      </div>
+      <button type="button" id="closeCustomerSizeCharts" class="size-charts-close">Close</button>
+    </header>
+    <div class="size-charts-grid">
+      <article class="size-chart-panel">
+        <h3>Job share by customer-size bin</h3>
+        <div class="panel-note">Primary calibration view: the 13 National Grid D.P.U. bins versus this simulation.</div>
+        <div class="size-comparison-chart-legend" aria-hidden="true">
+          <span><i style="background:#2563eb"></i>National Grid target</span>
+          <span><i style="background:#f97316"></i>Current simulation</span>
+        </div>
+        <div id="fullSizeBinChart" class="large-chart"></div>
+      </article>
+      <article class="size-chart-panel">
+        <h3>Customers per job by percentile</h3>
+        <div class="panel-note">Secondary validation view. The vertical axis is logarithmic so small jobs and the heavy tail remain visible.</div>
+        <div class="quantile-chart-legend" aria-hidden="true">
+          <span><i style="background:#2563eb"></i>National Grid</span>
+          <span><i style="background:#f97316"></i>Current simulation</span>
+        </div>
+        <div id="fullSizeQuantileChart" class="large-chart"></div>
+        <div class="panel-note">Both series are evaluated at the same eight percentile checkpoints. Checkpoints are spaced evenly for readability.</div>
+      </article>
+    </div>
+  </section>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -694,11 +840,12 @@
 <script src="./data/connecticut_towns_population.js"></script>
 <script src="./data/connecticut_substations.js"></script>
 <script src="./data/connecticut_critical_facilities.js"></script>
-<script src="./data/connecticut_census_tracts.js"></script>
+<script src="./data/connecticut_census_population_grid.js"></script>
 <script src="./data/connecticut_tree_canopy.js"></script>
 <script src="./data/hartford_storm_tracks.js"></script>
 <script src="./data/hartford_doe_oe417.js"></script>
-<script src="./data/connecticut_storm_timelines.js"></script>
+<script src="./data/customer_size_quantile_references.js"></script>
+<script src="./data/connecticut_storm_timelines.js?v=20260818-dec2022"></script>
 <script src="./data/july2026_town_outages.js"></script>
 <script src="./data/july2026_observed_restoration.js"></script>
 <script src="./data/connecticut_flood_corridors.js"></script>
@@ -707,12 +854,12 @@
      here just means the fetch script hasn't been run yet; live mode shows
      instructions instead of data. -->
 <script src="./data/connecticut_live_outages.js"></script>
-<script src="./outage_location_model.js?v=4"></script>
+<script src="./outage_location_model.js?v=9"></script>
 <script src="./outage_restoration_adapter.js"></script>
 <script>
-// Real Connecticut town population + centroid (169 towns), from the 2020
-// Census P.L. 94-171 Redistricting Data (11_fetch_census_tracts.py). Used as
-// the demand-point fallback when census-tract data is toggled off.
+// Real Connecticut town population + Census internal points (169 towns), from
+// 2020 P.L. 94-171 data (11_fetch_census_population.py). Used as
+// the demand-point fallback when Census-block-derived demand is toggled off.
 //
 // Population != customer accounts: CT's 2020 census population is 3,605,944,
 // but Eversource (~1.3M) + United Illuminating (~333,000) together report
@@ -722,7 +869,7 @@
 // household"). Every "customers without power" figure this tool shows is
 // compared directly against utility-reported customer counts (DOE OE-417
 // panel, PURA filings, news coverage), so demand weight is converted to
-// Raw town and tract values remain in persons throughout grid construction.
+// Raw town and Census-block-derived grid values remain in persons.
 // Conversion to estimated customer accounts occurs only where an account-valued
 // output is explicitly needed.
 const POP_TO_CUSTOMER_RATIO = 1633000 / 3605944; // ≈ 0.4529
@@ -900,9 +1047,9 @@ map.getPane('countyBoundary').style.zIndex = 650;
 map.getPane('countyBoundary').style.pointerEvents = 'none';
 
 const mapLayerVisibility={
-  towns:true,territories:true,gridLines:true,substations:true,
+  towns:false,territories:false,gridLines:true,substations:false,
   impactSurface:true,outages:true,restoration:true,depots:true,
-  criticalFacilities:true,stormTrack:true,
+  criticalFacilities:false,stormTrack:false,
 };
 const layerPicker=L.control({position:'topright'});
 layerPicker.onAdd=function(){
@@ -912,15 +1059,15 @@ layerPicker.onAdd=function(){
     <div class="ml-title">Map layers</div>
     <label><input type="checkbox" data-map-layer="outages" checked> Outage locations <span class="layer-state"></span></label>
     <label><input type="checkbox" data-map-layer="impactSurface" checked> Weather / impact overlay <span class="layer-state"></span></label>
-    <label><input type="checkbox" data-map-layer="substations" checked> Substations <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="substations"> Substations <span class="layer-state"></span></label>
     <label><input type="checkbox" data-map-layer="gridLines" checked> Grid lines <span class="layer-state"></span></label>
-    <label><input type="checkbox" data-map-layer="territories" checked> Service territories <span class="layer-state"></span></label>
-    <label><input type="checkbox" data-map-layer="towns" checked> Town boundaries <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="territories"> Service territories <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="towns"> Town boundaries <span class="layer-state"></span></label>
     <div class="layer-group-title">Restoration and review</div>
     <label><input type="checkbox" data-map-layer="restoration" checked> Repair assignments <span class="layer-state"></span></label>
     <label><input type="checkbox" data-map-layer="depots" checked> Crew depots <span class="layer-state"></span></label>
-    <label><input type="checkbox" data-map-layer="criticalFacilities" checked> Critical facilities <span class="layer-state"></span></label>
-    <label><input type="checkbox" data-map-layer="stormTrack" checked> Storm track <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="criticalFacilities"> Critical facilities <span class="layer-state"></span></label>
+    <label><input type="checkbox" data-map-layer="stormTrack"> Storm track <span class="layer-state"></span></label>
   `;
   L.DomEvent.disableClickPropagation(div);
   L.DomEvent.disableScrollPropagation(div);
@@ -940,6 +1087,39 @@ layerPicker.onAdd=function(){
   return div;
 };
 layerPicker.addTo(map);
+
+// Appears only for generated scenarios. X size and color encode which level of
+// the synthetic electrical network failed. Critical-facility proximity remains
+// restoration metadata but is intentionally not drawn over the outage symbols.
+const outageTypeKey=L.control({position:'bottomright'});
+outageTypeKey.onAdd=function(){
+  const div=L.DomUtil.create('div','map-legend outage-type-key');
+  div.id='outageTypeLegend';
+  div.style.display='none';
+  div.innerHTML=`
+    <div class="key-heading"><div class="ml-title">Simulated outage type</div><button type="button" class="key-hide" aria-label="Hide outage type key">Hide</button></div>
+    <div class="ml-row"><span class="outage-symbol service"></span> Service / small customer group</div>
+    <div class="ml-row"><span class="outage-symbol lateral"></span> Lateral branch</div>
+    <div class="ml-row"><span class="outage-symbol feeder"></span> Feeder / backbone</div>
+  `;
+  L.DomEvent.disableClickPropagation(div);
+  L.DomEvent.disableScrollPropagation(div);
+  div.querySelector('.key-hide').addEventListener('click',()=>{
+    window._outageLegendDismissed=true;
+    syncOutageTypeLegend();
+  });
+  return div;
+};
+outageTypeKey.addTo(map);
+
+function syncOutageTypeLegend(){
+  const legend=document.getElementById('outageTypeLegend');
+  if (!legend) return;
+  legend.style.display=window._outageLegendMode==='simulated'
+    && !!window._outageCloud
+    && mapLayerVisibility.outages
+    && !window._outageLegendDismissed ? 'block' : 'none';
+}
 
 // --- Layers ---
 // Canvas-batched lateral/feeder clouds (see PolylineCloudLayer above) -- created
@@ -1252,6 +1432,18 @@ const PointCloudLayer = L.Layer.extend({
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
+    } else if (o.uniformColor && o.marker === 'ring'){
+      ctx.strokeStyle = o.stroke || o.fillColor;
+      ctx.lineWidth = o.lineWidth || 1.6;
+      ctx.globalAlpha = o.fillOpacity;
+      for (let i=0;i<pts.length;i++){
+        const p = pts[i];
+        const xy = map.latLngToContainerPoint([p.lat, p.lon]);
+        ctx.beginPath();
+        ctx.arc(xy.x, xy.y, o.radius, 0, 6.283);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
     } else if (o.uniformColor){
       ctx.fillStyle = o.fillColor;
       ctx.strokeStyle = o.stroke;
@@ -1425,13 +1617,15 @@ let outageSurfaceLayer=null;
 let currentTimelineFrameIndex=0;
 let timelinePlaybackTimer=null;
 let timelineSurfaceScales=null;
+let currentCustomerSizeChartResult=null;
+let customerSizeChartsReturnFocus=null;
 let outageResearchGridMaskCache=null;
 const outageResearchWeatherCache=new Map();
 
 // --- UI refs ---
 const fS=document.getElementById('fSlider'), fV=document.getElementById('fVal');
 const oS=document.getElementById('oSlider'), oV=document.getElementById('oVal');
-const customerScaleV=document.getElementById('customerScaleVal');
+const oCountI=document.getElementById('oCountInput');
 const cS=document.getElementById('cSlider'), cV=document.getElementById('cVal');
 const seedI=document.getElementById('seedInput');
 const status=document.getElementById('status');
@@ -1487,24 +1681,39 @@ function setRecProgress(pct, visible){
   _recProgressLabel.textContent = v + "%";
 }
 fS.oninput=()=>{fV.textContent=fS.value; markOutageModelStale('Network density changed. Regenerate the grid and outage scenario.');};
-// Sourced average customers per outage for the pre-generation ESTIMATE. Real CT
-// storms: Irene 44.8, Oct 2011 Nor'easter 30.9, Sandy 31.0 (weighted ~34.6) from
-// Wanik et al. 2017 + PURA Docket 13-03-23. The ACTUAL per-outage count is
-// geography-derived at generation time (see applyOutageModelResult); this is
-// only the slider preview, replacing the old unsourced flat 50.
-const EST_CUST_PER_OUTAGE = 35;
-oS.oninput=()=>{
-  const units=Number(oS.value);
-  oV.textContent=units.toLocaleString();
-  // Pre-generation PREVIEW: flat ~35/outage. The actual generated total is
-  // geography-weighted (outages concentrate in denser areas, so it runs a bit
-  // higher); applyOutageModelResult overwrites this with the real number and
-  // drops the "(est.)" tag. Dragging the slider restores the estimate.
-  customerScaleV.textContent=(units*EST_CUST_PER_OUTAGE).toLocaleString();
-  const estTag=document.getElementById('custAffEst'); if(estTag) estTag.textContent=' (est.)';
+const OUTAGE_COUNT_MIN=50;
+const OUTAGE_COUNT_MAX=26000;
+const OUTAGE_SLIDER_STEPS=1000;
+function outageSliderPosition(count){
+  const bounded=Math.max(OUTAGE_COUNT_MIN,Math.min(OUTAGE_COUNT_MAX,Number(count)||OUTAGE_COUNT_MIN));
+  return Math.round(OUTAGE_SLIDER_STEPS*Math.log(bounded/OUTAGE_COUNT_MIN)/Math.log(OUTAGE_COUNT_MAX/OUTAGE_COUNT_MIN));
+}
+function outageCountAtSliderPosition(position){
+  const fraction=Math.max(0,Math.min(1,(Number(position)||0)/OUTAGE_SLIDER_STEPS));
+  const raw=OUTAGE_COUNT_MIN*Math.pow(OUTAGE_COUNT_MAX/OUTAGE_COUNT_MIN,fraction);
+  const step=raw<200?1:raw<1000?5:raw<5000?10:raw<10000?50:100;
+  return Math.max(OUTAGE_COUNT_MIN,Math.min(OUTAGE_COUNT_MAX,Math.round(raw/step)*step));
+}
+function requestedOutageCount(){
+  return Math.max(OUTAGE_COUNT_MIN,Math.min(OUTAGE_COUNT_MAX,Math.round(Number(oCountI.value)||OUTAGE_COUNT_MIN)));
+}
+function setRequestedOutageCount(count,markStale=true){
+  const outages=Math.max(OUTAGE_COUNT_MIN,Math.min(OUTAGE_COUNT_MAX,Math.round(Number(count)||OUTAGE_COUNT_MIN)));
+  oCountI.value=String(outages);
+  oS.value=String(outageSliderPosition(outages));
+  oV.textContent=outages.toLocaleString();
   updateEstimate();
-  markOutageModelStale('Requested scenario size changed. Generate a new scenario.');
+  if (markStale) markOutageModelStale('Outage count changed. Generate a new scenario.');
+}
+oS.oninput=()=>setRequestedOutageCount(outageCountAtSliderPosition(oS.value));
+oCountI.oninput=()=>{
+  const value=Number(oCountI.value);
+  if (Number.isFinite(value)&&value>=OUTAGE_COUNT_MIN&&value<=OUTAGE_COUNT_MAX){
+    setRequestedOutageCount(value);
+  }
 };
+oCountI.onchange=()=>setRequestedOutageCount(oCountI.value);
+setRequestedOutageCount(oCountI.value,false);
 cS.oninput=()=>{cV.textContent=cS.value; updateEstimate();};
 
 // --- Closed-form restoration-time estimate (Alternative #1) ---
@@ -1666,23 +1875,24 @@ function starSVG(color,size=14){return `<svg xmlns="http://www.w3.org/2000/svg" 
 // --- Step 1: Substation placement via weighted k-means on demand points ---
 function buildDemandPoints(rnd){
   const pts=[];
-  const useTracts = document.getElementById('useCensusTracts')
-                    && document.getElementById('useCensusTracts').checked
-                    && window.CONNECTICUT_CENSUS_TRACTS
-                    && window.CONNECTICUT_CENSUS_TRACTS.length > 0;
-  if (useTracts){
-    // Census-tract-level demand (883 tracts, much finer than the 169-town model).
-    const tracts = window.CONNECTICUT_CENSUS_TRACTS;
-    tracts.forEach(t=>{
-      const n = Math.max(3, Math.round(Math.sqrt(t.pop)/3));
-      const w = t.pop/n;
-      for (let i=0;i<n;i++){
-        const r=0.002+rnd()*0.006, a=rnd()*Math.PI*2;
-        pts.push({lat:t.lat+Math.sin(a)*r*0.85,lon:t.lon+Math.cos(a)*r,w});
+  const blockGrid=window.CONNECTICUT_CENSUS_POPULATION_GRID;
+  const useBlocks=document.getElementById('useCensusBlocks')
+                  && document.getElementById('useCensusBlocks').checked
+                  && blockGrid
+                  && Array.isArray(blockGrid.populationPersons);
+  if (useBlocks){
+    // The expensive 49,926-block bilinear allocation is performed once by
+    // 11_build_census_population_grid.js. Weighted k-means needs only the
+    // positive HRRR nodes (at most 2,665), not jittered copies of every block.
+    const lats=blockGrid.grid.latitudes, lons=blockGrid.grid.longitudes;
+    const cols=blockGrid.grid.columns;
+    blockGrid.populationPersons.forEach((population,index)=>{
+      if (population>0){
+        pts.push({lat:lats[Math.floor(index/cols)],lon:lons[index%cols],w:population});
       }
     });
   } else {
-    // Fallback: 169-town centroid model.
+    // Fallback: 169-town internal-point model with synthetic local jitter.
     TOWNS.forEach(t=>{
       const n=Math.max(8,Math.round(Math.sqrt(t.pop)/2));
       const w=t.pop/n;
@@ -1848,10 +2058,17 @@ async function generateGrid(){
       }
       for (const lpts of entry.laterals){
         // attach each lateral to the nearest feeder in this substation (by its start point)
-        const a = lpts[0]; let best = subFeederIdx[0], bd = Infinity;
+        const a = lpts[0]; let best = subFeederIdx[0], bestAnchor = 0, bd = Infinity;
         for (const fi of subFeederIdx){ const fp = feeders[fi].pts;
-          for (let k=0;k<fp.length;k+=3){ const dd=(fp[k][0]-a[0])**2+(fp[k][1]-a[1])**2; if(dd<bd){bd=dd;best=fi;} } }
-        laterals.push({feederIdx:best, pts:lpts, popServed:latPop});
+          for (let k=0;k<fp.length;k++){ const dd=(fp[k][0]-a[0])**2+(fp[k][1]-a[1])**2; if(dd<bd){bd=dd;best=fi;bestAnchor=k;} } }
+        const feederAnchor=feeders[best].pts[bestAnchor];
+        const anchoredLateralPts=bd>1e-16
+          ? [[feederAnchor[0],feederAnchor[1]],...lpts]
+          : lpts;
+        laterals.push({
+          feederIdx:best, pts:anchoredLateralPts, popServed:latPop,
+          feederAnchorVertexIndex:bestAnchor,
+        });
       }
     } else {
       // --- fallback: synthetic radial feeders + random-walk laterals ---
@@ -1874,7 +2091,8 @@ async function generateGrid(){
         feeders.push({subIdx:si,pts,popServed:popPerFeeder,color:s.color,trimAge});
         const lateralsPerFeeder=4+Math.floor(rnd()*5);
         for (let l=0;l<lateralsPerFeeder;l++){
-          const anchor=pts[1+Math.floor(rnd()*(pts.length-1))];
+          const feederAnchorVertexIndex=1+Math.floor(rnd()*(pts.length-1));
+          const anchor=pts[feederAnchorVertexIndex];
           let lLat=anchor[0],lLon=anchor[1],lAng=rnd()*Math.PI*2;
           const lPts=[[lLat,lLon]];
           const lSegs=3+Math.floor(rnd()*5);
@@ -1886,7 +2104,10 @@ async function generateGrid(){
             lPts.push([lLat,lLon]);
           }
           if (lPts.length<2) continue;
-          laterals.push({feederIdx:fIdx,pts:lPts,popServed:popPerFeeder/lateralsPerFeeder});
+          laterals.push({
+            feederIdx:fIdx,pts:lPts,popServed:popPerFeeder/lateralsPerFeeder,
+            feederAnchorVertexIndex,
+          });
         }
       }
     }
@@ -2021,6 +2242,7 @@ const MODEL_PARAMETER_INPUTS = {
   lineIntegrationStepKm:'modelIntegrationStep',
   feederSusceptibility:'modelFeederSusceptibility',
   lateralSusceptibility:'modelLateralSusceptibility',
+  serviceFailureWeight:'modelServiceFailureWeight',
 };
 const MODEL_CONTROL_HELP = Object.freeze({
   outagePlacementModel:
@@ -2040,7 +2262,7 @@ const MODEL_CONTROL_HELP = Object.freeze({
   modelExposureExponent:
     'Controls how strongly customer density affects impact-weighted placement. It is ignored by the failure-oriented objective.',
   modelCustomerSmoothing:
-    'Gaussian standard deviation used to map Census population onto the analysis grid. Larger values spread customer exposure farther.',
+    'Optional Gaussian smoothing after Census-block population is allocated to the HRRR grid. Zero retains the block-derived grid; larger values spread exposure farther.',
   modelRuralBaseline:
     'Adds a uniform synthetic exposure equal to this fraction of statewide population. The paper default is zero; nonzero values are sensitivity scenarios.',
   modelGaussianBandwidth:
@@ -2050,9 +2272,11 @@ const MODEL_CONTROL_HELP = Object.freeze({
   modelIntegrationStep:
     'Maximum spacing of midpoint samples used to integrate scores along a line. Smaller values improve numerical resolution but increase runtime.',
   modelFeederSusceptibility:
-    'Relative multiplier on feeder candidate weights. Values above one favor feeder failures; the neutral paper default is one.',
+    'Relative multiplier on feeder candidate weights. The paper default was fitted to the regulatory job-size bins.',
   modelLateralSusceptibility:
-    'Relative multiplier on lateral candidate weights. Values above one favor lateral failures; the neutral paper default is one.',
+    'Relative multiplier on lateral candidate weights and the reference value for calibrated component weights.',
+  modelServiceFailureWeight:
+    'Relative total failure mass for compact 1–15-customer load groups attached to lateral segments. The groups are generic sizing units, not claimed equipment types. This is calibrated against the regulatory job-size bins, not PCAO.',
 });
 const SURFACE_SCALES = {
   customerExposure:{max:4000,label:'4,000 customer accounts / grid node'},
@@ -2178,8 +2402,7 @@ function readOutageModelConfig(){
     // weather.stormId on the research path -- so a sentinel keeps them working.
     stormId:document.getElementById('stormTrackSelect').value || 'uniform_no_track',
     seed:Number(seedI.value),
-    nOutages:Number(oS.value),
-    customersPerOutage:50,
+    nOutages:requestedOutageCount(),
     placementMode:document.getElementById('modelRiskObjective').value,
   };
   for (const [key,id] of Object.entries(MODEL_PARAMETER_INPUTS)){
@@ -2195,15 +2418,20 @@ function removeOutageSurface(){
 
 function clearOutageResultLayers(){
   stopTimelinePlayback();
+  clearOutageInspection();
   document.getElementById('stormPlayback').classList.remove('visible');
   currentTimelineFrameIndex=0;
   timelineSurfaceScales=null;
   outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
-  for (const key of ['_outageCloud','_criticalCloud','_depotCloud','_repairCloud']){
+  for (const key of ['_outageCloud','_depotCloud','_repairCloud']){
     if (window[key]){map.removeLayer(window[key]);window[key]=null;}
   }
+  window._outageLegendMode=null;
+  window._outageLegendDismissed=false;
+  syncOutageTypeLegend();
   removeOutageSurface();
   syncMapLayerVisibility();
+  resetCustomerSizeChartReview();
 }
 
 function markOutageModelStale(reason){
@@ -2216,6 +2444,7 @@ function markOutageModelStale(reason){
   if (storm || currentOutageModelResult){
     storm=null; plan=null; currentOutageModelResult=null;
     clearOutageResultLayers();
+    setRequestedOutageCount(requestedOutageCount(),false);
     affectedEl.textContent='0'; affectedPctEl.textContent='0% of estimated statewide accounts';
     outageCountEl.textContent='0'; clearRestorationResult();
     const summary=document.getElementById('modelSummary');
@@ -2277,6 +2506,7 @@ function buildWorkerNetworkInput(){
     })),
     laterals:laterals.map((lateral,lateral_id)=>({
       lateral_id,feeder_id:lateral.feederIdx,pts:lateral.pts,
+      feeder_anchor_vertex_index:lateral.feederAnchorVertexIndex,
     })),
   };
 }
@@ -2346,6 +2576,7 @@ function makeWorkerRequestInput(config,mode){
     config,
     network:buildWorkerNetworkInput(),
     boundary:simplifiedBoundaryForModel(),
+    populationGrid:window.CONNECTICUT_CENSUS_POPULATION_GRID,
     inputs:{networkSeed:String(seedI.value),source:'live browser network'},
   };
   if (mode==='basic') return base;
@@ -2354,7 +2585,7 @@ function makeWorkerRequestInput(config,mode){
     ...base,
     mode:'timeline',
     boundary:simplifiedBoundaryForModel(),
-    censusTracts:window.CONNECTICUT_CENSUS_TRACTS||[],
+    populationGrid:window.CONNECTICUT_CENSUS_POPULATION_GRID,
     weatherTimeline:{
       grid:weatherData.grid,
       storm:{storm_id:config.stormId,...weatherData.storms[config.stormId]},
@@ -2367,22 +2598,172 @@ function renderOutagePoints(outages){
   drawOutagePoints(outages);
 }
 
+// Keep statewide outage rendering fast: the X markers remain one batched
+// canvas draw, while this small geographic hash supports hover/click details
+// without creating up to 26,000 interactive Leaflet marker objects.
+const OUTAGE_INSPECTION_CELL_DEG=0.01;
+const OUTAGE_INSPECTION_HOVER_RADIUS_PX=10;
+const OUTAGE_INSPECTION_CLICK_RADIUS_PX=14;
+let outageInspectionGrid=new Map();
+let outageInspectionIds=new WeakMap();
+let outageInspectionTooltip=null;
+let outageInspectionPinnedId=null;
+let outageInspectionFrame=null;
+let outageInspectionPendingLatLng=null;
+
+function outageInspectionId(outage,index=0){
+  return outage.failureId||outage.networkSegmentId||`outage-${index}`;
+}
+
+function outageInspectionCellKey(x,y){return `${x}:${y}`;}
+
+function rebuildOutageInspectionIndex(outages){
+  const grid=new Map();
+  const ids=new WeakMap();
+  for (let index=0;index<outages.length;index++){
+    const outage=outages[index];
+    if (!Number.isFinite(outage.lat)||!Number.isFinite(outage.lon)) continue;
+    ids.set(outage,outageInspectionId(outage,index));
+    const x=Math.floor(outage.lon/OUTAGE_INSPECTION_CELL_DEG);
+    const y=Math.floor(outage.lat/OUTAGE_INSPECTION_CELL_DEG);
+    const key=outageInspectionCellKey(x,y);
+    let bucket=grid.get(key);
+    if (!bucket){bucket=[];grid.set(key,bucket);}
+    bucket.push(outage);
+  }
+  outageInspectionGrid=grid;
+  outageInspectionIds=ids;
+}
+
+function nearestInspectableOutage(latlng,radiusPx){
+  if (!latlng||!outageInspectionGrid.size||!mapLayerVisibility.outages) return null;
+  const center=map.latLngToContainerPoint(latlng);
+  const cornerA=map.containerPointToLatLng([center.x-radiusPx,center.y-radiusPx]);
+  const cornerB=map.containerPointToLatLng([center.x+radiusPx,center.y+radiusPx]);
+  const minLon=Math.min(cornerA.lng,cornerB.lng),maxLon=Math.max(cornerA.lng,cornerB.lng);
+  const minLat=Math.min(cornerA.lat,cornerB.lat),maxLat=Math.max(cornerA.lat,cornerB.lat);
+  const minX=Math.floor(minLon/OUTAGE_INSPECTION_CELL_DEG);
+  const maxX=Math.floor(maxLon/OUTAGE_INSPECTION_CELL_DEG);
+  const minY=Math.floor(minLat/OUTAGE_INSPECTION_CELL_DEG);
+  const maxY=Math.floor(maxLat/OUTAGE_INSPECTION_CELL_DEG);
+  const maximumDistanceSquared=radiusPx*radiusPx;
+  let nearest=null,nearestDistanceSquared=maximumDistanceSquared;
+  for (let x=minX;x<=maxX;x++) for (let y=minY;y<=maxY;y++){
+    const bucket=outageInspectionGrid.get(outageInspectionCellKey(x,y));
+    if (!bucket) continue;
+    for (const outage of bucket){
+      const point=map.latLngToContainerPoint([outage.lat,outage.lon]);
+      const dx=point.x-center.x,dy=point.y-center.y,distanceSquared=dx*dx+dy*dy;
+      if (distanceSquared<=nearestDistanceSquared){
+        nearest=outage;
+        nearestDistanceSquared=distanceSquared;
+      }
+    }
+  }
+  return nearest;
+}
+
+function outageInspectionComponentLabel(componentClass){
+  if (componentClass==='service') return 'Service / small customer group';
+  if (componentClass==='feeder') return 'Feeder / backbone';
+  return 'Lateral branch';
+}
+
+function outageInspectionContent(outage,pinned){
+  const customers=Math.max(0,Math.round(Number(outage.customers)||0));
+  const customerLabel=customers===1?'customer':'customers';
+  const occurrence=outage.occurredAt
+    ? `<div class="oi-detail"><b>Occurred:</b> ${formatTimelineTimestamp(outage.occurredAt)}</div>`:'';
+  const critical=outage.critical
+    ? '<div class="oi-detail">Near a critical facility</div>':'';
+  return `<div class="oi-customers">${customers.toLocaleString()} model-estimated ${customerLabel} affected</div>`+
+    `<div class="oi-detail"><b>Outage level:</b> ${outageInspectionComponentLabel(outage.componentClass)}</div>`+
+    occurrence+critical+
+    `<div class="oi-hint">${pinned?'Click the map elsewhere to close.':'Click to keep these details open.'}</div>`;
+}
+
+function showOutageInspection(outage,pinned=false){
+  if (!outage) return;
+  if (!outageInspectionTooltip){
+    outageInspectionTooltip=L.tooltip({
+      direction:'top',offset:[0,-7],opacity:0.98,className:'outage-inspection-tooltip',interactive:false,
+    });
+  }
+  outageInspectionTooltip
+    .setLatLng([outage.lat,outage.lon])
+    .setContent(outageInspectionContent(outage,pinned));
+  if (!map.hasLayer(outageInspectionTooltip)) outageInspectionTooltip.addTo(map);
+  map.getContainer().classList.add('outage-inspection-active');
+}
+
+function hideOutageInspection(force=false){
+  if (outageInspectionPinnedId&&!force) return;
+  if (outageInspectionTooltip&&map.hasLayer(outageInspectionTooltip)){
+    map.removeLayer(outageInspectionTooltip);
+  }
+  map.getContainer().classList.remove('outage-inspection-active');
+}
+
+function clearOutageInspection(){
+  outageInspectionGrid=new Map();
+  outageInspectionIds=new WeakMap();
+  outageInspectionPinnedId=null;
+  outageInspectionPendingLatLng=null;
+  if (outageInspectionFrame!==null){cancelAnimationFrame(outageInspectionFrame);outageInspectionFrame=null;}
+  hideOutageInspection(true);
+}
+
+map.on('mousemove',event=>{
+  if (outageInspectionPinnedId||!mapLayerVisibility.outages) return;
+  outageInspectionPendingLatLng=event.latlng;
+  if (outageInspectionFrame!==null) return;
+  outageInspectionFrame=requestAnimationFrame(()=>{
+    outageInspectionFrame=null;
+    const outage=nearestInspectableOutage(
+      outageInspectionPendingLatLng,OUTAGE_INSPECTION_HOVER_RADIUS_PX,
+    );
+    if (outage) showOutageInspection(outage,false);
+    else hideOutageInspection(false);
+  });
+});
+
+map.on('click',event=>{
+  const outage=nearestInspectableOutage(event.latlng,OUTAGE_INSPECTION_CLICK_RADIUS_PX);
+  if (!outage){outageInspectionPinnedId=null;hideOutageInspection(true);return;}
+  const inspectionId=outageInspectionIds.get(outage)||outageInspectionId(outage);
+  if (outageInspectionPinnedId===inspectionId){
+    outageInspectionPinnedId=null;
+    hideOutageInspection(true);
+    return;
+  }
+  outageInspectionPinnedId=inspectionId;
+  showOutageInspection(outage,true);
+});
+
+map.getContainer().addEventListener('mouseleave',()=>hideOutageInspection(false));
+
 function drawOutagePoints(outages){
-  for (const key of ['_outageCloud','_criticalCloud']){
-    if (window[key]){map.removeLayer(window[key]);window[key]=null;}
-  }
-  const normalPts=[],criticalPts=[];
+  rebuildOutageInspectionIndex(outages);
+  if (window._outageCloud){map.removeLayer(window._outageCloud);window._outageCloud=null;}
+  const componentPoints={service:[],lateral:[],feeder:[]};
   for (const outage of outages){
-    (outage.critical?criticalPts:normalPts).push({lat:outage.lat,lon:outage.lon});
+    const point={lat:outage.lat,lon:outage.lon};
+    const component=Object.prototype.hasOwnProperty.call(componentPoints,outage.componentClass)
+      ? outage.componentClass : 'lateral';
+    componentPoints[component].push(point);
   }
-  window._outageCloud=new PointCloudLayer(normalPts,{
-    uniformColor:true,marker:'x',radius:1.8,markerWidth:0.9,fillColor:'#dc2626',fillOpacity:0.95,
-  }).addTo(map);
-  if (criticalPts.length){
-    window._criticalCloud=new PointCloudLayer(criticalPts,{
-      uniformColor:true,radius:4,fillColor:'#dc2626',stroke:'#facc15',lineWidth:1.2,fillOpacity:0.92,
-    }).addTo(map);
-  }
+  const componentLayers=[];
+  if (componentPoints.service.length) componentLayers.push(new PointCloudLayer(componentPoints.service,{
+    uniformColor:true,marker:'x',radius:2.0,markerWidth:1.0,fillColor:'#0891b2',fillOpacity:0.96,
+  }));
+  if (componentPoints.lateral.length) componentLayers.push(new PointCloudLayer(componentPoints.lateral,{
+    uniformColor:true,marker:'x',radius:2.8,markerWidth:1.25,fillColor:'#ea580c',fillOpacity:0.96,
+  }));
+  if (componentPoints.feeder.length) componentLayers.push(new PointCloudLayer(componentPoints.feeder,{
+    uniformColor:true,marker:'x',radius:4.1,markerWidth:1.8,fillColor:'#7c3aed',fillOpacity:0.98,
+  }));
+  window._outageCloud=L.layerGroup(componentLayers).addTo(map);
+  window._outageLegendMode='simulated';
   syncMapLayerVisibility();
 }
 
@@ -2455,9 +2836,6 @@ function drawSurfaceRaster(values,scale,surfaces){
   }
   if (window._outageCloud&&mapLayerVisibility.outages){
     map.removeLayer(window._outageCloud);window._outageCloud.addTo(map);
-  }
-  if (window._criticalCloud&&mapLayerVisibility.outages){
-    map.removeLayer(window._criticalCloud);window._criticalCloud.addTo(map);
   }
   const legend=document.getElementById('modelSurfaceLegend');
   legend.style.display='block';
@@ -2594,17 +2972,214 @@ function relocateJuly4ToReportedTowns(outages){
     }
   }
 }
+function outageSizeComparisonSvg(comparison,idPrefix){
+  const rows=comparison.bins.map(bin=>({
+    label:bin.hi===bin.lo+1?String(bin.lo):`${bin.lo}–${bin.hi-1}`,
+    target:bin.jobShare,
+    simulated:bin.simulatedJobShare,
+  }));
+  rows.push({label:'Outside',target:0,simulated:comparison.overflow.jobShare});
+  const maximumObserved=Math.max(...rows.flatMap(row=>[row.target,row.simulated]));
+  const maximumShare=Math.max(0.25,Math.ceil(maximumObserved/0.05)*0.05);
+  const width=330,height=242,left=31,right=4,top=13,plotBottom=166;
+  const plotWidth=width-left-right,plotHeight=plotBottom-top;
+  const groupWidth=plotWidth/rows.length;
+  const barWidth=Math.min(7,groupWidth*0.34);
+  const y=share=>plotBottom-plotHeight*share/maximumShare;
+  const percent=share=>`${(share*100).toFixed(1)}%`;
+  const ticks=[];
+  for (let value=0;value<=maximumShare+1e-9;value+=0.05) ticks.push(value);
+  const grid=ticks.map(value=>{
+    const position=y(value);
+    return `<line x1="${left}" y1="${position}" x2="${width-right}" y2="${position}" stroke="#e2e8f0" stroke-width="0.7"/>`+
+      `<text x="${left-4}" y="${position+3}" text-anchor="end" fill="#64748b" font-size="8.5">${Math.round(value*100)}%</text>`;
+  }).join('');
+  const bars=rows.map((row,index)=>{
+    const center=left+groupWidth*(index+0.5);
+    const targetTop=y(row.target),simulatedTop=y(row.simulated);
+    const labelY=plotBottom+11;
+    return `<rect x="${center-barWidth-1}" y="${targetTop}" width="${barWidth}" height="${plotBottom-targetTop}" rx="1" fill="#2563eb"><title>${row.label}: National Grid target ${percent(row.target)}</title></rect>`+
+      `<rect x="${center+1}" y="${simulatedTop}" width="${barWidth}" height="${plotBottom-simulatedTop}" rx="1" fill="#f97316"><title>${row.label}: current simulation ${percent(row.simulated)}</title></rect>`+
+      `<text x="${center+2}" y="${labelY}" transform="rotate(52 ${center+2} ${labelY})" text-anchor="start" fill="#475569" font-size="8.5">${row.label}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="${idPrefix}Title ${idPrefix}Description">`+
+    `<title id="${idPrefix}Title">National Grid target compared with simulated outage job sizes</title>`+
+    `<desc id="${idPrefix}Description">Paired vertical bars compare target and simulated job shares across thirteen customer-size bins and an outside-target category.</desc>`+
+    grid+bars+
+    `<line x1="${left}" y1="${plotBottom}" x2="${width-right}" y2="${plotBottom}" stroke="#94a3b8" stroke-width="0.8"/>`+
+    `<text x="9" y="${(top+plotBottom)/2}" transform="rotate(-90 9 ${(top+plotBottom)/2})" text-anchor="middle" fill="#475569" font-size="8.5">Share of jobs</text>`+
+    `<text x="${left+plotWidth/2}" y="238" text-anchor="middle" fill="#475569" font-size="8.5">Customers affected by the job</text>`+
+    '</svg>';
+}
+
+function renderOutageSizeComparisonChart(comparison){
+  const chart=document.getElementById('modelSizeComparisonChart');
+  chart.className='';
+  chart.innerHTML=outageSizeComparisonSvg(comparison,'sizeChart');
+}
+
+function interpolatedCustomerQuantile(sortedCustomers,percentile){
+  if (!sortedCustomers.length) return null;
+  const bounded=Math.max(0,Math.min(100,percentile));
+  const position=(sortedCustomers.length-1)*bounded/100;
+  const lower=Math.floor(position),upper=Math.ceil(position),fraction=position-lower;
+  return sortedCustomers[lower]*(1-fraction)+sortedCustomers[upper]*fraction;
+}
+
+function customerSizeQuantileSvg(result,idPrefix){
+  const references=window.CUSTOMER_SIZE_QUANTILE_REFERENCES;
+  const national=references?.nationalGridDpu31?.points;
+  if (!Array.isArray(national)||!national.length){
+    throw new Error('Customer-size quantile reference data is unavailable.');
+  }
+  const sortedCustomers=result.outages.map(outage=>outage.customers).sort((a,b)=>a-b);
+  const percentiles=national.map(point=>point.percentile);
+  const simulated=percentiles.map(percentile=>({
+    percentile,
+    customers:interpolatedCustomerQuantile(sortedCustomers,percentile),
+  }));
+  const observedValues=[
+    ...national.map(point=>point.customers),
+    ...simulated.map(point=>point.customers),
+  ].filter(value=>Number.isFinite(value)&&value>0);
+  const width=600,height=410,left=68,right=18,top=18,bottom=60;
+  const plotWidth=width-left-right,plotHeight=height-top-bottom;
+  const minimumCustomers=1;
+  const maximumCustomers=10**Math.max(1,Math.ceil(Math.log10(Math.max(...observedValues))));
+  const xPositions=new Map(percentiles.map((percentile,index)=>[
+    percentile,
+    left+(percentiles.length===1?plotWidth/2:index/(percentiles.length-1)*plotWidth),
+  ]));
+  const x=percentile=>xPositions.get(percentile);
+  const logMinimum=Math.log10(minimumCustomers),logMaximum=Math.log10(maximumCustomers);
+  const y=customers=>top+(logMaximum-Math.log10(Math.max(minimumCustomers,customers)))/(logMaximum-logMinimum)*plotHeight;
+  const pointString=(points,valueKey)=>points.map(point=>
+    `${x(point.percentile).toFixed(2)},${y(point[valueKey]).toFixed(2)}`).join(' ');
+  const formatCustomers=value=>value>=1000
+    ? Math.round(value).toLocaleString()
+    : value>=10?value.toFixed(0):value.toFixed(1);
+  const xTicks=percentiles;
+  const yTicks=[];
+  for (let value=1;value<=maximumCustomers;value*=10) yTicks.push(value);
+  const grid=xTicks.map(value=>{
+    const position=x(value);
+    return `<line x1="${position}" y1="${top}" x2="${position}" y2="${height-bottom}" stroke="#f1f5f9" stroke-width="1"/>`+
+      `<text x="${position}" y="${height-bottom+18}" text-anchor="middle" fill="#64748b" font-size="11">P${value}</text>`;
+  }).join('')+yTicks.map(value=>{
+    const position=y(value);
+    return `<line x1="${left}" y1="${position}" x2="${width-right}" y2="${position}" stroke="#e2e8f0" stroke-width="1"/>`+
+      `<text x="${left-8}" y="${position+4}" text-anchor="end" fill="#64748b" font-size="11">${value.toLocaleString()}</text>`;
+  }).join('');
+  const pointMarks=(points,valueKey,color,label)=>points.map(point=>
+    `<circle cx="${x(point.percentile)}" cy="${y(point[valueKey])}" r="3" fill="${color}">`+
+      `<title>P${point.percentile}: ${label} ${formatCustomers(point[valueKey])} customers per job</title></circle>`).join('');
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="${idPrefix}Title ${idPrefix}Description">`+
+    `<title id="${idPrefix}Title">Customer counts per outage job by percentile</title>`+
+    `<desc id="${idPrefix}Description">Logarithmic chart comparing the current simulation and National Grid filing at the same eight percentile checkpoints.</desc>`+
+    grid+
+    `<polyline points="${pointString(national,'customers')}" fill="none" stroke="#2563eb" stroke-width="2.5"/>`+
+    `<polyline points="${pointString(simulated,'customers')}" fill="none" stroke="#f97316" stroke-width="2.5"/>`+
+    pointMarks(national,'customers','#2563eb','National Grid')+
+    pointMarks(simulated,'customers','#f97316','current simulation')+
+    `<rect x="${left}" y="${top}" width="${plotWidth}" height="${plotHeight}" fill="none" stroke="#94a3b8" stroke-width="1"/>`+
+    `<text x="${left+plotWidth/2}" y="${height-12}" text-anchor="middle" fill="#475569" font-size="12">Matching percentile checkpoints</text>`+
+    `<text x="16" y="${top+plotHeight/2}" transform="rotate(-90 16 ${top+plotHeight/2})" text-anchor="middle" fill="#475569" font-size="12">Customers affected per job (log scale)</text>`+
+    '</svg>';
+}
+
+function closeCustomerSizeCharts(){
+  const overlay=document.getElementById('customerSizeChartsOverlay');
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden','true');
+  document.body.classList.remove('size-charts-open-body');
+  if (customerSizeChartsReturnFocus?.focus) customerSizeChartsReturnFocus.focus();
+  customerSizeChartsReturnFocus=null;
+}
+
+function openCustomerSizeCharts(){
+  if (!currentCustomerSizeChartResult) return;
+  customerSizeChartsReturnFocus=document.activeElement;
+  document.getElementById('fullSizeBinChart').innerHTML=
+    outageSizeComparisonSvg(currentCustomerSizeChartResult.dpu31Comparison,'fullSizeBinChartSvg');
+  document.getElementById('fullSizeQuantileChart').innerHTML=
+    customerSizeQuantileSvg(currentCustomerSizeChartResult,'fullSizeQuantileChartSvg');
+  const overlay=document.getElementById('customerSizeChartsOverlay');
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden','false');
+  document.body.classList.add('size-charts-open-body');
+  document.getElementById('closeCustomerSizeCharts').focus();
+}
+
+function resetCustomerSizeChartReview(){
+  currentCustomerSizeChartResult=null;
+  document.getElementById('viewCustomerSizeCharts').disabled=true;
+  closeCustomerSizeCharts();
+}
+
+document.getElementById('viewCustomerSizeCharts').addEventListener('click',openCustomerSizeCharts);
+document.getElementById('closeCustomerSizeCharts').addEventListener('click',closeCustomerSizeCharts);
+document.getElementById('customerSizeChartsOverlay').addEventListener('click',event=>{
+  if (event.target===event.currentTarget) closeCustomerSizeCharts();
+});
+document.addEventListener('keydown',event=>{
+  if (event.key==='Escape'&&document.getElementById('customerSizeChartsOverlay').classList.contains('open')){
+    closeCustomerSizeCharts();
+  }
+});
+
+function renderOutageSizeValidation(result){
+  const comparison=result?.dpu31Comparison;
+  if (!comparison) throw new Error('Generated scenario is missing its D.P.U. size-distribution comparison.');
+  const pcao=result?.provisionalPcao;
+  if (!pcao||pcao.provisional!==true||pcao.historicalComparisonValid!==false||
+      pcao.calibrationObjectiveIncludesPcao!==false){
+    throw new Error('Generated scenario is missing its explicitly provisional PCAO output.');
+  }
+  const percent=value=>Number.isFinite(value)?`${(value*100).toFixed(1)}%`:'—';
+  const signedPercent=value=>Number.isFinite(value)?`${value>=0?'+':''}${(value*100).toFixed(1)}%`:'—';
+  const simulated=comparison.simulated;
+  currentCustomerSizeChartResult=result;
+  document.getElementById('viewCustomerSizeCharts').disabled=false;
+  document.getElementById('modelSizeTv').textContent=comparison.metrics.totalVariationJobShare.toFixed(3);
+  document.getElementById('modelSizeMean').textContent=
+    `${simulated.meanCustomers.toFixed(1)} (target ${comparison.targetMeanCustomers.toFixed(1)})`;
+  document.getElementById('modelSizeMedian').textContent=
+    `${simulated.quantiles.p50.toFixed(1)} (target 16)`;
+  document.getElementById('modelSizeTopOne').textContent=
+    `${percent(simulated.largestOnePercentCustomerShare)} (target ≈19%)`;
+  document.getElementById('modelPcaoValue').textContent=pcao.value.toFixed(1);
+  document.getElementById('modelPcaoFormula').textContent=
+    `${Math.round(pcao.peakCustomersAffected).toLocaleString()} assumed peak customers ÷ `+
+    `${pcao.totalStormOutages.toLocaleString()} total jobs = ${pcao.value.toFixed(1)}. `+
+    `Current-workflow demonstration only.`;
+  renderOutageSizeComparisonChart(comparison);
+  document.getElementById('modelSizeValidationBins').innerHTML=comparison.bins.map(bin=>{
+    const label=bin.hi===bin.lo+1?String(bin.lo):`${bin.lo}–${bin.hi-1}`;
+    return `<tr><td>${label}</td><td>${percent(bin.jobShare)}</td><td>${percent(bin.simulatedJobShare)}</td><td>${signedPercent(bin.jobShareError)}</td></tr>`;
+  }).join('')+
+    `<tr><td>Outside 1–4095</td><td>0.0%</td><td>${percent(comparison.overflow.jobShare)}</td><td>${signedPercent(comparison.overflow.jobShare)}</td></tr>`;
+  const passesDisplayLimits=comparison.metrics.totalVariationJobShare<=0.15&&
+    comparison.metrics.maximumAbsoluteJobShareError<=0.10&&comparison.overflow.jobShare<=0.01;
+  const status=document.getElementById('modelSizeValidationStatus');
+  status.className=`size-validation-status ${passesDisplayLimits?'pass':'warn'}`;
+  status.textContent=passesDisplayLimits
+    ? `Validation passed for this scenario: TV ≤ 0.15, maximum bin error ≤ 10%, and overflow jobs ≤ 1%. Formal acceptance still uses held-out seeds. Customer-share TV is ${comparison.metrics.totalVariationCustomerShare.toFixed(3)}.`
+    : `Calibration warning: the simulation ran, but this scenario's customer sizes are outside the validation limits. This does not block the demo. Reset the model defaults before comparing with the filing. TV is ${comparison.metrics.totalVariationJobShare.toFixed(3)}; the limit is 0.15.`;
+}
+
 function applyOutageModelResult(result){
-  const expectedCustomers=result.outages.length*50;
-  if (result.totalCustomers!==expectedCustomers||result.outages.some(outage=>outage.popLoss!==50)){
-    throw new Error('Generated scenario violated the fixed 50-customers-per-outage contract.');
+  const representedCustomers=result.outages.reduce((sum,outage)=>sum+outage.customers,0);
+  if (result.schemaVersion!==4||result.schema.indexOf('_v4')<0||
+      result.totalCustomers!==representedCustomers||
+      result.outages.some(outage=>!Number.isInteger(outage.customers)||outage.customers<=0||outage.popLoss!==outage.customers)){
+    throw new Error('Generated scenario violated the variable-customer v4 contract.');
   }
   if (!window.OutageRestorationAdapter){
     throw new Error('The restoration metadata adapter did not load. Refresh the page and try again.');
   }
   relocateJuly4ToReportedTowns(result.outages);   // town-anchor July 4 to reported locations (placement-only)
   const sampledOutages=result.outages.map(outage=>({
-    ...outage,popLoss:50,customers:50,
+    ...outage,
     wind_mph:Number.isFinite(outage.localWindMph)?outage.localWindMph:30,
     rain_in:Number.isFinite(outage.localRainIn)?outage.localRainIn:0,
   }));
@@ -2622,68 +3197,27 @@ function applyOutageModelResult(result){
     amiEnabled:document.getElementById('amiCoverage').checked,
     switchingEnabled:document.getElementById('switchingBackfeed').checked,
     undergroundEnabled:document.getElementById('undergroundLines').checked,
+    expectedTotal:result.totalCustomers,
   });
   const outages=enriched.outages;
-  // GEOGRAPHY-DERIVED CUSTOMER-ACCOUNT ESTIMATE (replaces the flat 50).
-  // Each outage inherits the customers of the feeder/lateral SEGMENT it sits on:
-  // census persons are split substation -> feeder (popServed/feedersPerSub) ->
-  // lateral (/lateralsPerFeeder) -> segment (/#segments) at grid-build time, then
-  // converted to electric customers via the real ratio (1,633,000 customers /
-  // 3,605,944 residents = POP_TO_CUSTOMER_RATIO). This is the same cascade the
-  // pre-merge model used (which matched EAGLE-I peaks to 2-4%); 50 was a hardcoded
-  // guess that overshot ~45% and, at the old 100k cap, implied 5M customers.
-  // Real CT storms show ~30-45 customers/outage (Wanik 2017 / PURA 13-03-23).
-  const _segPop = (o)=>{
-    if (o.kind==='f' && feeders[o.fi]){ const f=feeders[o.fi]; return f.popServed/Math.max(1,(f.pts?.length||2)-1); }
-    if (o.kind==='l' && laterals[o.li]){ const l=laterals[o.li]; return l.popServed/Math.max(1,(l.pts?.length||2)-1); }
-    return 50/POP_TO_CUSTOMER_RATIO;   // fallback (no grid segment) -> ~50 customers
-  };
-  for (const o of outages){
-    o.popLoss = Math.max(1, Math.round(_segPop(o)*POP_TO_CUSTOMER_RATIO));
-    o.customers = o.popLoss;
+  const modelCustomerTotal=outages.reduce((sum,outage)=>sum+outage.popLoss,0);
+  if (modelCustomerTotal!==result.totalCustomers){
+    throw new Error(`Restoration metadata changed the model total from ${result.totalCustomers} to ${modelCustomerTotal}.`);
   }
-  // Customer total: (a) ANCHOR to reported data when the selected storm has a known customer count
-  // (e.g. July 4, 2026 = ~94,000 out at peak) -- scale every per-outage allocation so the total
-  // matches the disclosed figure at the reported outage count (and scales at the same real per-outage
-  // ratio if the count is changed); otherwise (b) apply the PHYSICAL CEILING -- customers affected
-  // can never exceed the state's real base (~1.633M accounts), which the feeder/lateral overlap
-  // (note below) would otherwise blow past at the slider max. Either way storm.totalCust / the handoff
-  // contract / the restoration curve all keep summing the same (scaled) values.
-  const _rawGeoSum = outages.reduce((s,o)=>s+o.popLoss,0);
-  const _preset = REAL_STORM_PRESETS[document.getElementById('stormTrackSelect').value];
-  let _targetCust = (_preset && _preset.customers && _preset.outages)
-    ? Math.round(_preset.customers * (outages.length / _preset.outages))   // (a) reported anchor
-    : (_rawGeoSum > ESTIMATED_STATEWIDE_CUSTOMER_ACCOUNTS ? ESTIMATED_STATEWIDE_CUSTOMER_ACCOUNTS : null); // (b) ceiling
-  if (_targetCust != null) _targetCust = Math.min(_targetCust, ESTIMATED_STATEWIDE_CUSTOMER_ACCOUNTS);
-  if (_targetCust != null && _rawGeoSum > 0){
-    const _scale = _targetCust / _rawGeoSum;
-    for (const o of outages){ o.popLoss = Math.max(1, Math.round(o.popLoss*_scale)); o.customers = o.popLoss; }
-  }
-  // One shared per-location estimate so storm.totalCust, the handoff contract, and the
-  // restoration curve sum the same values. Feeder and lateral service allocations overlap by
-  // construction, so this is a consequence proxy, not a conserved utility customer inventory.
-  const geoSumCust = outages.reduce((s,o)=>s+o.popLoss,0);
-  // Re-issue the handoff contract on the geography-derived customer total, so the
-  // restoration-handoff integrity check (prepareTimelineForRestoration) validates
-  // against the geography numbers, not the model's stale flat-50 total.
-  const geoContract = Object.freeze({
-    outageCount: outages.length,
-    customersPerOutage: 'geography-derived',
-    representedCustomers: geoSumCust,
-  });
   const trackKey=document.getElementById('stormTrackSelect').value;
   const trackData=trackKey&&window.HARTFORD_STORM_TRACKS&&window.HARTFORD_STORM_TRACKS[trackKey];
+  const selectedWeatherStorm=window.CONNECTICUT_STORM_TIMELINES?.storms?.[trackKey];
   const localPlannerReasons=[];
   if (enriched.summary.switchRestored) localPlannerReasons.push('automatic switching');
   if (enriched.summary.underground) localPlannerReasons.push('underground repair-time modifiers');
   if (document.getElementById('floodZoneClosures').checked&&enriched.summary.nearFloodZone) localPlannerReasons.push('flood-zone travel penalties');
   if (document.getElementById('customerCallbackLag').checked&&enriched.summary.callbackDelayed) localPlannerReasons.push('callback discovery delays');
   storm={
-    outages,totalCust:geoSumCust,switchRestoredCount:enriched.summary.switchRestored,
+    outages,totalCust:modelCustomerTotal,switchRestoredCount:enriched.summary.switchRestored,
     isLocalized:!!trackData?.is_localized_reports,
     placementModel:result.summary.placementModel||'impact_weighted_research_unknown_version',
     modelConfig:result.config,modelSummary:result.summary,
-    initialContract:geoContract,
+    initialContract:enriched.contract,
     restorationMetadata:{...enriched.summary,localPlannerReasons},
     timeline:result.surfaces?.mode==='timeline'?result.surfaces.timeline:null,
   };
@@ -2693,34 +3227,26 @@ function applyOutageModelResult(result){
   if (isTimeline) clearOutageResultLayers();
   else renderOutagePoints(outages);
   affectedEl.textContent=Math.round(storm.totalCust).toLocaleString();
-  affectedPctEl.textContent=`${outages.length.toLocaleString()} locations · geography-derived customers (avg ${Math.round(storm.totalCust/Math.max(1,outages.length))}/outage)`;
+  affectedPctEl.textContent=`${outages.length.toLocaleString()} locations · ${Math.round(storm.totalCust/Math.max(1,outages.length)).toLocaleString()} customers per outage`;
   outageCountEl.textContent=outages.length.toLocaleString();
-  // Sync the top "Customers affected" preview to the ACTUAL geography total and
-  // drop the "(est.)" tag, so it matches the Generated-scenario panel exactly
-  // (the flat-35 estimate ran ~8% low because placement concentrates outages in
-  // denser areas). Dragging the slider reverts it to the estimate.
-  customerScaleV.textContent=Math.round(storm.totalCust).toLocaleString();
-  { const estTag=document.getElementById('custAffEst'); if(estTag) estTag.textContent=''; }
   clearRestorationResult();
   document.getElementById('modelSummaryOutages').textContent=outages.length.toLocaleString();
-  // storm.totalCust is the geography-derived total; expectedCustomers was the
-  // model's flat outages x 50 and leaked ~40% high into this panel (30,000
-  // outages showed 1,500,000 instead of the geography ~1,050,000).
   document.getElementById('modelSummaryCustomers').textContent=Math.round(storm.totalCust).toLocaleString();
   document.getElementById('modelSummarySplit').textContent=
-    `${result.summary.feederOutages.toLocaleString()} / ${result.summary.lateralOutages.toLocaleString()}`;
+    `${result.summary.serviceOutages.toLocaleString()} / ${result.summary.lateralOutages.toLocaleString()} / ${result.summary.feederOutages.toLocaleString()}`;
   document.getElementById('modelSummaryRuntime').textContent=`${result.summary.totalRuntimeMs.toFixed(0)} ms`;
+  renderOutageSizeValidation(result);
   const research=!!result.surfaces;
   document.getElementById('modelSummaryFormula').textContent=isTimeline
     ? `${result.summary.timelineFrames} hourly HRRR frames · wind × 6-hour recent-rain amplification × customer exposure · Gaussian-smoothed at ${result.config.gaussianBandwidthKm} km · seed ${result.config.seed}.`
     : research
     ? `Weather severity × relative customer exposure, Gaussian-smoothed at ${result.config.gaussianBandwidthKm} km · seed ${result.config.seed}.`
-    : `Explicit basic fallback: network length × susceptibility · no weather/customer surface · seed ${result.config.seed}.`;
+    : `Explicit basic fallback: network length × susceptibility · no weather placement surface; Census/topology still determines customer size · seed ${result.config.seed}.`;
   document.getElementById('modelSummaryRestoration').textContent=
     `Restoration tags: ${enriched.summary.critical} critical · ${enriched.summary.treeBlocked} tree-blocked · `+
     `${enriched.summary.nearFloodZone} flood-zone · ${enriched.summary.callbackDelayed} delayed callbacks · `+
     `${enriched.summary.switchRestored} quick-switch · ${enriched.summary.underground} underground. `+
-    `Placement is unchanged; the restoration handoff uses ${geoSumCust.toLocaleString()} geography-derived estimated accounts.`;
+    `Placement is unchanged; the restoration handoff preserves ${modelCustomerTotal.toLocaleString()} unique topology-derived accounts.`;
   const fresh=document.getElementById('modelFreshness');fresh.textContent='current';fresh.className='';
   document.getElementById('modelSummary').classList.add('visible');
   const surfaceSelect=document.getElementById('modelSurfaceSelect');
@@ -2731,8 +3257,8 @@ function applyOutageModelResult(result){
   setStormProgress(100);
   setTimeout(()=>setStormProgress(0,false),700);
   status.textContent=isTimeline
-    ? `Generated ${outages.length.toLocaleString()} timestamped outages from ${result.summary.timelineFrames} hourly Isaias frames. Playback uses the exact weather and impact arrays used by the model; the full scenario is ready for restoration.`
-    : `Generated ${outages.length.toLocaleString()} unique outages representing exactly ${expectedCustomers.toLocaleString()} customers; attached deterministic restoration metadata without moving or removing any point. Ready to plan restoration.`;
+    ? `Generated ${outages.length.toLocaleString()} timestamped outages from ${result.summary.timelineFrames} hourly ${selectedWeatherStorm?.name||'storm'} frames. Playback uses the exact weather and impact arrays used by the model; the full scenario is ready for restoration.`
+    : `Generated ${outages.length.toLocaleString()} non-overlapping outages representing exactly ${modelCustomerTotal.toLocaleString()} unique customers; attached deterministic restoration metadata without moving or removing any point. Ready to plan restoration.`;
   syncMapLayerVisibility();
 }
 
@@ -2794,7 +3320,7 @@ function initializeOutageModelWorker(){
     setModelAvailability('warn','Starting outage generator…');
     document.getElementById('simStorm').disabled=true;
     const attempt=++outageModelWorkerAttempt;
-    outageModelWorker=new Worker('./outage_location_worker.js?v=4');
+    outageModelWorker=new Worker('./outage_location_worker.js?v=7');
     outageModelWorker.onmessage=handleOutageWorkerMessage;
     outageModelWorker.onerror=(event)=>{
       if (outageModelWorkerStartupTimer){clearTimeout(outageModelWorkerStartupTimer);outageModelWorkerStartupTimer=null;}
@@ -3001,11 +3527,11 @@ function loadLiveOutages(){
   // Render (same canvas-batched path as simulateStorm).
   outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
   if (window._outageCloud){ map.removeLayer(window._outageCloud); window._outageCloud=null; }
-  if (window._criticalCloud){ map.removeLayer(window._criticalCloud); window._criticalCloud=null; }
   if (window._depotCloud){ map.removeLayer(window._depotCloud); window._depotCloud=null; }
   if (window._repairCloud){ map.removeLayer(window._repairCloud); window._repairCloud=null; }
   const pts = outages.map(o => ({lat: o.lat, lon: o.lon}));
   window._outageCloud = new PointCloudLayer(pts, {uniformColor:true, marker:'x', radius:2.5, markerWidth:1.1, fillColor:"#059669", fillOpacity:0.95}).addTo(map);
+  window._outageLegendMode='live';
 
   affectedEl.textContent = Math.round(totalCust).toLocaleString();
   affectedPctEl.textContent =
@@ -4201,7 +4727,7 @@ function renderRestorationCurve(crews, totalTime, fmtDuration){
   // Map each coordinate to a QUEUE of outage indices (two outages can share a
   // lat/lon to 6dp; a single-value map collapsed them, which was harmless when
   // every outage was a flat 50 customers but corrupts the curve total now that
-  // customer counts are geography-derived and vary per outage).
+  // customer counts are topology-derived and vary per outage).
   const idxByKey = new Map();
   storm.outages.forEach((o,i)=>{ const k=`${o.lat.toFixed(6)},${o.lon.toFixed(6)}`;
     let b=idxByKey.get(k); if(!b){b=[];idxByKey.set(k,b);} b.push(i); });
@@ -4444,10 +4970,13 @@ function resetStorm(){
   storm=null; plan=null;
   outageLayer.clearLayers(); repairLayer.clearLayers(); depotLayer.clearLayers();
   if (window._outageCloud){ map.removeLayer(window._outageCloud); window._outageCloud=null; }
-  if (window._criticalCloud){ map.removeLayer(window._criticalCloud); window._criticalCloud=null; }
   if (window._depotCloud){ map.removeLayer(window._depotCloud); window._depotCloud=null; }
   if (window._repairCloud){ map.removeLayer(window._repairCloud); window._repairCloud=null; }
+  window._outageLegendMode=null;
+  window._outageLegendDismissed=false;
+  syncOutageTypeLegend();
   removeOutageSurface();
+  setRequestedOutageCount(requestedOutageCount(),false);
   affectedEl.textContent='0'; affectedPctEl.textContent='0% of estimated statewide accounts';
   outageCountEl.textContent='0'; clearRestorationResult();
   document.getElementById('modelSummary').classList.remove('visible');
@@ -5410,7 +5939,7 @@ function buildFeatureCollections(){
       substations: substations.length,
       substation_source: (window.CONNECTICUT_SUBSTATIONS && window.CONNECTICUT_SUBSTATIONS.length) ? "HIFLD-real" : "synthetic",
       feeders_per_sub: +fS.value,
-      storm_outages: +oS.value,
+      storm_outages: requestedOutageCount(),
       repair_crews: +cS.value,
       placement_model: storm?.placementModel || null,
       placement_config: storm?.modelConfig || null,
@@ -5469,11 +5998,14 @@ document.getElementById('showCriticalFacilities').onchange = function(){
   renderCriticalFacilities();
 };
 
-// --- Census tract count display ---
+// --- Census block/grid count display ---
 (function(){
-  const el = document.getElementById('censusTractCount');
-  const tracts = window.CONNECTICUT_CENSUS_TRACTS || [];
-  if (el) el.textContent = tracts.length ? ` (${tracts.length} tracts loaded)` : '';
+  const el=document.getElementById('censusBlockCount');
+  const populationGrid=window.CONNECTICUT_CENSUS_POPULATION_GRID;
+  if (el&&populationGrid){
+    const source=populationGrid.source, grid=populationGrid.grid;
+    el.textContent=` (${source.blockCount.toLocaleString()} blocks → ${grid.rows}×${grid.columns} grid)`;
+  }
 })();
 
 // --- NOAA Storm Track Overlay ---
@@ -5541,8 +6073,8 @@ document.getElementById('stormTrackSelect').addEventListener('change', function(
 // harness this was tuned against -- if you recalibrate a storm there,
 // update the matching entry here too. realH is the real documented
 // duration in hours, shown alongside the simulated result for comparison.
-// Snowtober/March 2023/Dec 2022/Oct 2019/Sep 2021 have no real track or
-// HRRR data (uniform placement, same as leaving the dropdown blank) --
+// Snowtober/March 2023/Oct 2019/Sep 2021 have no real track or
+// curated HRRR timeline (uniform placement, same as leaving the dropdown blank) --
 // their keys here don't exist in HARTFORD_STORM_TRACKS or the curated
 // timeline cache on purpose, so placement falls through to the
 // default population-weighted behavior.
@@ -5560,7 +6092,7 @@ const REAL_STORM_PRESETS = {
   march2023_noreaster:       {outages: 450,   crews: 350,  realH: 60,  label: "March 2023 Nor'easter"},
   oct2020_derecho:           {outages: 950,   crews: 300,  realH: 28,  label: "Oct 2020 Derecho"},
   ct_sep2019_tornado:        {outages: 80,    crews: 60,   realH: 24,  label: "Sep 2019 Tornado"},
-  dec2022_windstorm:         {outages: 3450,  crews: 1100, realH: 75,  label: "Dec 2022 Windstorm"},
+  dec2022:                   {outages: 3899,  crews: 1100, realH: 88,  label: "Dec 2022 Windstorm"},
   oct2019_bomb_cyclone:      {outages: 1500,  crews: 400,  realH: 60,  label: "Oct 2019 Bomb Cyclone"},
   sep2021_ida:               {outages: 1250,  crews: 300,  realH: 51,  label: "Sep 2021 Ida Flooding"},
   dec2025_windstorm:         {outages: 2950,  crews: 700,  realH: 72,  label: "Dec 2025 Windstorm"},
@@ -5572,13 +6104,11 @@ document.getElementById('applyHistoricalPreset').addEventListener('click', funct
     status.textContent='No historical restoration calibration preset is available for this event.';
     return;
   }
-  oS.value = String(preset.outages);
-  oS.dispatchEvent(new Event('input'));
+  setRequestedOutageCount(preset.outages);
   cS.value = String(preset.crews);
   cS.dispatchEvent(new Event('input'));
   status.textContent = `Applied historical restoration preset: ${preset.label} `
-    + `(${preset.outages} outages, ${preset.crews} crews -- real restoration took ${preset.realH}h). `
-    + `The storm dropdown by itself does not change these values.`;
+    + `(${preset.outages.toLocaleString()} outages, ${preset.crews} crews, ${preset.realH} real restoration hours).`;
 });
 
 // --- DOE OE-417 Events Panel ---
@@ -5666,7 +6196,7 @@ function _generateSimulationReport(){
       r += `Wind Parameters:    threshold ${cfg.windThresholdMph} mph; scale ${cfg.windExcessScaleMph} mph; exponent ${cfg.windExponent}\n`;
       r += `Rain / Exposure:    coefficient ${cfg.rainCoefficient}; cap ${cfg.rainScoreCap}; exposure exponent ${cfg.exposureExponent}\n`;
     }
-    r += `Initial Contract:   ${N.toLocaleString()} outages -> ${Math.round(totalCust).toLocaleString()} customers (geography-derived, verified)\n`;
+    r += `Initial Contract:   ${N.toLocaleString()} outages -> ${Math.round(totalCust).toLocaleString()} unique customers (topology-derived, verified)\n`;
     r += `Restoration Tags:   ${meta.critical||0} critical; ${meta.treeBlocked||0} tree-blocked; ${meta.nearFloodZone||0} flood-zone; ${meta.callbackDelayed||0} callback-delayed\n`;
     r += `                    ${meta.switchRestored||0} automatic switch; ${meta.underground||0} underground\n`;
   }
@@ -6269,7 +6799,7 @@ function mapLayerAvailability(){
   const selectedTrack=document.getElementById('stormTrackSelect')?.value;
   const track=selectedTrack&&window.HARTFORD_STORM_TRACKS?.[selectedTrack];
   return {
-    outages:{available:!!(window._outageCloud||window._criticalCloud),waiting:'run outage simulation'},
+    outages:{available:!!window._outageCloud,waiting:'run outage simulation'},
     impactSurface:{available:!!outageSurfaceLayer,waiting:'run research model'},
     substations:{available:substations.length>0&&subLayer.getLayers().length>0,waiting:'grid is loading'},
     gridLines:{available:!!(lateralCloud&&feederCloud&&(feeders.length||laterals.length)),waiting:'grid is loading'},
@@ -6306,13 +6836,14 @@ function syncMapLayerVisibility(){
   setMapLayerVisible(subLayer,mapLayerVisibility.substations);
   setMapLayerVisible(outageSurfaceLayer,mapLayerVisibility.impactSurface);
   setMapLayerVisible(window._outageCloud,mapLayerVisibility.outages);
-  setMapLayerVisible(window._criticalCloud,mapLayerVisibility.outages);
   setMapLayerVisible(repairLayer,mapLayerVisibility.restoration);
   setMapLayerVisible(window._repairCloud,mapLayerVisibility.restoration);
   setMapLayerVisible(depotLayer,mapLayerVisibility.depots);
   setMapLayerVisible(window._depotCloud,mapLayerVisibility.depots);
   setMapLayerVisible(critFacilityLayer,mapLayerVisibility.criticalFacilities);
   setMapLayerVisible(stormTrackLayer,mapLayerVisibility.stormTrack);
+  if (!mapLayerVisibility.outages){outageInspectionPinnedId=null;hideOutageInspection(true);}
+  syncOutageTypeLegend();
   if (window._boundary) window._boundary.bringToFront();
   updateMapLayerControlAvailability();
 }

@@ -50,15 +50,21 @@ function smallSurfaces() {
 
 test("configuration has frozen defaults and rejects invalid inputs", () => {
   assert.equal(model.DEFAULT_CONFIG.nOutages, 2000);
-  assert.equal(model.DEFAULT_CONFIG.customersPerOutage, 50);
+  assert.equal(model.DEFAULT_CONFIG.customersPerOutage, undefined);
+  assert.equal(model.DEFAULT_CONFIG.customerSmoothingKm, 0);
   assert.equal(model.DEFAULT_CONFIG.ruralBaselineFraction, 0);
   assert.equal(model.DEFAULT_CONFIG.placementMode, "impact_weighted");
-  assert.equal(model.DEFAULT_CONFIG.candidateSegmentLengthKm, 1);
+  assert.equal(model.DEFAULT_CONFIG.candidateSegmentLengthKm, 0.25);
   assert.equal(model.DEFAULT_CONFIG.lineIntegrationStepKm, 0.25);
   assert.equal(model.DEFAULT_CONFIG.lateralSusceptibility, 1);
+  assert.equal(model.DEFAULT_CONFIG.feederSusceptibility, 0.1);
+  assert.equal(model.DEFAULT_CONFIG.serviceFailureWeight, 0.75);
+  assert.equal(model.DEFAULT_CONFIG.serviceGroupMaximumCustomers, 15);
   assert.equal(model.validateConfig({ n_outages: 3 }).nOutages, 3);
   assert.throws(() => model.validateConfig({ customersPerOutage: 49 }), model.InputValidationError);
   assert.throws(() => model.validateConfig({ gaussianBandwidthKm: 0 }), model.InputValidationError);
+  assert.equal(model.validateConfig({ customerSmoothingKm: 0 }).customerSmoothingKm, 0);
+  assert.throws(() => model.validateConfig({ customerSmoothingKm: -0.1 }), model.InputValidationError);
   assert.throws(() => model.validateConfig({ placementMode: "probability" }), model.InputValidationError);
   assert.throws(() => model.validateConfig({ typoBandwidthKm: 10 }), model.InputValidationError);
 });
@@ -96,6 +102,66 @@ test("small customer allocation, Gaussian smoothing, rural floor, and conservati
   assert.equal(customer.spatialMethod.coordinateReferenceSystem, "EPSG:4326");
   assert.equal(customer.spatialMethod.smoothing.standardDeviationKm, small.input.config.customer_smoothing_km);
   assert.match(customer.spatialMethod.populationAllocation, /bilinear/);
+});
+
+test("zero population smoothing is an exact mass-preserving identity", () => {
+  const input = small.input;
+  const weather = model.normalizeWeather(input.weather);
+  const customer = model.buildCustomerExposureSurface(
+    input.boundary,
+    input.census_tracts,
+    weather.latitudes,
+    weather.longitudes,
+    { smoothingKm: 0, ruralBaselineFraction: 0 },
+  );
+  compareGrid(customer.smoothedPopulationPersons, customer.rawPopulationPersons);
+  tolerance(customer.summary.rawPopulationTotal, customer.summary.smoothedPopulationTotal);
+  assert.equal(customer.spatialMethod.smoothing.applied, false);
+  assert.equal(customer.spatialMethod.smoothing.kernel, "none");
+});
+
+test("production block grid exactly reproduces runtime bilinear allocation", { timeout: 120000 }, () => {
+  const blocks = JSON.parse(fs.readFileSync(
+    path.join(ROOT, "data", "connecticut_census_blocks.json"), "utf8",
+  ));
+  const stored = JSON.parse(fs.readFileSync(
+    path.join(ROOT, "data", "connecticut_census_population_grid.json"), "utf8",
+  ));
+  const { rows, columns, latitudes, longitudes } = stored.grid;
+  const mask = Array.from({ length: rows }, (_, row) =>
+    stored.connecticutMask.slice(row * columns, (row + 1) * columns).map(Boolean));
+  const expected = Array.from({ length: rows }, (_, row) =>
+    stored.populationPersons.slice(row * columns, (row + 1) * columns));
+  const rerasterized = model.rasterizePopulationPersons(blocks, latitudes, longitudes, mask);
+  const boundary = JSON.parse(fs.readFileSync(
+    path.join(ROOT, "data", "connecticut_land_boundary.json"), "utf8",
+  ));
+  const customer = model.buildCustomerExposureSurface(
+    boundary, stored, latitudes, longitudes, { smoothingKm: 0, ruralBaselineFraction: 0 },
+  );
+
+  assert.equal(blocks.length, 49926);
+  assert.equal(stored.source.populatedBlockCount, 42008);
+  assert.equal(stored.source.zeroPopulationBlockCount, 7918);
+  assert.equal(stored.source.totalPopulationPersons, 3605944);
+  assert.equal(new Set(blocks.map((block) => block.geoid)).size, blocks.length);
+  assert.ok(blocks.every((block) => /^09\d{13}$/.test(block.geoid)));
+  tolerance(rerasterized.flat().reduce((sum, value) => sum + value, 0), 3605944, 1e-12, 1e-6);
+  compareGrid(rerasterized, expected, 1e-12);
+  tolerance(customer.summary.rawPopulationTotal, 3605944, 1e-12, 1e-6);
+  assert.equal(customer.summary.validCellCount, stored.connecticutMask.reduce((a, b) => a + b, 0));
+  assert.equal(customer.spatialMethod.sourceGeography, "Census block");
+  assert.equal(customer.spatialMethod.boundarySource, "data/connecticut_land_boundary.json");
+  assert.throws(
+    () => model.buildCustomerExposureSurface(
+      boundary,
+      { ...stored, source: { ...stored.source, totalPopulationPersons: 3605945 } },
+      latitudes,
+      longitudes,
+      { smoothingKm: 0, ruralBaselineFraction: 0 },
+    ),
+    /total does not match/,
+  );
 });
 
 test("wind threshold and rain amplification preserve all weather components", () => {
@@ -182,15 +248,24 @@ test("segment-keyed sampling is deterministic, order-invariant, unique, and rest
   });
   assert.deepEqual(first.outages, second.outages);
   assert.equal(first.outages.length, 3);
-  assert.equal(first.totalCustomers, 150);
-  assert.deepEqual(first.samplingDesign, {
-    algorithm: "segment_keyed_exponential_random_key_without_replacement",
-    keyEquation: "log(U_s) / W_s",
-    uniformKey: "FNV-1a-derived 32-bit hash of seed, stream, segment ID, and counter",
-    stableUnderCandidateReordering: true,
-    conditionedOnOutageCount: 3,
-    normalizedScoresAreInclusionProbabilities: false,
-  });
+  assert.equal(first.schemaVersion, 4);
+  assert.equal(first.schema, "connecticut_outage_scenario_v4");
+  assert.equal(
+    first.totalCustomers,
+    first.outages.reduce((sum, outage) => sum + outage.customers, 0),
+  );
+  assert.equal(first.methodology.networkTopology.customerLoadsAssigned, true);
+  assert.equal(first.methodology.networkTopology.overlappingOutagePreventionApplied, true);
+  assert.equal(
+    first.customerAllocation.summary.allocatedCustomerAccounts,
+    first.customerAllocation.summary.targetIntegerCustomerAccounts,
+  );
+  assert.equal(
+    first.samplingDesign.algorithm,
+    "segment_keyed_exponential_random_key_without_replacement",
+  );
+  assert.equal(first.samplingDesign.stableUnderCandidateReordering, true);
+  assert.equal(first.samplingDesign.overlappingCustomerSubtrees, 0);
   const { config, customer, severity, impact } = smallSurfaces();
   const segments = model.buildWeightedNetworkSegments(
     small.input.network, customer, severity, impact, config,
@@ -200,12 +275,15 @@ test("segment-keyed sampling is deterministic, order-invariant, unique, and rest
   assert.deepEqual(reversed.outages, forward.outages);
   assert.equal(new Set(first.outages.map((outage) => outage.networkSegmentId)).size, 3);
   first.outages.forEach((outage) => {
-    assert.equal(outage.popLoss, 50);
-    assert.equal(outage.customers, 50);
+    assert.ok(Number.isInteger(outage.customers) && outage.customers > 0);
+    assert.equal(outage.popLoss, outage.customers);
+    assert.equal(outage.downstreamCustomers, outage.customers);
     assert.ok(Number.isInteger(outage.fi));
     assert.ok(outage.kind === "f" || Number.isInteger(outage.li));
     assert.ok(outage.is_feeder === 0 || outage.is_feeder === 1);
     assert.equal(outage.sub_id, 0);
+    assert.ok(Number.isInteger(outage.networkDirectCustomerAccounts));
+    assert.ok(Number.isInteger(outage.networkDownstreamCustomerAccounts));
   });
 });
 

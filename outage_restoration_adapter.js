@@ -21,7 +21,6 @@
 
   const METADATA_VERSION = 1;
   const DEFAULTS = Object.freeze({
-    customersPerOutage: 50,
     criticalRadiusMi: 0.5,
     criticalFallbackRate: 0.02,
     treeBaseRate: 0.90,
@@ -117,7 +116,7 @@
     return -1;
   }
 
-  function validateInitialScenario(outages, expectedTotal, customersPerOutage = 50) {
+  function validateInitialScenario(outages, expectedTotal) {
     if (!Array.isArray(outages) || outages.length === 0) {
       throw new ContractError("the generated scenario must contain at least one outage");
     }
@@ -126,18 +125,27 @@
       if (!Number.isFinite(outage.lat) || !Number.isFinite(outage.lon)) {
         throw new ContractError(`outage ${index} has invalid coordinates`);
       }
-      if (outage.popLoss !== customersPerOutage || outage.customers !== customersPerOutage) {
-        throw new ContractError(`outage ${index} must represent exactly ${customersPerOutage} customers`);
+      if (!Number.isInteger(outage.customers) || outage.customers <= 0
+          || outage.popLoss !== outage.customers) {
+        throw new ContractError(
+          `outage ${index} must have matching positive integer customers and popLoss`,
+        );
       }
     }
-    const representedCustomers = outages.length * customersPerOutage;
+    const representedCustomers = outages.reduce(
+      (sum, outage) => sum + outage.customers,
+      0,
+    );
     if (expectedTotal != null && expectedTotal !== representedCustomers) {
       throw new ContractError(`scenario total ${expectedTotal} does not equal ${representedCustomers}`);
     }
     return Object.freeze({
       outageCount: outages.length,
-      customersPerOutage,
       representedCustomers,
+      minimumCustomersPerOutage: Math.min(...outages.map((outage) => outage.customers)),
+      maximumCustomersPerOutage: Math.max(...outages.map((outage) => outage.customers)),
+      meanCustomersPerOutage: representedCustomers / outages.length,
+      variableCustomerCounts: true,
     });
   }
 
@@ -156,15 +164,10 @@
     const switchingRandom = stream(seed, 4217);
     const undergroundRandom = stream(seed, 7331);
 
-    const prepared = sampledOutages.map((outage) => ({
-      ...outage,
-      popLoss: config.customersPerOutage,
-      customers: config.customersPerOutage,
-    }));
+    const prepared = sampledOutages.map((outage) => ({ ...outage }));
     const initialContract = validateInitialScenario(
       prepared,
-      sampledOutages.length * config.customersPerOutage,
-      config.customersPerOutage,
+      options.expectedTotal ?? null,
     );
 
     const counts = {
@@ -242,7 +245,7 @@
       };
     });
 
-    validateInitialScenario(outages, initialContract.representedCustomers, config.customersPerOutage);
+    validateInitialScenario(outages, initialContract.representedCustomers);
     return {
       outages,
       contract: initialContract,

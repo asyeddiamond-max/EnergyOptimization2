@@ -20,7 +20,7 @@
   let yieldToMessages;
 
   if (typeof importScripts === "function" && typeof self !== "undefined") {
-    importScripts("outage_location_model.js?v=4");
+    importScripts("outage_location_model.js?v=9");
     model = self.OutageLocationModel;
     send = (message, transfer = []) => self.postMessage(message, transfer);
     subscribe = (handler) => self.addEventListener("message", (event) => handler(event.data));
@@ -237,25 +237,43 @@
     return { surfaces, transfer };
   }
 
-  function buildSummary(segments, scenario, customer, weather, impact, timingsMs) {
+  function buildSummary(
+    segments,
+    scenario,
+    customer,
+    weather,
+    impact,
+    customerAllocation,
+    timingsMs,
+  ) {
     const feederCandidateSegments = segments.reduce(
       (count, segment) => count + (segment.networkKind === "feeder" ? 1 : 0), 0,
     );
-    const feederOutages = scenario.outages.reduce(
-      (count, outage) => count + (outage.is_feeder === 1 ? 1 : 0), 0,
-    );
+    const componentClassCounts = scenario.sizeSummary.componentClassCounts;
     const totalSegmentWeight = segments.reduce((sum, segment) => sum + segment.weight, 0);
     return {
-      placementModel: `${scenario.methodology.placementMode}_snapshot_v2`,
+      placementModel: `${scenario.methodology.placementMode}_snapshot_v4_topology_sized`,
       placementMode: scenario.methodology.placementMode,
       candidateSegments: segments.length,
       feederCandidateSegments,
       lateralCandidateSegments: segments.length - feederCandidateSegments,
       sampledOutages: scenario.outages.length,
       uniqueSampledSegments: new Set(scenario.outages.map((outage) => outage.networkSegmentId)).size,
-      feederOutages,
-      lateralOutages: scenario.outages.length - feederOutages,
+      feederOutages: componentClassCounts.feeder,
+      lateralOutages: componentClassCounts.lateral,
+      serviceOutages: componentClassCounts.service,
+      topologyRoots: new Set(segments.map((segment) => segment.topologyRootId)).size,
+      maximumTopologyDepth: segments.reduce(
+        (maximum, segment) => Math.max(maximum, segment.topologyDepth || 0),
+        0,
+      ),
       representedCustomers: scenario.totalCustomers,
+      uniqueCustomersAffected: scenario.totalCustomers,
+      outageSize: scenario.sizeSummary,
+      dpu31Comparison: scenario.dpu31Comparison,
+      provisionalPcao: scenario.provisionalPcao,
+      topologySizing: scenario.sizingSelection.summary,
+      customerAllocation: customerAllocation.summary,
       totalSegmentWeight,
       totalFailureOrientedWeight: segments.reduce(
         (sum, segment) => sum + (segment.failureOrientedWeight || 0), 0,
@@ -288,33 +306,91 @@
         runId, timingsMs, currentStage, 0.05, "Validating basic placement inputs…",
         () => model.validateConfig(input.config),
       );
+      currentStage = "customer-exposure";
+      const customer = await stage(
+        runId,
+        timingsMs,
+        currentStage,
+        0.16,
+        "Loading Census customer inventory for basic placement…",
+        () => {
+          const populationSource = model.populationSourceFromInput(input);
+          const grid = populationSource && populationSource.grid;
+          const latitudes = grid && (grid.latitudes || grid.lats);
+          const longitudes = grid && (grid.longitudes || grid.lons);
+          if (!Array.isArray(latitudes) || !Array.isArray(longitudes)) {
+            throw new model.InputValidationError(
+              "basic placement requires a precomputed populationGrid with latitude/longitude coordinates",
+            );
+          }
+          return model.buildCustomerExposureSurface(
+            input.boundary,
+            populationSource,
+            latitudes,
+            longitudes,
+            {
+              smoothingKm: config.customerSmoothingKm,
+              ruralBaselineFraction: config.ruralBaselineFraction,
+            },
+          );
+        },
+      );
+      currentStage = "network-customer-allocation";
+      const customerAllocation = await stage(
+        runId,
+        timingsMs,
+        currentStage,
+        0.30,
+        "Assigning Census customer accounts to the rooted network…",
+        () => model.allocateCustomerAccountsToTopology(
+          model.buildRootedNetworkTopology(input.network, config),
+          customer,
+        ),
+      );
       currentStage = "network-weighting";
       const segments = await stage(
-        runId, timingsMs, currentStage, 0.36, "Weighting network segments by length…",
-        () => model.buildBasicNetworkSegments(input.network, config),
+        runId, timingsMs, currentStage, 0.48, "Weighting network segments by length…",
+        () => model.buildBasicNetworkSegments(input.network, config, customerAllocation),
       );
       currentStage = "sampling";
       const scenario = await stage(
         runId, timingsMs, currentStage, 0.82, "Sampling unique basic outage locations…",
-        () => model.sampleOutageScenario(segments, config, input.inputs || {}, input.boundary || null),
+        () => model.sampleSizedOutageScenario(
+          segments,
+          config,
+          input.inputs || {},
+          input.boundary,
+        ),
       );
       currentStage = "serialization";
       postProgress(runId, currentStage, 0.96, "Preparing basic-placement result…", timingsMs);
       await yieldToMessages();
       ensureCurrent(runId, currentStage);
       const feederCandidateSegments = segments.filter((segment) => segment.networkKind === "feeder").length;
-      const feederOutages = scenario.outages.filter((outage) => outage.is_feeder === 1).length;
+      const componentClassCounts = scenario.sizeSummary.componentClassCounts;
       const totalSegmentWeight = segments.reduce((sum, segment) => sum + segment.weight, 0);
       const summary = {
-        placementModel: "basic_network_v1",
+        placementModel: "basic_network_v2_topology_sized",
         candidateSegments: segments.length,
         feederCandidateSegments,
         lateralCandidateSegments: segments.length - feederCandidateSegments,
         sampledOutages: scenario.outages.length,
         uniqueSampledSegments: new Set(scenario.outages.map((outage) => outage.networkSegmentId)).size,
-        feederOutages,
-        lateralOutages: scenario.outages.length - feederOutages,
+        feederOutages: componentClassCounts.feeder,
+        lateralOutages: componentClassCounts.lateral,
+        serviceOutages: componentClassCounts.service,
+        topologyRoots: new Set(segments.map((segment) => segment.topologyRootId)).size,
+        maximumTopologyDepth: segments.reduce(
+          (maximum, segment) => Math.max(maximum, segment.topologyDepth || 0),
+          0,
+        ),
         representedCustomers: scenario.totalCustomers,
+        uniqueCustomersAffected: scenario.totalCustomers,
+        outageSize: scenario.sizeSummary,
+        dpu31Comparison: scenario.dpu31Comparison,
+        provisionalPcao: scenario.provisionalPcao,
+        topologySizing: scenario.sizingSelection.summary,
+        customerAllocation: customerAllocation.summary,
         totalSegmentWeight,
         surface: null,
         timingsMs: { ...timingsMs },
@@ -323,7 +399,18 @@
       };
       postProgress(runId, "complete", 1, "Basic outage locations generated.", timingsMs);
       send(envelope("result", runId, {
-        result: { ...scenario, surfaces: null, summary },
+        result: {
+          ...scenario,
+          customerAllocation: {
+            schema: customerAllocation.schema,
+            allocationVersion: customerAllocation.allocationVersion,
+            sourceCustomerQuantity: customerAllocation.sourceCustomerQuantity,
+            serviceRepresentation: customerAllocation.serviceRepresentation,
+            summary: customerAllocation.summary,
+          },
+          surfaces: null,
+          summary,
+        },
       }));
       return true;
     } catch (error) {
@@ -431,7 +518,7 @@
         runId, timingsMs, currentStage, 0.12, "Allocating and smoothing customer exposure…",
         () => model.buildCustomerExposureSurface(
           input.boundary,
-          input.censusTracts,
+          model.populationSourceFromInput(input),
           validated.weather.latitudes,
           validated.weather.longitudes,
           {
@@ -441,9 +528,25 @@
         ),
       );
 
+      currentStage = "network-customer-allocation";
+      const customerAllocation = await stage(
+        runId,
+        timingsMs,
+        currentStage,
+        0.25,
+        "Assigning Census customer accounts to the rooted network…",
+        () => {
+          const topology = model.buildRootedNetworkTopology(
+            input.network,
+            validated.config,
+          );
+          return model.allocateCustomerAccountsToTopology(topology, customer);
+        },
+      );
+
       currentStage = "weather-severity";
       const weather = await stage(
-        runId, timingsMs, currentStage, 0.31, "Calculating wind and rain severity…",
+        runId, timingsMs, currentStage, 0.36, "Calculating wind and rain severity…",
         () => model.buildWeatherSeveritySurface(
           input.weather, customer.connecticutMask, validated.config,
         ),
@@ -451,23 +554,33 @@
 
       currentStage = "impact-smoothing";
       const impact = await stage(
-        runId, timingsMs, currentStage, 0.45, "Combining exposure and Gaussian-smoothed impact…",
+        runId, timingsMs, currentStage, 0.50, "Combining exposure and Gaussian-smoothed impact…",
         () => model.buildCombinedImpactSurface(customer, weather, validated.config),
       );
 
       currentStage = "network-weighting";
       const segments = await stage(
-        runId, timingsMs, currentStage, 0.58,
+        runId, timingsMs, currentStage, 0.63,
         "Integrating hazard and impact scores along standardized network segments…",
         () => model.buildWeightedNetworkSegments(
-          input.network, customer, weather, impact, validated.config,
+          input.network,
+          customer,
+          weather,
+          impact,
+          validated.config,
+          customerAllocation,
         ),
       );
 
       currentStage = "sampling";
       const scenario = await stage(
         runId, timingsMs, currentStage, 0.88, "Sampling unique outage locations…",
-        () => model.sampleOutageScenario(segments, validated.config, input.inputs || {}, input.boundary),
+        () => model.sampleSizedOutageScenario(
+          segments,
+          validated.config,
+          input.inputs || {},
+          input.boundary,
+        ),
       );
 
       currentStage = "serialization";
@@ -475,7 +588,15 @@
       await yieldToMessages();
       ensureCurrent(runId, currentStage);
       const started = performance.now();
-      const summary = buildSummary(segments, scenario, customer, weather, impact, timingsMs);
+      const summary = buildSummary(
+        segments,
+        scenario,
+        customer,
+        weather,
+        impact,
+        customerAllocation,
+        timingsMs,
+      );
       const transported = prepareSurfaceTransport(customer, weather, impact);
       timingsMs[currentStage] = performance.now() - started;
       summary.timingsMs = { ...timingsMs };
@@ -486,6 +607,13 @@
       send(envelope("result", runId, {
         result: {
           ...scenario,
+          customerAllocation: {
+            schema: customerAllocation.schema,
+            allocationVersion: customerAllocation.allocationVersion,
+            sourceCustomerQuantity: customerAllocation.sourceCustomerQuantity,
+            serviceRepresentation: customerAllocation.serviceRepresentation,
+            summary: customerAllocation.summary,
+          },
           surfaces: transported.surfaces,
           summary,
         },
@@ -519,6 +647,9 @@
           separatedRiskComponents: true,
           lineIntegratedNetworkScores: true,
           segmentKeyedSampling: true,
+          rootedNetworkTopology: true,
+          censusCustomerAccountAllocation: true,
+          topologyCustomerSizing: true,
         } }));
         return;
       }
@@ -555,5 +686,8 @@
     separatedRiskComponents: true,
     lineIntegratedNetworkScores: true,
     segmentKeyedSampling: true,
+    rootedNetworkTopology: true,
+    censusCustomerAccountAllocation: true,
+    topologyCustomerSizing: true,
   } }));
 })();

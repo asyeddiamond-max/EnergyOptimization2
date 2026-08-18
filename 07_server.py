@@ -189,7 +189,7 @@ class Outage(BaseModel):
     lat: float
     lon: float
     critical: bool = False
-    customers: float = 0.0  # number of customers served by this outage point
+    customers: int = Field(gt=0)  # authoritative positive topology-derived count
     feeder_id: int = -1     # parent feeder index (for hierarchical restoration)
     is_feeder: int = 0      # 1 if this is a backbone fault, 0 if a lateral fault
     priority: int = 0       # dispatch tier: 0 normal, 1 critical facility,
