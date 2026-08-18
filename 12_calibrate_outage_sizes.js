@@ -140,6 +140,90 @@ function buildCalibrationNetwork(boundary, substations, options = {}) {
   return network;
 }
 
+/*
+ * Rebuild the road-snapped production network using the same deterministic
+ * ordering and lateral-to-feeder attachment rule as 03_grid_simulation.html.
+ * road_grid.json stores points as [latitude, longitude], so keep them in the
+ * `pts` form understood by outage_location_model.js.
+ */
+function buildRoadCalibrationNetwork(substations, roadGrid) {
+  if (!roadGrid || !Array.isArray(roadGrid.subs)) {
+    throw new Error("road grid must contain a subs array");
+  }
+  if (roadGrid.subs.length !== substations.length) {
+    throw new Error(
+      `road grid has ${roadGrid.subs.length} substations; expected ${substations.length}`,
+    );
+  }
+  const network = {
+    substations: substations.map((substation, subId) => ({
+      sub_id: subId,
+      name: substation.name,
+      lat: substation.lat,
+      lon: substation.lon,
+    })),
+    feeders: [],
+    laterals: [],
+  };
+
+  for (let subId = 0; subId < substations.length; subId += 1) {
+    const substation = substations[subId];
+    // The road-grid asset is generated from CONNECTICUT_SUBSTATIONS in source
+    // order. Match by that stable position because HIFLD names are not unique.
+    const entry = roadGrid.subs[subId];
+    if (entry?.name !== substation.name) {
+      throw new Error(
+        `road grid substation ${subId} is ${entry?.name ?? "missing"}; expected ${substation.name}`,
+      );
+    }
+    if (!entry || !Array.isArray(entry.feeders) || !entry.feeders.length) {
+      throw new Error(`road grid has no feeders for substation ${substation.name ?? subId}`);
+    }
+
+    const substationFeederIds = [];
+    for (const points of entry.feeders) {
+      const feederId = network.feeders.length;
+      substationFeederIds.push(feederId);
+      network.feeders.push({
+        feeder_id: feederId,
+        sub_id: subId,
+        pts: points.map((point) => [point[0], point[1]]),
+      });
+    }
+
+    for (const points of entry.laterals ?? []) {
+      const lateralOrigin = points[0];
+      let feederId = substationFeederIds[0];
+      let feederAnchorVertexIndex = 0;
+      let bestDistanceSquared = Infinity;
+      for (const candidateFeederId of substationFeederIds) {
+        const feederPoints = network.feeders[candidateFeederId].pts;
+        for (let vertexIndex = 0; vertexIndex < feederPoints.length; vertexIndex += 1) {
+          const point = feederPoints[vertexIndex];
+          const distanceSquared = (point[0] - lateralOrigin[0]) ** 2
+            + (point[1] - lateralOrigin[1]) ** 2;
+          if (distanceSquared < bestDistanceSquared) {
+            bestDistanceSquared = distanceSquared;
+            feederId = candidateFeederId;
+            feederAnchorVertexIndex = vertexIndex;
+          }
+        }
+      }
+      const feederAnchor = network.feeders[feederId].pts[feederAnchorVertexIndex];
+      const anchoredPoints = bestDistanceSquared > 1e-16
+        ? [[feederAnchor[0], feederAnchor[1]], ...points]
+        : points;
+      network.laterals.push({
+        lateral_id: network.laterals.length,
+        feeder_id: feederId,
+        feeder_anchor_vertex_index: feederAnchorVertexIndex,
+        pts: anchoredPoints.map((point) => [point[0], point[1]]),
+      });
+    }
+  }
+  return network;
+}
+
 function calibrationInputs(options = {}) {
   const candidateSegmentLengthKm = options.candidateSegmentLengthKm
     ?? model.DEFAULT_CONFIG.candidateSegmentLengthKm;
@@ -155,7 +239,13 @@ function calibrationInputs(options = {}) {
     "data/connecticut_substations.js",
     "CONNECTICUT_SUBSTATIONS",
   );
-  const network = buildCalibrationNetwork(boundary, substations);
+  const networkSource = options.networkSource ?? "road_grid";
+  const network = networkSource === "road_grid"
+    ? buildRoadCalibrationNetwork(
+      substations,
+      JSON.parse(fs.readFileSync(path.join(ROOT, "data", "road_grid.json"), "utf8")),
+    )
+    : buildCalibrationNetwork(boundary, substations);
   const customerSurface = model.buildCustomerExposureSurface(
     boundary,
     populationGrid,
@@ -178,7 +268,7 @@ function calibrationInputs(options = {}) {
     childSegmentIds: segment.childSegmentIds.map((id) => id.replace(/^basic:/, "")),
     topologyRootId: segment.topologyRootId.replace(/^basic:/, ""),
   }));
-  return { network, customerSurface, allocation, neutralSegments };
+  return { networkSource, network, customerSurface, allocation, neutralSegments };
 }
 
 function resultOutages(selection) {
@@ -261,8 +351,8 @@ function evaluateParameters(neutralSegments, parameters, seeds) {
 
 function parameterGrid(quick) {
   const feederValues = quick
-    ? [0.003, 0.01, 0.03, 0.05]
-    : [0.003, 0.01, 0.03, 0.05, 0.1];
+    ? [0.001, 0.003, 0.01, 0.03]
+    : [0.001, 0.002, 0.003, 0.005, 0.01, 0.03, 0.05, 0.1];
   const serviceValues = quick
     ? [0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
     : [0.6, 0.65, 0.7, 0.75, 0.8];
@@ -279,7 +369,8 @@ function runCalibration(options = {}) {
   const quick = options.quick === true;
   const candidateSegmentLengthKm = options.candidateSegmentLengthKm
     ?? model.DEFAULT_CONFIG.candidateSegmentLengthKm;
-  const inputs = calibrationInputs({ candidateSegmentLengthKm });
+  const networkSource = options.networkSource ?? "road_grid";
+  const inputs = calibrationInputs({ candidateSegmentLengthKm, networkSource });
   const seeds = quick ? CALIBRATION_SEEDS.slice(0, 3) : CALIBRATION_SEEDS;
   const evaluated = parameterGrid(quick).map((parameters) =>
     evaluateParameters(inputs.neutralSegments, parameters, seeds));
@@ -306,6 +397,7 @@ function runCalibration(options = {}) {
       heldOutOverflowJobShareMaximum: 0.01,
     },
     topology: {
+      source: inputs.networkSource,
       substations: inputs.network.substations.length,
       feeders: inputs.network.feeders.length,
       laterals: inputs.network.laterals.length,
@@ -328,8 +420,12 @@ function runCalibration(options = {}) {
 
 if (require.main === module) {
   const segmentArgument = process.argv.find((value) => value.startsWith("--segment-km="));
+  const networkArgument = process.argv.find((value) => value.startsWith("--network="));
   const result = runCalibration({
     quick: process.argv.includes("--quick"),
+    networkSource: networkArgument?.split("=")[1] === "synthetic"
+      ? "synthetic"
+      : "road_grid",
     candidateSegmentLengthKm: segmentArgument
       ? Number(segmentArgument.split("=")[1])
       : model.DEFAULT_CONFIG.candidateSegmentLengthKm,
@@ -341,6 +437,7 @@ module.exports = {
   CALIBRATION_SEEDS,
   VALIDATION_SEEDS,
   buildCalibrationNetwork,
+  buildRoadCalibrationNetwork,
   calibrationInputs,
   evaluateParameters,
   runCalibration,

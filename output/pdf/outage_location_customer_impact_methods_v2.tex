@@ -27,7 +27,7 @@
 
 The model creates a fixed number of synthetic storm outages on a distribution-network map. It does not predict the total outage count or an absolute probability that a particular line will fail. Given a storm and a requested count $k$, weather and customer exposure determine where failures receive weight, while network topology determines how many modeled customer accounts are downstream of each failure.
 
-The inputs are hourly NOAA High-Resolution Rapid Refresh (HRRR) wind and precipitation fields, 2020 Census population, and synthetic feeders and laterals anchored at public substation coordinates \citep{noaahrrr,census2020,hifld}. Raster calculations use a regular $41\times65$ Connecticut grid. Network lines remain vector geometry and are evaluated against that grid.
+The inputs are hourly NOAA High-Resolution Rapid Refresh (HRRR) wind and precipitation fields, 2020 Census population, public substation coordinates, and synthetic feeder and lateral routes constrained to OpenStreetMap roads \citep{noaahrrr,census2020,hifld,openstreetmap}. Raster calculations use a regular $41\times65$ Connecticut grid. Network lines remain vector geometry and are evaluated against that grid.
 
 \section*{Weather and customer-exposure surface}
 
@@ -98,13 +98,13 @@ The default impact-priority field is
 The 10 km boundary-corrected smoother regularizes the combined surface. It is an explicit modeling choice, not an empirically fitted damage radius.
 
 \textbf{5. Transfer the grid score to network lines.}
-Every feeder and lateral is divided by chainage into candidates no longer than 0.25 km. Composite midpoint quadrature, also using a maximum spacing of 0.25 km, gives
+Every feeder and lateral is divided by chainage into candidates no longer than 0.075 km. Composite midpoint quadrature uses a maximum spacing of 0.25 km and gives
 
 \begin{equation}
   W_s=\lambda_{\mathrm{type}(s)}
   \sum_t\int_s I(x,t)\,d\ell,
   \qquad
-  \lambda_{\mathrm{feeder}}=0.10,
+  \lambda_{\mathrm{feeder}}=0.003,
   \quad
   \lambda_{\mathrm{lateral}}=1.00.
   \label{eq:segment-weight}
@@ -114,8 +114,8 @@ $I(x,t)$ is bilinearly interpolated along segment $s$. An optional failure-orien
 
 \section*{Topology-based customer counts}
 
-\textbf{6. Turn feeders and laterals into directed trees.}
-A feeder coordinate list is interpreted from its substation toward its endpoint. A lateral is interpreted from its feeder attachment outward. Each segment records one parent and zero or more children. A lateral's first segment is attached to the feeder segment at the recorded or inferred attachment chainage. Attachments farther than 0.05 km from the feeder are rejected. The statewide network is therefore a rooted forest: one directed tree for each feeder root.
+\textbf{6. Put the modeled network in downstream order.}
+Each modeled feeder is associated with a real substation point. Its synthetic route begins at the nearest mapped road node and follows the OpenStreetMap road graph outward; synthetic laterals follow eligible local-road branches from those feeder routes. For this calculation, feeder and lateral segments are ordered away from the substation. Each segment has one immediate upstream connection, except the first feeder segment, and may have zero or more downstream connections. Each lateral begins at its calculated feeder attachment; connections farther than 0.05 km are rejected. This ordering identifies every modeled account downstream of a failure location. The road-constrained paths are geographic proxies, not observed utility circuits, switching records, or alternate supply paths.
 
 \textbf{7. Attach modeled accounts to the network.}
 Topology sizing uses the raw, unsmoothed Census-derived account grid, so population-smoothing experiments affect placement but do not change the topology allocation or statewide sizing inventory. Each positive grid node is first assigned to its nearest substation territory. Within that territory, the node's accounts are divided among up to eight nearest distinct laterals using inverse-square distance weights:
@@ -159,11 +159,11 @@ The final partial cycle is adjusted to conserve the segment's exact direct-accou
 If segment $s$ has $G_s$ small groups, each group receives
 
 \begin{equation}
-  W_{sg}=\frac{0.75W_s}{G_s}.
+  W_{sg}=\frac{0.80W_s}{G_s}.
   \label{eq:group-weight}
 \end{equation}
 
-Thus all small groups on the segment together have 75 percent of the segment's network-failure weight, regardless of how many groups it contains.
+Thus all small groups on the segment together have 80 percent of the segment's network-failure weight, regardless of how many groups it contains.
 
 \textbf{10. Select failures without counting the same customers twice.}
 Every positive-weight network or small-group candidate $f$ receives a deterministic random-priority key
@@ -176,7 +176,7 @@ Every positive-weight network or small-group candidate $f$ receives a determinis
 
 where $w_f=W_s$ for a network failure and $w_f=W_{sg}$ for a small group. The logarithmic key is ordering-equivalent to the Efraimidis-Spirakis weighted sampling key \citep{efraimidis2006}. Uniform values are generated from the scenario seed and stable candidate identifiers, making results reproducible and invariant to candidate-array order.
 
-Candidates are considered from largest key downward. Each network segment has a preorder subtree interval $[a_s,b_s]$. In a rooted tree, two network failures overlap when their intervals intersect:
+Candidates are considered from largest key downward. Each network segment is assigned a numerical range $[a_s,b_s]$ covering itself and all segments below it. Within one feeder, two network failures overlap when their ranges intersect:
 
 \begin{equation}
   a_i\le b_j
@@ -208,9 +208,9 @@ The location is sampled reproducibly along the selected segment. This separates 
 
 \section*{Calibration and interpretation}
 
-Feeder susceptibility, candidate length, and total small-group weight were selected using aggregate National Grid D.P.U. 24-41 storm-job size bins supplied for this project \citep{dpu2441}. The fitting objective was the mean total-variation distance between simulated and target job shares across five calibration seeds. Five additional seeds were held out from parameter selection. The accepted settings produced held-out mean job-share total variation 0.1007, maximum absolute bin error 0.0578, and overflow job share 0.0025.
+Feeder susceptibility, candidate length, and total small-group weight were selected using aggregate National Grid D.P.U. 24-41 storm-job size bins supplied for this project \citep{dpu2441}. The corrected road-network run contained 299 substations, 1,749 feeders, 8,137 laterals, 185,571 candidate segments, and exactly 1,633,000 modeled accounts. Forty feeder/small-group combinations were compared using mean total-variation distance between simulated and target job shares across five calibration seeds. Five additional seeds were held out from parameter selection. The accepted settings produced held-out mean job-share total variation 0.1397, maximum absolute bin error 0.0786, and overflow job share 0.00025.
 
-These are held-out stochastic seeds on the same synthetic calibration network, not validation on an independent utility topology or storm. The D.P.U. target influences the distribution of modeled job sizes; it does not directly assign a customer count to an outage.
+These are held-out stochastic seeds on the same road-constrained synthetic network, not validation on an independent utility topology or storm. The D.P.U. target influences the distribution of modeled job sizes; it does not directly assign a customer count to an outage.
 
 \section*{What this supports and what it does not}
 
@@ -218,18 +218,18 @@ The method provides a transparent conditional scenario generator in which custom
 
 Important limitations remain:
 
+\enlargethispage{1.2\baselineskip}
 \begin{itemize}[leftmargin=1.35em,itemsep=0.02em,topsep=0.1em,parsep=0pt]
-  \item Substation locations are real, but feeders and laterals are synthetic.
+  \item Substation points are real, but the road-constrained feeders and laterals are synthetic.
   \item Customer-to-network attachment is based on distance rather than utility customer-circuit records.
   \item The initial sizing rule assumes every modeled customer below a failed segment loses power.
   \item Initial sizing does not represent electrical phases, protective-device boundaries, switching, or backfeeding.
-  \item A failure location is sampled within a 0.25 km segment, while its size uses that segment's complete downstream total.
+  \item A failure location is sampled within a 0.075 km segment, while its size uses that segment's complete downstream total.
   \item The 1-15 account groups are generic and calibration-informed, not an observed equipment inventory.
 \end{itemize}
 
 The appropriate paper language is therefore \emph{model-estimated downstream customer accounts}, not known customers served by an actual circuit. Validation against observed component failures and utility circuit records would be required before interpreting the weights as calibrated failure probabilities or the customer counts as actual outage impacts.
 
-\newpage
 \bibliographystyle{plainnat}
 \bibliography{outage_location_customer_impact_methods_v2}
 

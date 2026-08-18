@@ -54,11 +54,11 @@ test("configuration has frozen defaults and rejects invalid inputs", () => {
   assert.equal(model.DEFAULT_CONFIG.customerSmoothingKm, 0);
   assert.equal(model.DEFAULT_CONFIG.ruralBaselineFraction, 0);
   assert.equal(model.DEFAULT_CONFIG.placementMode, "impact_weighted");
-  assert.equal(model.DEFAULT_CONFIG.candidateSegmentLengthKm, 0.25);
+  assert.equal(model.DEFAULT_CONFIG.candidateSegmentLengthKm, 0.075);
   assert.equal(model.DEFAULT_CONFIG.lineIntegrationStepKm, 0.25);
   assert.equal(model.DEFAULT_CONFIG.lateralSusceptibility, 1);
-  assert.equal(model.DEFAULT_CONFIG.feederSusceptibility, 0.1);
-  assert.equal(model.DEFAULT_CONFIG.serviceFailureWeight, 0.75);
+  assert.equal(model.DEFAULT_CONFIG.feederSusceptibility, 0.003);
+  assert.equal(model.DEFAULT_CONFIG.serviceFailureWeight, 0.8);
   assert.equal(model.DEFAULT_CONFIG.serviceGroupMaximumCustomers, 15);
   assert.equal(model.validateConfig({ n_outages: 3 }).nOutages, 3);
   assert.throws(() => model.validateConfig({ customersPerOutage: 49 }), model.InputValidationError);

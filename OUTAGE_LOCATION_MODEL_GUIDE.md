@@ -147,21 +147,24 @@ configuration is the frozen `DEFAULT_CONFIG`.
 | Population smoothing | `customerSmoothingKm` | 0 km | Optional Gaussian standard deviation after block-to-grid allocation; zero disables it |
 | Rural baseline fraction | `ruralBaselineFraction` | 0 | Optional synthetic uniform exposure for sensitivity analysis |
 | Impact bandwidth | `gaussianBandwidthKm` | 10 km | Standard deviation for impact-surface regularization |
-| Candidate length | `candidateSegmentLengthKm` | 0.25 km | Maximum length of a without-replacement network candidate |
+| Candidate length | `candidateSegmentLengthKm` | 0.075 km | Maximum length of a without-replacement network candidate |
 | Line-integration step | `lineIntegrationStepKm` | 0.25 km | Maximum midpoint-quadrature spacing |
-| Feeder susceptibility | `feederSusceptibility` | 0.10 | Calibrated relative feeder candidate multiplier |
+| Feeder susceptibility | `feederSusceptibility` | 0.003 | Calibrated relative feeder candidate multiplier |
 | Lateral susceptibility | `lateralSusceptibility` | 1 | Relative lateral candidate multiplier |
-| Small-group weight | `serviceFailureWeight` | 0.75 | Calibrated relative total failure mass for compact 1–15-account load groups |
+| Small-group weight | `serviceFailureWeight` | 0.80 | Calibrated relative total failure mass for compact 1–15-account load groups |
 
 The separate **Placement method** UI selector chooses the research model or the
 explicit basic network-length fallback. It is orchestration state rather than a
 scientific coefficient.
 
-The initial two-account representation failed held-out calibration. After
-adding generic 1–15-account topology leaf groups and using 0.25 km candidates,
-the final five-calibration-seed/five-held-out-seed run passed all frozen limits:
-held-out job-share TV 0.1007, maximum bin error 0.0578, and overflow job share
-0.0025. The accepted settings above are now the model defaults. See
+The original synthetic-network calibration became stale when the production UI
+adopted the road-snapped grid. The calibration harness now reconstructs that
+same production network: 299 substations, 1,749 feeders, and 8,137 laterals.
+After retaining the generic 1–15-account topology leaf groups and refining the
+maximum candidate length to 0.075 km, the final five-calibration-seed and
+five-held-out-seed road-network run passed all frozen limits: held-out job-share
+TV 0.1397, maximum bin error 0.0786, and overflow job share 0.00025. The
+accepted settings above are now the model defaults. See
 [`data/validation/dpu31_topology_calibration_report.md`](data/validation/dpu31_topology_calibration_report.md).
 PCAO* is displayed separately and is never part of the fitting objective. It
 uses Wanik et al. (2018), Equation 2, but is explicitly provisional: the current
@@ -179,6 +182,12 @@ independently identifiable spatial tuning parameter under this sampling design.
 
 - HRRR wind and precipitation define the common approximately 3 km analysis
   grid and hourly timeline.
+- For a multi-hour storm, the code sums the hourly hazard and impact grids
+  before integrating them along every candidate line segment. Line integration
+  is linear, so this produces the same cumulative candidate weights as
+  integrating every segment separately in every hour, while substantially
+  reducing browser runtime. The selected outages are still assigned to their
+  individual occurrence hours from the hourly weights.
 - All 49,926 Connecticut Census blocks are represented by Census internal
   points and mapped to that grid before any weather/customer combination;
   42,008 blocks have positive population.
@@ -195,6 +204,29 @@ independently identifiable spatial tuning parameter under this sampling design.
 - Bilinear interpolation evaluates grid surfaces along network polylines.
 - Candidate length controls the sampling unit; integration step controls the
   numerical quadrature within that unit. They are intentionally separate.
+
+### Runtime optimization without resolution loss
+
+The accepted 0.075 km candidate length remains unchanged. Because it is below
+the 0.25 km quadrature step, every calibrated candidate uses exactly one
+midpoint sample. Topology construction already stores that exact along-path
+midpoint, so the runtime reuses it instead of reconstructing each candidate's
+path geometry during weighting and boundary checks. A regression test compares
+the optimized weights with the generic midpoint integrator.
+
+The persistent outage-model Worker also retains one exact-input cache with
+three layers: Census/network allocation, storm-dependent segment weights, and
+the deterministic sampled scenario. Every cache key contains the complete data
+and scientific parameters relevant to that layer. Changing the network,
+population surface, storm, or relevant coefficient invalidates the affected
+layer; changing only the seed reuses the network and storm weights but samples
+new failures. Reloading the page clears the in-memory cache.
+
+In the 2026-08-18 production-browser check, the full 299-substation,
+1,749-feeder, 8,137-lateral Isaias scenario with 185,571 candidates and 2,000
+outages completed in 3.2 seconds on its first run. An identical deterministic
+rerun completed in 41 milliseconds. These timings are hardware-dependent and
+are performance observations, not calibration criteria.
 
 ### Population-bandwidth sensitivity
 

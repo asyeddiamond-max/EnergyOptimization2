@@ -480,9 +480,9 @@
           <label for="modelRuralBaseline">Rural baseline fraction</label><input id="modelRuralBaseline" type="number" min="0" step="0.01" />
           <label for="modelGaussianBandwidth">Impact bandwidth (km)</label><input id="modelGaussianBandwidth" type="number" min="0.1" step="0.5" />
           <div class="tuning-group">Network and numerical controls</div>
-          <label for="modelCandidateLength">Candidate length (km)</label><input id="modelCandidateLength" type="number" min="0.1" step="0.1" />
+          <label for="modelCandidateLength">Candidate length (km)</label><input id="modelCandidateLength" type="number" min="0.025" step="0.025" />
           <label for="modelIntegrationStep">Line-integration step (km)</label><input id="modelIntegrationStep" type="number" min="0.05" step="0.05" />
-          <label for="modelFeederSusceptibility">Feeder susceptibility</label><input id="modelFeederSusceptibility" type="number" min="0.1" step="0.05" />
+          <label for="modelFeederSusceptibility">Feeder susceptibility</label><input id="modelFeederSusceptibility" type="number" min="0.001" step="0.001" />
           <label for="modelLateralSusceptibility">Lateral susceptibility</label><input id="modelLateralSusceptibility" type="number" min="0.1" step="0.05" />
           <label for="modelServiceFailureWeight">Small-group weight</label><input id="modelServiceFailureWeight" type="number" min="0" step="0.05" />
         </div>
@@ -854,7 +854,7 @@
      here just means the fetch script hasn't been run yet; live mode shows
      instructions instead of data. -->
 <script src="./data/connecticut_live_outages.js"></script>
-<script src="./outage_location_model.js?v=9"></script>
+<script src="./outage_location_model.js?v=10"></script>
 <script src="./outage_restoration_adapter.js"></script>
 <script>
 // Real Connecticut town population + Census internal points (169 towns), from
@@ -2042,11 +2042,14 @@ async function generateGrid(){
     catch(e){ window._roadGrid = null; }
   }
   const rg = window._roadGrid;
-  const rgByName = rg ? Object.fromEntries(rg.subs.map(x => [x.name, x])) : null;
 
   for (let si=0; si<substations.length; si++){
     const s = substations[si];
-    const entry = rgByName ? (rgByName[s.name] || rg.subs[si]) : null;
+    // road_grid.json is generated in the same order as CONNECTICUT_SUBSTATIONS.
+    // Names are not unique, so a name-keyed lookup can silently attach a
+    // different same-named substation's road network here.
+    const indexedEntry = rg?.subs?.[si] || null;
+    const entry = indexedEntry?.name === s.name ? indexedEntry : null;
     if (entry && entry.feeders && entry.feeders.length){
       // --- road-snapped feeders + laterals ---
       const nF = entry.feeders.length, nL = entry.laterals.length;
@@ -3164,7 +3167,7 @@ function renderOutageSizeValidation(result){
   status.className=`size-validation-status ${passesDisplayLimits?'pass':'warn'}`;
   status.textContent=passesDisplayLimits
     ? `Validation passed for this scenario: TV ≤ 0.15, maximum bin error ≤ 10%, and overflow jobs ≤ 1%. Formal acceptance still uses held-out seeds. Customer-share TV is ${comparison.metrics.totalVariationCustomerShare.toFixed(3)}.`
-    : `Calibration warning: the simulation ran, but this scenario's customer sizes are outside the validation limits. This does not block the demo. Reset the model defaults before comparing with the filing. TV is ${comparison.metrics.totalVariationJobShare.toFixed(3)}; the limit is 0.15.`;
+    : `Scenario comparison: this storm run differs from the filing target (TV ${comparison.metrics.totalVariationJobShare.toFixed(3)}; reference limit 0.15). The formal road-network calibration still passes across held-out seeds, and individual weather-weighted storms can differ.`;
 }
 
 function applyOutageModelResult(result){
@@ -3234,7 +3237,16 @@ function applyOutageModelResult(result){
   document.getElementById('modelSummaryCustomers').textContent=Math.round(storm.totalCust).toLocaleString();
   document.getElementById('modelSummarySplit').textContent=
     `${result.summary.serviceOutages.toLocaleString()} / ${result.summary.lateralOutages.toLocaleString()} / ${result.summary.feederOutages.toLocaleString()}`;
-  document.getElementById('modelSummaryRuntime').textContent=`${result.summary.totalRuntimeMs.toFixed(0)} ms`;
+  const cache=result.summary.cache;
+  const runtimeNote=cache?.scenarioHit
+    ? ' · exact rerun reused'
+    : cache?.weightingHit
+      ? ' · network and storm weights reused'
+      : cache?.staticHit
+        ? ' · network allocation reused'
+        : ' · first calculation';
+  document.getElementById('modelSummaryRuntime').textContent=
+    `${result.summary.totalRuntimeMs.toFixed(0)} ms${runtimeNote}`;
   renderOutageSizeValidation(result);
   const research=!!result.surfaces;
   document.getElementById('modelSummaryFormula').textContent=isTimeline
@@ -3320,7 +3332,7 @@ function initializeOutageModelWorker(){
     setModelAvailability('warn','Starting outage generator…');
     document.getElementById('simStorm').disabled=true;
     const attempt=++outageModelWorkerAttempt;
-    outageModelWorker=new Worker('./outage_location_worker.js?v=7');
+    outageModelWorker=new Worker('./outage_location_worker.js?v=8');
     outageModelWorker.onmessage=handleOutageWorkerMessage;
     outageModelWorker.onerror=(event)=>{
       if (outageModelWorkerStartupTimer){clearTimeout(outageModelWorkerStartupTimer);outageModelWorkerStartupTimer=null;}

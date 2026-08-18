@@ -134,6 +134,7 @@ test("Worker announces its versioned capabilities", async (t) => {
   assert.equal(ready.capabilities.rootedNetworkTopology, true);
   assert.equal(ready.capabilities.censusCustomerAccountAllocation, true);
   assert.equal(ready.capabilities.topologyCustomerSizing, true);
+  assert.equal(ready.capabilities.exactTimelinePreparationCache, true);
 });
 
 test("Worker answers an explicit startup status handshake", async (t) => {
@@ -228,7 +229,10 @@ test("Worker returns 24 transferable Isaias frames and 2,000 timestamped outages
   );
   const { result } = message;
   assert.deepEqual(stages, [
-    "timeline-validation", "timeline-modeling", "timeline-serialization", "complete",
+    "timeline-validation", "timeline-customer-exposure",
+    "timeline-network-customer-allocation", "timeline-frame-surfaces",
+    "timeline-network-weighting", "timeline-sampling",
+    "timeline-serialization", "complete",
   ]);
   assert.equal(
     result.summary.placementModel,
@@ -257,6 +261,55 @@ test("Worker returns 24 transferable Isaias frames and 2,000 timestamped outages
     result.surfaces.timeline.frames[0].smoothedImpact,
   );
   assert.equal(result.surfaces.timeline.frames[0].windGustMph.length, 41 * 65);
+  assert.deepEqual(result.summary.cache, {
+    schema: "connecticut_timeline_worker_cache_v1",
+    staticHit: false,
+    weightingHit: false,
+    scenarioHit: false,
+    exactInputMatching: true,
+  });
+});
+
+test("timeline Worker cache preserves exact results and invalidates only the changed layer", { timeout: 30000 }, async (t) => {
+  const worker = createWorker();
+  t.after(() => worker.terminate());
+  await waitFor(worker, (message) => message.type === "ready");
+  const input = timelineInput();
+
+  worker.postMessage(request("cache-first", input));
+  const first = await waitFor(
+    worker,
+    (value) => value.type === "result" && value.runId === "cache-first",
+    30000,
+  );
+  worker.postMessage(request("cache-identical", input));
+  const identical = await waitFor(
+    worker,
+    (value) => value.type === "result" && value.runId === "cache-identical",
+    30000,
+  );
+  assert.deepEqual(identical.result.outages, first.result.outages);
+  assert.equal(identical.result.summary.cache.staticHit, true);
+  assert.equal(identical.result.summary.cache.weightingHit, true);
+  assert.equal(identical.result.summary.cache.scenarioHit, true);
+
+  const changedSeed = {
+    ...input,
+    config: { ...input.config, seed: input.config.seed + 1 },
+  };
+  worker.postMessage(request("cache-new-seed", changedSeed));
+  const resampled = await waitFor(
+    worker,
+    (value) => value.type === "result" && value.runId === "cache-new-seed",
+    30000,
+  );
+  assert.equal(resampled.result.summary.cache.staticHit, true);
+  assert.equal(resampled.result.summary.cache.weightingHit, true);
+  assert.equal(resampled.result.summary.cache.scenarioHit, false);
+  assert.notDeepEqual(
+    resampled.result.outages.map((outage) => outage.failureId),
+    first.result.outages.map((outage) => outage.failureId),
+  );
 });
 
 test("Worker returns human-readable validation errors with the failing stage", async (t) => {

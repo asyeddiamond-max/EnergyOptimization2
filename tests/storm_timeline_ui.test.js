@@ -51,8 +51,8 @@ test("research UI sends the curated timeline to the existing Worker", () => {
   assert.match(html, /data\/connecticut_census_population_grid\.js/);
   assert.match(html, /populationGrid:window\.CONNECTICUT_CENSUS_POPULATION_GRID/);
   assert.doesNotMatch(html, /script src="\.\/data\/connecticut_census_blocks/);
-  assert.match(html, /outage_location_worker\.js\?v=7/);
-  assert.match(html, /outage_location_model\.js\?v=9/);
+  assert.match(html, /outage_location_worker\.js\?v=8/);
+  assert.match(html, /outage_location_model\.js\?v=10/);
   assert.match(html, /id="modelRiskObjective"/);
   assert.match(html, /value="failure_oriented"/);
   assert.match(html, /candidateSegmentLengthKm:'modelCandidateLength'/);
@@ -127,6 +127,13 @@ test("generated-scenario UI reports DPU size-bin error and keeps PCAO outside ca
   assert.match(html, /Current-workflow demonstration only/);
   assert.match(html, /not comparable with the historical ≈37 value/);
   assert.match(html, /never used for calibration/);
+});
+
+test("runtime summary distinguishes first calculations from exact cached reruns", () => {
+  assert.match(html, /cache\?\.scenarioHit/);
+  assert.match(html, /exact rerun reused/);
+  assert.match(html, /network and storm weights reused/);
+  assert.match(html, /first calculation/);
 });
 
 test("customer-size validation plots National Grid target against the current simulation", () => {
@@ -242,9 +249,10 @@ test("outage-location control is exact by number and logarithmic by slider", () 
   assert.doesNotMatch(html, /nOutages:Number\(oS\.value\)/);
 });
 
-test("a size-distribution miss is presented as a calibration warning, not a runtime failure", () => {
+test("a scenario-level size-distribution miss does not claim the formal calibration failed", () => {
   assert.match(html, /size-validation-status\.warn/);
-  assert.match(html, /Calibration warning: the simulation ran/);
-  assert.match(html, /This does not block the demo/);
-  assert.match(html, /this scenario's customer sizes are outside the validation limits/);
+  assert.match(html, /Scenario comparison: this storm run differs from the filing target/);
+  assert.match(html, /formal road-network calibration still passes across held-out seeds/);
+  assert.match(html, /individual weather-weighted storms can differ/);
+  assert.doesNotMatch(html, /Calibration warning: the simulation ran/);
 });

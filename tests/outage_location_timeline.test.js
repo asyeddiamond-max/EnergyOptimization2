@@ -101,6 +101,37 @@ test("full Isaias timeline produces exactly 2,000 unique timestamped outages", (
   assert.equal(result.summary.lastOccurrence, "2020-08-05T00:00:00Z");
 });
 
+test("calibrated one-sample segment integration matches generic midpoint quadrature", () => {
+  const input = loadInputs();
+  const prepared = model.prepareTimelineOutageScenario(input);
+  const { frameSurfaces, weightedSegments } = prepared;
+  const latitudes = frameSurfaces[0].impact.latitudes;
+  const longitudes = frameSurfaces[0].impact.longitudes;
+  const summedHazard = latitudes.map((_, rowIndex) =>
+    longitudes.map((__, columnIndex) => frameSurfaces.reduce(
+      (sum, frame) => sum + frame.weather.weatherSeverity[rowIndex][columnIndex],
+      0,
+    )));
+  const stride = Math.max(1, Math.floor(weightedSegments.length / 100));
+  for (let index = 0; index < weightedSegments.length; index += stride) {
+    const segment = weightedSegments[index];
+    const generic = model.integrateGridAlongPath(
+      latitudes,
+      longitudes,
+      summedHazard,
+      segment.pathCoordinates,
+      input.config.lineIntegrationStepKm,
+    );
+    const expected = generic.integral * segment.susceptibility;
+    const tolerance = 1e-12 * Math.max(1, Math.abs(expected));
+    assert.ok(
+      Math.abs(segment.failureOrientedWeight - expected) <= tolerance,
+      `segment ${segment.segmentId} fast midpoint integration changed its weight`,
+    );
+    assert.equal(segment.integrationSampleCount, 1);
+  }
+});
+
 test("December 2022 timeline produces topology-sized outages from its own 42 weather frames", () => {
   const input = loadInputs("dec2022");
   const result = model.generateTimelineOutageScenario({
@@ -121,7 +152,7 @@ test("December 2022 timeline produces topology-sized outages from its own 42 wea
     validTimes.has(outage.occurredAt)
       && Number.isInteger(outage.customers)
       && outage.customers > 0));
-  assert.equal(result.summary.firstOccurrence, "2022-12-23T01:00:00Z");
+  assert.equal(result.summary.firstOccurrence, "2022-12-23T02:00:00Z");
   assert.equal(result.summary.lastOccurrence, "2022-12-24T01:00:00Z");
 });
 

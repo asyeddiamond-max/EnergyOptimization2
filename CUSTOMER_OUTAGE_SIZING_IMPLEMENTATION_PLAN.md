@@ -3,7 +3,7 @@
 **Status:** Phases 1–7 complete; topology-derived customer sizing passed held-out calibration
 **Prepared for:** Alex Luo
 **Advisor:** Dr. Dave Wanik
-**Last updated:** 2026-08-13
+**Last updated:** 2026-08-18
 
 ## Purpose
 
@@ -492,7 +492,8 @@ historical approximately-37 value. PCAO never enters the calibration loss.
 
 ### Phase 1: Targets and baseline
 
-**Status:** Complete on 2026-08-13.
+**Status:** Complete; road-network calibration and performance reverified on
+2026-08-18.
 
 Deliverables:
 
@@ -596,7 +597,7 @@ off-thread responsiveness on a 100,000-segment test network.
 
 ### Phase 6: Calibration and held-out validation
 
-**Status:** Complete; final fit accepted on 2026-08-13 and reference settings frozen.
+**Status:** Complete; road-network fit accepted on 2026-08-18 and reference settings frozen.
 
 **Acceptance thresholds recorded before tuning:** The mean job-share total
 variation distance over held-out seeds must be at most 0.15, no individual
@@ -621,17 +622,23 @@ Its two-account representation failed held-out job-share TV (0.4515) and
 maximum-bin-error (0.2156), showing a structural shortage of small jobs. Those
 weights were not promoted.
 
-The follow-up added generic 1–15-account topology leaf groups, spread each
-lateral's customer allocation over its standardized segments, and reduced the
-maximum candidate length to 0.25 km. The final 25-combination search reused the
-same calibration seeds, held-out seeds, fitting objective, and acceptance
-limits. Its accepted reference settings are feeder 0.10, lateral 1.00, and
-small-group 0.75. On held-out seeds it achieved job-share TV 0.1007, maximum
-bin error 0.0578, and overflow job share 0.0025, passing every frozen limit.
-Mean size (146.77 versus 128.74) and largest-1% concentration (23.18% versus
-approximately 19%) remain reported differences, not hidden or added to the
-objective after fitting. The complete saved report is
-`data/validation/dpu31_topology_calibration_report.md`.
+The follow-up added generic 1–15-account topology leaf groups and spread each
+lateral's customer allocation over its standardized segments. That fit was
+valid for the deterministic synthetic calibration network, but became stale
+when the website adopted the road-snapped grid. The calibration harness now
+reconstructs the production road network exactly rather than silently testing
+different geometry.
+
+The road-network rerun contains 299 substations, 1,749 feeders, 8,137 laterals,
+and 185,571 candidates at a 0.075 km maximum candidate length. The final
+40-combination search reused the same calibration seeds, held-out seeds,
+fitting objective, and acceptance limits. Its accepted reference settings are
+feeder 0.003, lateral 1.00, and small-group 0.80. On held-out seeds it achieved
+job-share TV 0.1397, maximum bin error 0.0786, and overflow job share 0.00025,
+passing every frozen limit. Mean size (125.17 versus 128.74) and largest-1%
+concentration (14.54% versus approximately 19%) remain reported differences,
+not hidden or added to the objective after fitting. The complete saved report
+is `data/validation/dpu31_topology_calibration_report.md`.
 
 ### Phase 7: UI, documentation, and performance
 
@@ -653,8 +660,13 @@ independent-output notice with its numerator, denominator, current time-basis
 limitation, and explicit warning that it is not comparable with approximately
 37. It is not part of the pass/fail calculation. Model,
 data-source, calibration-report, and alignment documentation now use the same
-v4 terminology. The full 74-test suite passes, including exact restoration
-accounting and the 100,000-segment off-thread performance case.
+v4 terminology. The full 89-test suite passes, including exact restoration
+accounting, exact cached-versus-uncached timeline equivalence, optimized-versus-
+generic midpoint integration, and the 100,000-segment off-thread performance
+case. The validated 0.075 km candidate length was retained. A production
+browser check reduced the first Isaias run from approximately 27 seconds to
+3.2 seconds and an identical rerun to 41 milliseconds through exact midpoint
+reuse and layered in-memory Worker caching.
 
 ## Separate Isaias follow-up
 

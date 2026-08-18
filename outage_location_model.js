@@ -51,12 +51,13 @@
     // sensitivity results rather than represented as a calibrated constant.
     gaussianBandwidthKm: 10,
     placementMode: "impact_weighted",
-    candidateSegmentLengthKm: 0.25,
+    candidateSegmentLengthKm: 0.075,
     lineIntegrationStepKm: 0.25,
-    // Component weights frozen by the 2026-08-13 D.P.U. 24-41 calibration.
-    feederSusceptibility: 0.1,
+    // Component weights frozen by the 2026-08-18 D.P.U. 24-41 calibration
+    // against the production road-snapped network.
+    feederSusceptibility: 0.003,
     lateralSusceptibility: 1,
-    serviceFailureWeight: 0.75,
+    serviceFailureWeight: 0.8,
     serviceGroupMaximumCustomers: 15,
   });
 
@@ -72,7 +73,7 @@
   const DEFAULT_CUSTOMER_SIZING_CONFIG = Object.freeze({
     // Relative total failure mass for compact customer groups attached to each
     // customer-bearing segment. Frozen by the D.P.U. 24-41 calibration.
-    serviceFailureWeight: 0.75,
+    serviceFailureWeight: 0.8,
     // Direct accounts are partitioned into disjoint small load groups. This is
     // a generic network-resolution layer; it does not assert an equipment or
     // damage type for each group.
@@ -1277,6 +1278,48 @@
     return { means, integrals, samples };
   }
 
+  function integrateNamedGridsForTopologySegment(
+    latitudes,
+    longitudes,
+    namedGrids,
+    segment,
+    integrationStepKm,
+  ) {
+    const stepKm = finiteNumber(integrationStepKm, "lineIntegrationStepKm");
+    if (stepKm <= 0) throw new InputValidationError("lineIntegrationStepKm must be > 0");
+    // Standardized topology candidates already store the exact along-path
+    // midpoint and length used when they were created. At the calibrated
+    // 0.075 km candidate length and 0.25 km integration step, midpoint
+    // quadrature has exactly one sample. Reusing that sample avoids rebuilding
+    // 185k tiny path geometries without changing the numerical method.
+    if (segment
+        && Array.isArray(segment.midpoint)
+        && segment.midpoint.length >= 2
+        && Number.isFinite(segment.lengthKm)
+        && segment.lengthKm > 0
+        && segment.lengthKm <= stepKm + 1e-12) {
+      const names = Object.keys(namedGrids);
+      const [longitude, latitude] = segment.midpoint;
+      const stencil = bilinearStencil(latitudes, longitudes, latitude, longitude);
+      const means = Object.fromEntries(names.map((name) => [
+        name,
+        bilinearValueFromStencil(namedGrids[name], stencil),
+      ]));
+      const integrals = Object.fromEntries(names.map((name) => [
+        name,
+        means[name] * segment.lengthKm,
+      ]));
+      return { means, integrals, samples: 1, stencil };
+    }
+    return integrateNamedGridsAlongPath(
+      latitudes,
+      longitudes,
+      namedGrids,
+      segment.pathCoordinates,
+      stepKm,
+    );
+  }
+
   function normalizeNetwork(network) {
     if (!network || !Array.isArray(network.feeders) || !Array.isArray(network.laterals)) {
       throw new InputValidationError("network must contain feeders and laterals arrays");
@@ -2065,11 +2108,11 @@
         const susceptibility = topologySegment.networkKind === "feeder"
           ? feederSusceptibility
           : lateralSusceptibility;
-        const integrated = integrateNamedGridsAlongPath(
+        const integrated = integrateNamedGridsForTopologySegment(
           latitudes,
           longitudes,
           interpolationGrids,
-          topologySegment.pathCoordinates,
+          topologySegment,
           lineIntegrationStepKm,
         );
         const failureOrientedWeight = susceptibility * integrated.integrals.hazardIndex;
@@ -2603,6 +2646,11 @@
   }
 
   function segmentPoint(segment, fraction) {
+    if (fraction === 0.5 && Array.isArray(segment.midpoint)) {
+      return segment.midpoint.slice();
+    }
+    if (fraction === 0 && Array.isArray(segment.start)) return segment.start.slice();
+    if (fraction === 1 && Array.isArray(segment.end)) return segment.end.slice();
     return pointAlongPath(segment.pathCoordinates || [segment.start, segment.end], fraction);
   }
 
@@ -3219,23 +3267,35 @@
       impactPriorityWeight: 0,
       weight: 0,
     }));
-    for (const frame of frameSurfaces) {
-      for (const segment of segments) {
-        const integrated = integrateNamedGridsAlongPath(
-          latitudes,
-          longitudes,
-          {
-            hazardIndex: frame.weather.weatherSeverity,
-            impactPriorityScore: frame.impact.smoothedImpact,
-          },
-          segment.pathCoordinates,
-          config.lineIntegrationStepKm,
-        );
-        segment.failureOrientedWeight +=
-          integrated.integrals.hazardIndex * segment.susceptibility;
-        segment.impactPriorityWeight +=
-          integrated.integrals.impactPriorityScore * segment.susceptibility;
-      }
+    // Line integration is linear. Sum the hourly grids first, then integrate
+    // each network candidate once. This is mathematically equivalent to the
+    // former frame × segment loop while avoiding millions of repeated path and
+    // interpolation setup operations on the production road network.
+    const summedHazardIndex = latitudes.map((_, rowIndex) =>
+      longitudes.map((__, columnIndex) => frameSurfaces.reduce(
+        (sum, frame) => sum + frame.weather.weatherSeverity[rowIndex][columnIndex],
+        0,
+      )));
+    const summedImpactPriorityScore = latitudes.map((_, rowIndex) =>
+      longitudes.map((__, columnIndex) => frameSurfaces.reduce(
+        (sum, frame) => sum + frame.impact.smoothedImpact[rowIndex][columnIndex],
+        0,
+      )));
+    for (const segment of segments) {
+      const integrated = integrateNamedGridsForTopologySegment(
+        latitudes,
+        longitudes,
+        {
+          hazardIndex: summedHazardIndex,
+          impactPriorityScore: summedImpactPriorityScore,
+        },
+        segment,
+        config.lineIntegrationStepKm,
+      );
+      segment.failureOrientedWeight =
+        integrated.integrals.hazardIndex * segment.susceptibility;
+      segment.impactPriorityWeight =
+        integrated.integrals.impactPriorityScore * segment.susceptibility;
     }
     for (const segment of segments) {
       segment.weight = config.placementMode === "failure_oriented"
@@ -3284,11 +3344,11 @@
         const grid = config.placementMode === "failure_oriented"
           ? frame.weather.weatherSeverity
           : frame.impact.smoothedImpact;
-        const integrated = integrateNamedGridsAlongPath(
+        const integrated = integrateNamedGridsForTopologySegment(
           latitudes,
           longitudes,
           { selectedScore: grid },
-          segment.pathCoordinates,
+          segment,
           config.lineIntegrationStepKm,
         );
         return Math.max(0, integrated.integrals.selectedScore * segment.susceptibility);
@@ -3360,7 +3420,7 @@
     };
   }
 
-  function generateTimelineOutageScenario(input) {
+  function prepareTimelineOutageScenario(input) {
     if (!input || typeof input !== "object") throw new InputValidationError("model input must be an object");
     const config = validateConfig(input.config);
     const timeline = normalizeWeatherTimeline(input.weatherTimeline ?? input.weather_timeline);
@@ -3385,6 +3445,37 @@
       config,
       customerAllocation,
     );
+    return {
+      config,
+      timeline,
+      customerSurface,
+      customerAllocation,
+      frameSurfaces,
+      weightedSegments,
+    };
+  }
+
+  function buildTimelineOutageScenarioFromPrepared(input, prepared) {
+    if (!input || typeof input !== "object") throw new InputValidationError("model input must be an object");
+    if (!prepared || typeof prepared !== "object") {
+      throw new InputValidationError("prepared timeline model inputs must be an object");
+    }
+    const config = validateConfig(input.config);
+    const {
+      timeline,
+      customerSurface,
+      customerAllocation,
+      frameSurfaces,
+      weightedSegments,
+    } = prepared;
+    if (!timeline || config.stormId !== timeline.stormId) {
+      throw new InputValidationError("prepared timeline does not match the requested storm");
+    }
+    if (!customerSurface || !customerAllocation
+        || !Array.isArray(frameSurfaces) || !frameSurfaces.length
+        || !Array.isArray(weightedSegments) || !weightedSegments.length) {
+      throw new InputValidationError("prepared timeline inputs are incomplete");
+    }
     const scenario = sampleTimelineOutageScenario(
       weightedSegments,
       frameSurfaces,
@@ -3472,6 +3563,13 @@
     };
   }
 
+  function generateTimelineOutageScenario(input) {
+    return buildTimelineOutageScenarioFromPrepared(
+      input,
+      prepareTimelineOutageScenario(input),
+    );
+  }
+
   return Object.freeze({
     SCHEMA_VERSION,
     OUTAGE_SCENARIO_VERSION,
@@ -3520,6 +3618,8 @@
     buildTimelineFrameSurfaces,
     buildTimelineWeightedSegments,
     sampleTimelineOutageScenario,
+    prepareTimelineOutageScenario,
+    buildTimelineOutageScenarioFromPrepared,
     generateOutageScenario,
     generateTimelineOutageScenario,
   });

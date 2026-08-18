@@ -20,7 +20,7 @@
   let yieldToMessages;
 
   if (typeof importScripts === "function" && typeof self !== "undefined") {
-    importScripts("outage_location_model.js?v=9");
+    importScripts("outage_location_model.js?v=10");
     model = self.OutageLocationModel;
     send = (message, transfer = []) => self.postMessage(message, transfer);
     subscribe = (handler) => self.addEventListener("message", (event) => handler(event.data));
@@ -40,6 +40,55 @@
   const activeRuns = new Set();
   const cancelledRuns = new Set();
   const cancellationMessagesSent = new Set();
+  const TIMELINE_CACHE_VERSION = 1;
+  let timelineStaticCache = null;
+  let timelineWeightingCache = null;
+  let timelineScenarioCache = null;
+  let timelineCacheGeneration = 0;
+
+  function timelineStaticCacheKey(input, config, timeline) {
+    return JSON.stringify({
+      version: TIMELINE_CACHE_VERSION,
+      boundary: input.boundary,
+      populationSource: model.populationSourceFromInput(input),
+      network: input.network,
+      analysisGrid: {
+        latitudes: timeline.latitudes,
+        longitudes: timeline.longitudes,
+      },
+      config: {
+        candidateSegmentLengthKm: config.candidateSegmentLengthKm,
+        customerSmoothingKm: config.customerSmoothingKm,
+        ruralBaselineFraction: config.ruralBaselineFraction,
+      },
+    });
+  }
+
+  function timelineWeightingCacheKey(staticGeneration, config, timeline) {
+    const weightingConfig = { ...config };
+    delete weightingConfig.seed;
+    delete weightingConfig.nOutages;
+    delete weightingConfig.serviceFailureWeight;
+    delete weightingConfig.serviceGroupMaximumCustomers;
+    return JSON.stringify({
+      version: TIMELINE_CACHE_VERSION,
+      staticGeneration,
+      config: weightingConfig,
+      timeline,
+    });
+  }
+
+  function timelineScenarioCacheKey(weightingGeneration, config, inputs) {
+    return JSON.stringify({
+      version: TIMELINE_CACHE_VERSION,
+      weightingGeneration,
+      seed: config.seed,
+      nOutages: config.nOutages,
+      serviceFailureWeight: config.serviceFailureWeight,
+      serviceGroupMaximumCustomers: config.serviceGroupMaximumCustomers,
+      inputs: inputs || {},
+    });
+  }
 
   function envelope(type, runId, fields = {}) {
     return { protocol: PROTOCOL, version: VERSION, type, runId, ...fields };
@@ -423,7 +472,7 @@
   async function generateTimeline(runId, input, timingsMs, runStarted) {
     let currentStage = "timeline-validation";
     try {
-      await stage(
+      const validated = await stage(
         runId,
         timingsMs,
         currentStage,
@@ -437,17 +486,163 @@
               `config stormId ${config.stormId} does not match timeline stormId ${timeline.stormId}`,
             );
           }
+          return { config, timeline };
         },
       );
-      currentStage = "timeline-modeling";
-      const result = await stage(
-        runId,
-        timingsMs,
-        currentStage,
-        0.18,
-        "Calculating separated hourly hazard, consequence, and impact frames…",
-        () => model.generateTimelineOutageScenario(input),
+
+      const staticKey = timelineStaticCacheKey(
+        input,
+        validated.config,
+        validated.timeline,
       );
+      const staticHit = timelineStaticCache?.key === staticKey;
+      let customerSurface;
+      let customerAllocation;
+      if (staticHit) {
+        currentStage = "timeline-static-cache-hit";
+        await stage(
+          runId,
+          timingsMs,
+          currentStage,
+          0.24,
+          "Reusing the prepared Census allocation and rooted network…",
+          () => null,
+        );
+        customerSurface = timelineStaticCache.customerSurface;
+        customerAllocation = timelineStaticCache.customerAllocation;
+      } else {
+        currentStage = "timeline-customer-exposure";
+        customerSurface = await stage(
+          runId,
+          timingsMs,
+          currentStage,
+          0.12,
+          "Preparing the Census customer surface…",
+          () => model.buildCustomerExposureSurface(
+            input.boundary,
+            model.populationSourceFromInput(input),
+            validated.timeline.latitudes,
+            validated.timeline.longitudes,
+            {
+              smoothingKm: validated.config.customerSmoothingKm,
+              ruralBaselineFraction: validated.config.ruralBaselineFraction,
+            },
+          ),
+        );
+        currentStage = "timeline-network-customer-allocation";
+        customerAllocation = await stage(
+          runId,
+          timingsMs,
+          currentStage,
+          0.28,
+          "Assigning Census accounts to the rooted road network…",
+          () => model.allocateCustomerAccountsToTopology(
+            model.buildRootedNetworkTopology(input.network, validated.config),
+            customerSurface,
+          ),
+        );
+        timelineStaticCache = {
+          key: staticKey,
+          generation: ++timelineCacheGeneration,
+          customerSurface,
+          customerAllocation,
+        };
+        timelineWeightingCache = null;
+        timelineScenarioCache = null;
+      }
+
+      const weightingKey = timelineWeightingCacheKey(
+        timelineStaticCache.generation,
+        validated.config,
+        validated.timeline,
+      );
+      const weightingHit = timelineWeightingCache?.key === weightingKey;
+      let frameSurfaces;
+      let weightedSegments;
+      if (weightingHit) {
+        currentStage = "timeline-weighting-cache-hit";
+        await stage(
+          runId,
+          timingsMs,
+          currentStage,
+          0.68,
+          "Reusing hourly surfaces and line-integrated network scores…",
+          () => null,
+        );
+        frameSurfaces = timelineWeightingCache.frameSurfaces;
+        weightedSegments = timelineWeightingCache.weightedSegments;
+      } else {
+        currentStage = "timeline-frame-surfaces";
+        frameSurfaces = await stage(
+          runId,
+          timingsMs,
+          currentStage,
+          0.40,
+          "Calculating separated hourly hazard, consequence, and impact frames…",
+          () => model.buildTimelineFrameSurfaces(
+            validated.timeline,
+            customerSurface,
+            validated.config,
+          ),
+        );
+        currentStage = "timeline-network-weighting";
+        weightedSegments = await stage(
+          runId,
+          timingsMs,
+          currentStage,
+          0.68,
+          "Integrating cumulative storm scores along calibrated network candidates…",
+          () => model.buildTimelineWeightedSegments(
+            input.network,
+            frameSurfaces,
+            validated.config,
+            customerAllocation,
+          ),
+        );
+        timelineWeightingCache = {
+          key: weightingKey,
+          generation: ++timelineCacheGeneration,
+          frameSurfaces,
+          weightedSegments,
+        };
+        timelineScenarioCache = null;
+      }
+
+      const scenarioKey = timelineScenarioCacheKey(
+        timelineWeightingCache.generation,
+        validated.config,
+        input.inputs,
+      );
+      const scenarioHit = timelineScenarioCache?.key === scenarioKey;
+      let result;
+      if (scenarioHit) {
+        currentStage = "timeline-scenario-cache-hit";
+        result = await stage(
+          runId,
+          timingsMs,
+          currentStage,
+          0.88,
+          "Reusing the identical deterministic outage selection…",
+          () => timelineScenarioCache.result,
+        );
+      } else {
+        currentStage = "timeline-sampling";
+        result = await stage(
+          runId,
+          timingsMs,
+          currentStage,
+          0.88,
+          "Selecting non-overlapping outages and assigning occurrence hours…",
+          () => model.buildTimelineOutageScenarioFromPrepared(input, {
+            timeline: validated.timeline,
+            customerSurface,
+            customerAllocation,
+            frameSurfaces,
+            weightedSegments,
+          }),
+        );
+        timelineScenarioCache = { key: scenarioKey, result };
+      }
 
       currentStage = "timeline-serialization";
       postProgress(runId, currentStage, 0.94, "Preparing animated map frames…", timingsMs);
@@ -461,6 +656,13 @@
       timingsMs[currentStage] = performance.now() - started;
       const summary = {
         ...result.summary,
+        cache: {
+          schema: "connecticut_timeline_worker_cache_v1",
+          staticHit,
+          weightingHit,
+          scenarioHit,
+          exactInputMatching: true,
+        },
         timingsMs: { ...timingsMs },
         calculationRuntimeMs: Object.values(timingsMs).reduce((sum, value) => sum + value, 0),
         totalRuntimeMs: performance.now() - runStarted,
@@ -650,6 +852,7 @@
           rootedNetworkTopology: true,
           censusCustomerAccountAllocation: true,
           topologyCustomerSizing: true,
+          exactTimelinePreparationCache: true,
         } }));
         return;
       }
@@ -689,5 +892,6 @@
     rootedNetworkTopology: true,
     censusCustomerAccountAllocation: true,
     topologyCustomerSizing: true,
+    exactTimelinePreparationCache: true,
   } }));
 })();

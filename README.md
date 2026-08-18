@@ -33,7 +33,7 @@ Public data sources: NOAA SPC storm reports (`data/july2026_spc_reports.json`), 
 
 | Capability | How |
 |---|---|
-| Real statewide Connecticut distribution grid | 299 HIFLD substations across all 8 counties, branching feeders + laterals, and 2020 Census-block-derived demand on the HRRR grid |
+| Road-constrained synthetic Connecticut distribution grid | 299 real HIFLD substation points, synthetic feeder and lateral routes constrained to OpenStreetMap roads, and 2020 Census-block-derived demand on the HRRR grid |
 | Weather/customer-weighted outage locations | Browser Worker combines HRRR wind and rain, Census-block customer exposure, optional population smoothing, 10 km impact regularization, and the live network |
 | Realistic-mode scheduler with seven factors | assessment delay, log-normal repair, discovery ramp, mutual-aid waves, road proxy, workday clamp, critical priority |
 | Real critical facilities (HIFLD/EPA) | 1,143 hospitals, fire stations, EMS, water plants statewide — outages near real facilities get priority-1 restoration |
@@ -262,6 +262,10 @@ responsiveness, reviewed Isaias and December 2022 timeline generation, timestamp
 movement, restoration metadata, and zero-endpoint accounting. The
 100,000-segment performance fixture is built deterministically in JavaScript;
 there is no exported production-network file or second generator to maintain.
+The suite also verifies that the calibrated one-sample midpoint optimization
+matches generic quadrature and that cached and uncached Worker runs return
+identical outages. The memory-heavy test files run sequentially to avoid
+creating several production-scale network fixtures at once.
 
 ## Current limitations
 
@@ -269,11 +273,12 @@ there is no exported production-network file or second generator to maintain.
   storms. The remaining representative-hour caches stay available for offline
   compatibility and regression comparison, but the website does not present
   them as equivalent full-storm timelines.
-- Feeder and lateral topology is synthetic around 299 real HIFLD substations;
-  it is not utility GIS topology.
+- Feeder and lateral topology is synthetic and constrained to OpenStreetMap
+  roads around 299 real HIFLD substations; it is not utility GIS topology.
 - Topology-derived customer sizing passes the predeclared held-out D.P.U. bin
   thresholds after adding generic 1–15-account leaf groups. The match is not
-  exact: the held-out mean and largest-1% concentration remain somewhat high;
+  exact: the held-out mean is close to the supplied target, while largest-1%
+  concentration remains low;
   see [`data/validation/dpu31_topology_calibration_report.md`](data/validation/dpu31_topology_calibration_report.md).
 - The model creates plausible outage locations, but it has not yet been
   validated against restricted EAGLE-I or utility outage-point data.
